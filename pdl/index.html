@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Personal Development Library</title>
+<style>
+  :root{
+    --bg: #14181d;
+    --bg-raised: #1b2129;
+    --bg-card: #1f2630;
+    --line: #2a323d;
+    --paper: #ece7dc;
+    --muted: #8b909a;
+    --muted-dim: #5f6570;
+    --gold: #c9a24b;
+    --gold-bright: #e0bd6e;
+    --gold-dim: rgba(201,162,75,0.14);
+    --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'SF Mono', 'Consolas', Menlo, monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--paper);
+    font-family:var(--sans);
+    padding-bottom:100px;
+  }
+  a{color:var(--gold);}
+  ::selection{background:var(--gold-dim);}
+
+  .wrap{max-width:680px;margin:0 auto;padding:28px 18px 40px;}
+
+  /* header */
+  header{margin-bottom:22px;}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted-dim);margin-bottom:10px;
+  }
+  h1{
+    font-family:var(--serif);font-weight:400;font-size:30px;letter-spacing:-.01em;
+    margin:0 0 8px;color:var(--paper);
+  }
+  .tagline{color:var(--muted);font-size:14px;line-height:1.6;max-width:480px;}
+
+  .toprow{display:flex;align-items:center;justify-content:space-between;margin-top:18px;gap:12px;}
+  .search{
+    flex:1;position:relative;
+  }
+  .search input{
+    width:100%;padding:11px 14px;background:var(--bg-raised);border:1px solid var(--line);
+    border-radius:8px;color:var(--paper);font-family:var(--sans);font-size:14px;
+  }
+  .search input:focus{outline:none;border-color:var(--gold);}
+  .search input::placeholder{color:var(--muted-dim);}
+
+  .organize-toggle{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);
+    flex-shrink:0;cursor:pointer;user-select:none;
+  }
+  .switch{
+    width:34px;height:20px;border-radius:20px;background:var(--bg-raised);border:1px solid var(--line);
+    position:relative;transition:.15s;flex-shrink:0;
+  }
+  .switch::after{
+    content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:var(--muted);transition:.15s;
+  }
+  .organize-toggle.on .switch{background:var(--gold-dim);border-color:var(--gold);}
+  .organize-toggle.on .switch::after{transform:translateX(14px);background:var(--gold);}
+
+  /* today's practice — signature element */
+  .today-card{
+    margin-top:20px;
+    background:radial-gradient(120% 160% at 15% 0%, rgba(201,162,75,0.16), transparent 60%), var(--bg-card);
+    border:1px solid rgba(201,162,75,0.35);
+    border-radius:14px;
+    padding:22px 22px 20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .today-card .eyebrow{color:var(--gold);margin-bottom:10px;}
+  .today-title{
+    font-family:var(--serif);font-size:22px;line-height:1.35;color:var(--paper);margin:0 0 16px;
+    max-width:420px;
+  }
+  .today-actions{display:flex;align-items:center;gap:14px;}
+  .play-btn{
+    width:46px;height:46px;border-radius:50%;background:var(--gold);border:none;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+    transition:.15s;
+  }
+  .play-btn:hover{background:var(--gold-bright);}
+  .play-btn svg{width:16px;height:16px;fill:var(--bg);}
+  .today-meta{font-size:12.5px;color:var(--muted);}
+  .today-empty{color:var(--muted);font-size:13.5px;}
+
+  /* filter chips */
+  .chips{display:flex;gap:8px;margin:22px 0 14px;flex-wrap:wrap;}
+  .chip{
+    padding:7px 14px;border-radius:20px;border:1px solid var(--line);background:var(--bg-raised);
+    color:var(--muted);font-size:12.5px;cursor:pointer;transition:.15s;
+  }
+  .chip.active{border-color:var(--gold);color:var(--gold-bright);background:var(--gold-dim);}
+
+  /* folder groups */
+  .folder-group{margin-bottom:24px;}
+  .folder-label{
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted-dim);margin-bottom:10px;padding-left:2px;
+  }
+
+  .item{
+    display:flex;align-items:center;gap:12px;
+    padding:12px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg-raised);
+    margin-bottom:8px;transition:.15s;
+  }
+  .item:hover{border-color:var(--muted-dim);}
+  .item.playing{border-color:var(--gold);background:var(--gold-dim);}
+  .item-icon{
+    width:36px;height:36px;border-radius:8px;background:var(--bg-card);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .item-icon svg{width:16px;height:16px;stroke:var(--muted);fill:none;}
+  .item.playing .item-icon svg{stroke:var(--gold);}
+  .item-body{flex:1;min-width:0;}
+  .item-title{
+    font-size:14px;color:var(--paper);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    cursor:pointer;
+  }
+  .item-title-input{
+    width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--gold);border-radius:6px;
+    color:var(--paper);font-size:14px;font-family:var(--sans);
+  }
+  .item-meta{font-size:11.5px;color:var(--muted-dim);margin-top:2px;font-family:var(--mono);}
+  .item-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .icon-btn{
+    width:32px;height:32px;border-radius:7px;border:1px solid transparent;background:transparent;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);
+  }
+  .icon-btn:hover{background:var(--bg-card);border-color:var(--line);}
+  .icon-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;}
+  select.move-select{
+    background:var(--bg-card);color:var(--muted);border:1px solid var(--line);border-radius:7px;
+    font-size:11.5px;font-family:var(--sans);padding:6px 8px;max-width:110px;
+  }
+
+  .empty-state{
+    text-align:center;padding:50px 20px;color:var(--muted);font-size:14px;line-height:1.7;
+  }
+  .empty-state .big{font-family:var(--serif);font-size:19px;color:var(--paper);margin-bottom:8px;}
+
+  /* credentials panel (organize mode) */
+  .cred-panel{
+    background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:18px;
+    font-size:13px;color:var(--muted);
+  }
+  .cred-panel input{
+    width:100%;padding:9px 12px;background:var(--bg-raised);border:1px solid var(--line);border-radius:7px;
+    color:var(--paper);font-family:var(--mono);font-size:13px;margin:8px 0;
+  }
+  .cred-panel button{
+    padding:8px 14px;background:var(--gold);border:none;border-radius:7px;color:var(--bg);
+    font-size:12.5px;cursor:pointer;font-family:var(--sans);font-weight:600;
+  }
+  .cred-note{font-size:11.5px;color:var(--muted-dim);line-height:1.5;margin-top:6px;}
+
+  /* bottom mini player */
+  .mini-player{
+    position:fixed;left:0;right:0;bottom:0;
+    background:var(--bg-card);border-top:1px solid var(--line);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    display:none;
+    z-index:50;
+  }
+  .mini-player.show{display:block;}
+  .mp-scrub{
+    width:100%;height:3px;-webkit-appearance:none;appearance:none;background:var(--line);
+    border-radius:3px;margin-bottom:10px;cursor:pointer;
+  }
+  .mp-scrub::-webkit-slider-thumb{
+    -webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--gold);
+  }
+  .mp-row{display:flex;align-items:center;gap:12px;max-width:680px;margin:0 auto;}
+  .mp-info{flex:1;min-width:0;}
+  .mp-title{font-size:13.5px;color:var(--paper);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mp-time{font-size:11px;color:var(--muted-dim);font-family:var(--mono);margin-top:2px;}
+  .mp-controls{display:flex;align-items:center;gap:6px;}
+  .mp-btn{
+    width:38px;height:38px;border-radius:50%;background:transparent;border:none;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--paper);
+  }
+  .mp-btn.play{background:var(--gold);color:var(--bg);width:42px;height:42px;}
+  .mp-btn svg{width:16px;height:16px;fill:currentColor;}
+  .mp-btn.small svg{width:14px;height:14px;}
+
+  /* video / pdf modal */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(10,12,15,0.92);display:none;
+    align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{width:100%;max-width:800px;}
+  .modal-close{
+    display:flex;justify-content:flex-end;margin-bottom:10px;
+  }
+  .modal-close button{
+    background:none;border:1px solid var(--line);color:var(--muted);border-radius:7px;
+    padding:6px 12px;font-size:12px;cursor:pointer;
+  }
+  video.modal-video{width:100%;border-radius:10px;background:#000;max-height:70vh;}
+  embed.modal-pdf, iframe.modal-pdf{width:100%;height:75vh;border-radius:8px;border:1px solid var(--line);background:#fff;}
+  .modal-title{color:var(--muted);font-size:13px;margin-top:12px;text-align:center;}
+
+  .activity{
+    margin-top:24px;border-top:1px solid var(--line);padding-top:14px;
+  }
+  .activity summary{font-size:11.5px;color:var(--muted-dim);cursor:pointer;font-family:var(--mono);letter-spacing:.05em;text-transform:uppercase;}
+  .activity-log{margin-top:10px;font-size:12px;color:var(--muted);font-family:var(--mono);line-height:1.8;max-height:160px;overflow:auto;}
+  .activity-log .err{color:#d98866;}
+  .activity-log .ok{color:var(--gold-bright);}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">c1jumpw / mkp-tools / pdl</div>
+    <h1>Personal Development Library</h1>
+    <div class="tagline">The research, the goals, and the words you return to — every day, in your own mindset practice.</div>
+
+    <div class="toprow">
+      <div class="search">
+        <input type="text" id="searchInput" placeholder="Search your library…">
+      </div>
+      <div class="organize-toggle" id="organizeToggle">
+        <span class="switch"></span>
+        Organize
+      </div>
+    </div>
+  </header>
+
+  <div class="today-card">
+    <div class="eyebrow">Today's practice</div>
+    <div class="today-title" id="todayTitle">Loading your library…</div>
+    <div class="today-actions" id="todayActions"></div>
+  </div>
+
+  <div id="credPanel" style="display:none;"></div>
+
+  <div class="chips" id="chips">
+    <div class="chip active" data-filter="all">All</div>
+    <div class="chip" data-filter="audio">Audio</div>
+    <div class="chip" data-filter="video">Video</div>
+    <div class="chip" data-filter="doc">Docs</div>
+  </div>
+
+  <div id="library"></div>
+
+  <div class="activity">
+    <details>
+      <summary>Activity log</summary>
+      <div class="activity-log" id="activityLog"></div>
+    </details>
+  </div>
+</div>
+
+<!-- mini audio player -->
+<div class="mini-player" id="miniPlayer">
+  <input type="range" class="mp-scrub" id="scrub" min="0" max="100" value="0">
+  <div class="mp-row">
+    <button class="mp-btn small" id="prevBtn" title="Previous">
+      <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l9-6v12z"/></svg>
+    </button>
+    <button class="mp-btn play" id="playPauseBtn" title="Play/Pause">
+      <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button class="mp-btn small" id="nextBtn" title="Next">
+      <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l9 6-9 6z"/></svg>
+    </button>
+    <div class="mp-info">
+      <div class="mp-title" id="mpTitle">—</div>
+      <div class="mp-time" id="mpTime">0:00 / 0:00</div>
+    </div>
+  </div>
+</div>
+<audio id="audioEl"></audio>
+
+<!-- video / pdf modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-close"><button id="modalCloseBtn">Close</button></div>
+    <div id="modalContent"></div>
+    <div class="modal-title" id="modalTitleText"></div>
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const OWNER = 'c1jumpw';
+const REPO = 'mkp-tools';
+const BRANCH = 'main';
+const MEDIA_PREFIX = 'pdl/media/'; // paths in the repo tree live under here
+const TOKEN_KEY = 'pdlLibraryToken';
+
+const EXT_MAP = {
+  audio: ['mp3','m4a','wav','ogg','aac','flac'],
+  video: ['mp4','mov','webm','mkv','m4v'],
+  doc: ['pdf','doc','docx','txt','md','ppt','pptx','xls','xlsx']
+};
+function typeOf(filename){
+  const ext = filename.split('.').pop().toLowerCase();
+  for(const [t, list] of Object.entries(EXT_MAP)) if(list.includes(ext)) return t;
+  return 'doc';
+}
+
+/* ================= STATE ================= */
+let items = [];       // {path, folder, name, type, url, sha}
+let currentFilter = 'all';
+let searchTerm = '';
+let organizeMode = false;
+let playQueue = [];    // current filtered audio queue
+let currentIndex = -1;
+let writeQueue = Promise.resolve(); // serializes GitHub write ops
+
+/* ================= DOM refs ================= */
+const libraryEl = document.getElementById('library');
+const todayTitle = document.getElementById('todayTitle');
+const todayActions = document.getElementById('todayActions');
+const activityLog = document.getElementById('activityLog');
+const credPanel = document.getElementById('credPanel');
+
+function log(msg, cls){
+  const div = document.createElement('div');
+  if(cls) div.className = cls;
+  div.textContent = msg;
+  activityLog.appendChild(div);
+  activityLog.scrollTop = activityLog.scrollHeight;
+}
+
+/* ================= LOAD LIBRARY ================= */
+async function loadLibrary(){
+  try{
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`);
+    if(!res.ok) throw new Error(`GitHub API returned ${res.status}`);
+    const data = await res.json();
+    items = data.tree
+      .filter(e => e.type === 'blob' && e.path.startsWith(MEDIA_PREFIX))
+      .map(e => {
+        const rel = e.path.slice(MEDIA_PREFIX.length); // e.g. "wealth/file.m4a" or "file.m4a"
+        const parts = rel.split('/');
+        const name = parts.pop();
+        const folder = parts.join('/'); // '' if root
+        return {
+          path: e.path,
+          sha: e.sha,
+          folder,
+          name,
+          type: typeOf(name),
+          url: 'media/' + rel.split('/').map(encodeURIComponent).join('/')
+        };
+      });
+    renderToday();
+    renderLibrary();
+    log(`loaded ${items.length} file(s) from ${MEDIA_PREFIX}`, 'ok');
+  } catch(err){
+    libraryEl.innerHTML = `<div class="empty-state"><div class="big">Couldn't load the library</div>${err.message}. If this repo is private, browsing needs a token too — enable Organize mode and add one.</div>`;
+    todayTitle.textContent = 'Your library will appear here once it loads.';
+    log(err.message, 'err');
+  }
+}
+
+/* ================= TODAY'S PRACTICE ================= */
+function seededIndex(len){
+  const d = new Date();
+  const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  let hash = 0;
+  for(const c of key) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+  return hash % len;
+}
+function renderToday(){
+  const audioItems = items.filter(i => i.type === 'audio');
+  if(!audioItems.length){
+    todayTitle.textContent = 'Add audio to your media folder to get a daily pick here.';
+    todayActions.innerHTML = '';
+    return;
+  }
+  const pick = audioItems[seededIndex(audioItems.length)];
+  todayTitle.textContent = displayName(pick.name);
+  todayActions.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.className = 'play-btn';
+  btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+  btn.onclick = () => playAudio(pick);
+  const meta = document.createElement('div');
+  meta.className = 'today-meta';
+  meta.textContent = pick.folder ? pick.folder : 'General';
+  todayActions.appendChild(btn);
+  todayActions.appendChild(meta);
+}
+
+function displayName(filename){
+  return filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+}
+
+/* ================= RENDER LIBRARY ================= */
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    currentFilter = chip.dataset.filter;
+    renderLibrary();
+  });
+});
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchTerm = e.target.value.toLowerCase();
+  renderLibrary();
+});
+
+function iconFor(type){
+  if(type === 'audio') return `<svg viewBox="0 0 24 24" stroke-width="1.6"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+  if(type === 'video') return `<svg viewBox="0 0 24 24" stroke-width="1.6"><rect x="2" y="5" width="14" height="14" rx="2"/><path d="M22 8l-6 4 6 4z"/></svg>`;
+  return `<svg viewBox="0 0 24 24" stroke-width="1.6"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>`;
+}
+
+function existingFolders(){
+  return [...new Set(items.map(i => i.folder).filter(Boolean))];
+}
+
+function renderLibrary(){
+  libraryEl.innerHTML = '';
+  const filtered = items.filter(i => {
+    if(currentFilter !== 'all' && i.type !== currentFilter) return false;
+    if(searchTerm && !i.name.toLowerCase().includes(searchTerm)) return false;
+    return true;
+  });
+
+  if(!filtered.length){
+    libraryEl.innerHTML = `<div class="empty-state"><div class="big">Nothing here yet</div>Upload audio, video, or documents into <code>pdl/media</code> and they'll show up in this library automatically.</div>`;
+    return;
+  }
+
+  // group by folder
+  const groups = {};
+  filtered.forEach(i => {
+    const key = i.folder || 'General';
+    (groups[key] = groups[key] || []).push(i);
+  });
+
+  playQueue = filtered.filter(i => i.type === 'audio');
+
+  Object.entries(groups).forEach(([folder, list]) => {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'folder-group';
+    groupEl.innerHTML = `<div class="folder-label">${folder}</div>`;
+    list.forEach(item => groupEl.appendChild(renderItem(item)));
+    libraryEl.appendChild(groupEl);
+  });
+}
+
+function renderItem(item){
+  const row = document.createElement('div');
+  row.className = 'item';
+  row.id = 'item-' + btoa(item.path).replace(/[^a-zA-Z0-9]/g,'');
+
+  const icon = document.createElement('div');
+  icon.className = 'item-icon';
+  icon.innerHTML = iconFor(item.type);
+
+  const body = document.createElement('div');
+  body.className = 'item-body';
+  const title = document.createElement('div');
+  title.className = 'item-title';
+  title.textContent = displayName(item.name);
+  const meta = document.createElement('div');
+  meta.className = 'item-meta';
+  meta.textContent = item.type;
+  body.appendChild(title);
+  body.appendChild(meta);
+
+  const actions = document.createElement('div');
+  actions.className = 'item-actions';
+
+  if(organizeMode){
+    title.style.cursor = 'text';
+    title.title = 'Tap to rename';
+    title.onclick = () => startRename(item, title);
+
+    const moveSelect = document.createElement('select');
+    moveSelect.className = 'move-select';
+    const folders = ['', ...existingFolders(), '__new__'];
+    moveSelect.innerHTML = folders.map(f => {
+      if(f === '__new__') return `<option value="__new__">+ New folder…</option>`;
+      return `<option value="${f}" ${f === item.folder ? 'selected' : ''}>${f || 'General'}</option>`;
+    }).join('');
+    moveSelect.onchange = () => handleMove(item, moveSelect);
+    actions.appendChild(moveSelect);
+  } else {
+    const playBtn = document.createElement('button');
+    playBtn.className = 'icon-btn';
+    playBtn.innerHTML = item.type === 'audio'
+      ? `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`
+      : `<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+    playBtn.onclick = () => openItem(item);
+    actions.appendChild(playBtn);
+  }
+
+  row.appendChild(icon);
+  row.appendChild(body);
+  row.appendChild(actions);
+  return row;
+}
+
+function startRename(item, titleEl){
+  const input = document.createElement('input');
+  input.className = 'item-title-input';
+  input.value = item.name;
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const newName = input.value.trim();
+    if(newName && newName !== item.name){
+      const newPath = MEDIA_PREFIX + (item.folder ? item.folder + '/' : '') + newName;
+      queueWrite(() => performMove(item, newPath, `Rename ${item.name} → ${newName}`));
+    } else {
+      renderLibrary();
+    }
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => { if(e.key === 'Enter') input.blur(); if(e.key === 'Escape'){ input.value = item.name; input.blur(); } });
+}
+
+function handleMove(item, selectEl){
+  let newFolder = selectEl.value;
+  if(newFolder === '__new__'){
+    newFolder = prompt('New folder name (e.g. "wealth" or "leadership"):', '');
+    if(newFolder === null){ renderLibrary(); return; }
+    newFolder = newFolder.trim().replace(/^\/|\/$/g, '');
+  }
+  if(newFolder === item.folder){ return; }
+  const newPath = MEDIA_PREFIX + (newFolder ? newFolder + '/' : '') + item.name;
+  queueWrite(() => performMove(item, newPath, `Move ${item.name} → ${newFolder || 'General'}`));
+}
+
+/* ================= ORGANIZE TOGGLE / TOKEN ================= */
+const organizeToggleEl = document.getElementById('organizeToggle');
+organizeToggleEl.addEventListener('click', () => {
+  organizeMode = !organizeMode;
+  organizeToggleEl.classList.toggle('on', organizeMode);
+  if(organizeMode) renderCredPanel();
+  else credPanel.style.display = 'none';
+  renderLibrary();
+});
+
+function getToken(){ return localStorage.getItem(TOKEN_KEY) || ''; }
+function setToken(t){ localStorage.setItem(TOKEN_KEY, t); }
+
+function renderCredPanel(){
+  const token = getToken();
+  credPanel.style.display = 'block';
+  if(token){
+    credPanel.innerHTML = `<div class="cred-panel">Token saved for this browser. <button id="forgetTokenBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);">Forget token</button></div>`;
+    document.getElementById('forgetTokenBtn').onclick = () => { localStorage.removeItem(TOKEN_KEY); renderCredPanel(); };
+  } else {
+    credPanel.innerHTML = `
+      <div class="cred-panel">
+        Renaming and moving files needs a token with write access to <strong>${OWNER}/${REPO}</strong>.
+        <input type="password" id="tokenInput" placeholder="github_pat_...">
+        <button id="saveTokenBtn">Save token</button>
+        <div class="cred-note">Stored only in this browser's local storage — never uploaded anywhere except directly to GitHub's API. Use a fine-grained token scoped to this one repo, with "Contents: Read and write" permission.</div>
+      </div>`;
+    document.getElementById('saveTokenBtn').onclick = () => {
+      const val = document.getElementById('tokenInput').value.trim();
+      if(val){ setToken(val); renderCredPanel(); }
+    };
+  }
+}
+
+/* ================= GITHUB WRITE (rename / move via tree surgery) ================= */
+function queueWrite(fn){
+  writeQueue = writeQueue.then(fn).catch(err => log(err.message, 'err'));
+}
+
+async function ghFetch(url, options={}){
+  const token = getToken();
+  if(!token) throw new Error('No token set — open Organize mode and add one first.');
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      ...(options.headers||{})
+    }
+  });
+  if(!res.ok){
+    const body = await res.text();
+    throw new Error(`${res.status} — ${body.slice(0,150)}`);
+  }
+  return res.json();
+}
+
+async function performMove(item, newPath, message, attempt=1){
+  const MAX_RETRIES = 4;
+  try{
+    log(`${message}...`);
+    const ref = await ghFetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
+    const latestCommitSha = ref.object.sha;
+    const commitData = await ghFetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/commits/${latestCommitSha}`);
+    const baseTreeSha = commitData.tree.sha;
+
+    const newTree = await ghFetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/trees`, {
+      method: 'POST',
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: [
+          { path: item.path, mode: '100644', type: 'blob', sha: null },
+          { path: newPath, mode: '100644', type: 'blob', sha: item.sha }
+        ]
+      })
+    });
+    const newCommit = await ghFetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/commits`, {
+      method: 'POST',
+      body: JSON.stringify({ message, tree: newTree.sha, parents: [latestCommitSha] })
+    });
+    await ghFetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sha: newCommit.sha })
+    });
+
+    // update local state
+    item.path = newPath;
+    const rel = newPath.slice(MEDIA_PREFIX.length);
+    const parts = rel.split('/');
+    item.name = parts.pop();
+    item.folder = parts.join('/');
+    log(`done: ${message}`, 'ok');
+    renderLibrary();
+    renderToday();
+  } catch(err){
+    const msg = err.message || '';
+    const retryable = msg.includes('not a fast forward') || msg.includes('Failed to fetch');
+    if(retryable && attempt < MAX_RETRIES){
+      log(`retrying (${attempt}/${MAX_RETRIES})...`);
+      await new Promise(r => setTimeout(r, 1200 * attempt));
+      return performMove(item, newPath, message, attempt + 1);
+    }
+    throw err;
+  }
+}
+
+/* ================= AUDIO PLAYER ================= */
+const audioEl = document.getElementById('audioEl');
+const miniPlayer = document.getElementById('miniPlayer');
+const playPauseBtn = document.getElementById('playPauseBtn');
+const playIcon = document.getElementById('playIcon');
+const mpTitle = document.getElementById('mpTitle');
+const mpTime = document.getElementById('mpTime');
+const scrub = document.getElementById('scrub');
+
+function fmtTime(s){
+  if(!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function playAudio(item){
+  currentIndex = playQueue.findIndex(i => i.path === item.path);
+  if(currentIndex === -1){ playQueue = [item]; currentIndex = 0; }
+  audioEl.src = item.url;
+  audioEl.play();
+  mpTitle.textContent = displayName(item.name);
+  miniPlayer.classList.add('show');
+  highlightPlaying(item);
+}
+function highlightPlaying(item){
+  document.querySelectorAll('.item').forEach(el => el.classList.remove('playing'));
+  const el = document.getElementById('item-' + btoa(item.path).replace(/[^a-zA-Z0-9]/g,''));
+  if(el) el.classList.add('playing');
+}
+
+playPauseBtn.onclick = () => { audioEl.paused ? audioEl.play() : audioEl.pause(); };
+audioEl.addEventListener('play', () => { playIcon.innerHTML = '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>'; });
+audioEl.addEventListener('pause', () => { playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>'; });
+audioEl.addEventListener('timeupdate', () => {
+  if(audioEl.duration){
+    scrub.value = (audioEl.currentTime / audioEl.duration) * 100;
+    mpTime.textContent = `${fmtTime(audioEl.currentTime)} / ${fmtTime(audioEl.duration)}`;
+  }
+});
+scrub.addEventListener('input', () => { if(audioEl.duration) audioEl.currentTime = (scrub.value/100) * audioEl.duration; });
+document.getElementById('nextBtn').onclick = () => { if(playQueue.length){ currentIndex = (currentIndex+1) % playQueue.length; playAudio(playQueue[currentIndex]); } };
+document.getElementById('prevBtn').onclick = () => { if(playQueue.length){ currentIndex = (currentIndex-1+playQueue.length) % playQueue.length; playAudio(playQueue[currentIndex]); } };
+audioEl.addEventListener('ended', () => document.getElementById('nextBtn').onclick());
+
+/* ================= VIDEO / DOC MODAL ================= */
+const modalOverlay = document.getElementById('modalOverlay');
+const modalContent = document.getElementById('modalContent');
+const modalTitleText = document.getElementById('modalTitleText');
+document.getElementById('modalCloseBtn').onclick = closeModal;
+function closeModal(){
+  modalOverlay.classList.remove('show');
+  modalContent.innerHTML = '';
+}
+
+function openItem(item){
+  if(item.type === 'audio'){ playAudio(item); return; }
+  if(item.type === 'video'){
+    modalContent.innerHTML = `<video class="modal-video" src="${item.url}" controls autoplay></video>`;
+    modalTitleText.textContent = displayName(item.name);
+    modalOverlay.classList.add('show');
+    return;
+  }
+  if(item.name.toLowerCase().endsWith('.pdf')){
+    modalContent.innerHTML = `<embed class="modal-pdf" src="${item.url}" type="application/pdf">`;
+    modalTitleText.textContent = displayName(item.name);
+    modalOverlay.classList.add('show');
+    return;
+  }
+  window.open(item.url, '_blank');
+}
+
+/* ================= INIT ================= */
+loadLibrary();
+</script>
+</body>
+</html>
