@@ -282,7 +282,12 @@
   function relayFetch(path, opts){
     opts = opts || {};
     opts.headers = Object.assign({ "X-App-Key": CONFIG.APP_KEY }, opts.headers || {});
-    return fetch(CONFIG.WORKER_URL.replace(/\/+$/, "") + path, opts);
+    return fetch(CONFIG.WORKER_URL.replace(/\/+$/, "") + path, opts).catch(err => {
+      if (CONFIG.WORKER_URL.includes("PASTE-YOUR")){
+        throw new Error("CONFIG.WORKER_URL still has a placeholder — paste your real Worker URL at the top of this file.");
+      }
+      throw new Error(`Network error reaching the relay (${err.message}) — check the Worker URL is correct, deployed, and reachable.`);
+    });
   }
 
   el("todayDate").textContent = new Date().toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" });
@@ -373,6 +378,9 @@
         body: JSON.stringify(body)
       });
       if (!res.ok){
+        if (res.status === 401){
+          throw new Error("The relay rejected the app key (401) — make sure CONFIG.APP_KEY here matches APP_KEY in the Worker's settings exactly.");
+        }
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || `HTTP ${res.status}`);
       }
