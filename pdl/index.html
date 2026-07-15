@@ -15,8 +15,21 @@
     --brass:#c9a15e;
     --brass-dim:#4a3d28;
     --brass-soft:rgba(201,161,94,0.12);
+    --err:#e0684c;
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  body[data-theme="light"]{
+    --bg:#faf6ee;
+    --bg-2:#f1e9d8;
+    --panel:#ffffff;
+    --line:#e4d9c0;
+    --text:#2b2419;
+    --text-dim:#7c6f57;
+    --brass:#9c7226;
+    --brass-dim:#ecdcb4;
+    --brass-soft:rgba(156,114,38,0.16);
+    --err:#c14a30;
   }
   *{box-sizing:border-box;}
   body{
@@ -33,6 +46,12 @@
 
   .organize-toggle{display:flex; align-items:center; gap:8px; flex-shrink:0; margin-top:2px;}
   .organize-toggle span{font-size:11px; color:var(--text-dim); font-weight:600;}
+  .header-actions{display:flex; align-items:center; gap:10px; flex-shrink:0;}
+  .theme-toggle{
+    width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:var(--panel);
+    color:var(--text-dim); cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;
+  }
+  .theme-toggle:hover{color:var(--brass); border-color:var(--brass-dim);}
   .switch{position:relative; width:38px; height:21px;}
   .switch input{opacity:0; width:0; height:0;}
   .slider{position:absolute; inset:0; background:var(--panel); border:1px solid var(--line); border-radius:22px; cursor:pointer; transition:.15s;}
@@ -116,6 +135,29 @@
     color:var(--text-dim); display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer;
   }
   .icon-btn:hover{color:var(--brass); border-color:var(--brass-dim);}
+  .icon-btn.danger:hover{color:var(--err); border-color:var(--err);}
+
+  /* passcode lock */
+  .lock-overlay{
+    position:fixed; inset:0; background:var(--bg); z-index:100; display:none;
+    align-items:center; justify-content:center; padding:20px;
+  }
+  .lock-overlay.show{display:flex;}
+  .lock-card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:32px 28px; max-width:300px; width:100%; text-align:center;}
+  .lock-card .eyebrow{display:block;}
+  .lock-card h1{font-size:19px; margin-top:8px;}
+  .lock-card input{
+    width:100%; text-align:center; font-size:26px; letter-spacing:14px; background:var(--bg-2);
+    border:1px solid var(--line); color:var(--text); border-radius:10px; padding:14px 14px 14px 26px;
+    margin:18px 0 0; font-family:var(--sans); box-sizing:border-box;
+  }
+  .lock-card input:focus{outline:none; border-color:var(--brass);}
+  .lock-card button{
+    width:100%; background:var(--brass); color:#221a0e; border:none; padding:12px; border-radius:10px;
+    font-weight:700; cursor:pointer; font-size:14px; margin-top:14px;
+  }
+  .lock-error{color:var(--err); font-size:12px; margin-top:10px; display:none;}
+  .lock-error.show{display:block;}
 
   .empty{color:var(--text-dim); font-size:13px; text-align:center; padding:36px 0;}
   .loading{color:var(--text-dim); font-size:13px; text-align:center; padding:36px 0;}
@@ -177,6 +219,16 @@
 </head>
 <body>
 
+<div class="lock-overlay show" id="lockOverlay">
+  <div class="lock-card">
+    <span class="eyebrow">Personal Development Library</span>
+    <h1>Enter passcode</h1>
+    <input type="password" id="lockInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••">
+    <button id="lockSubmit">Unlock</button>
+    <div class="lock-error" id="lockError">Incorrect passcode — try again.</div>
+  </div>
+</div>
+
 <div class="wrap">
   <header>
     <div>
@@ -184,12 +236,15 @@
       <h1>Good morning.</h1>
       <div class="date" id="todayDate"></div>
     </div>
-    <div class="organize-toggle">
-      <span>Organize</span>
-      <label class="switch">
-        <input type="checkbox" id="organizeToggle">
-        <span class="slider"></span>
-      </label>
+    <div class="header-actions">
+      <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+      <div class="organize-toggle">
+        <span>Organize</span>
+        <label class="switch">
+          <input type="checkbox" id="organizeToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
   </header>
 
@@ -272,7 +327,7 @@
 
   // Same relay used by the uploader — paste the Worker URL and app key from your setup here.
   const CONFIG = {
-    WORKER_URL: "https://pdl-relay.c1-jumpw.workers.dev",
+    WORKER_URL: "https://pdl-relay.c1-jumpw.workers.dev/",
     APP_KEY: "87rh49bfughdbvfa34rdasdfrge1SS4"
   };
   // -----------------------------------
@@ -296,15 +351,47 @@
   const VIDEO_EXT = ["mp4","mov","m4v","webm"];
   const DOC_EXT = ["pdf","doc","docx","txt","md"];
 
+  // Large files get uploaded in parts by the Uploader app (its blob endpoint gets unreliable
+  // well before GitHub's documented 100MB ceiling). A "<name>.chunked.json" file stands in for
+  // the real file; the actual parts live in a sibling hidden folder derived from its own path,
+  // so moving/renaming/trashing the pointer transparently moves the whole file — see chunkFolderFor.
+  const CHUNK_SUFFIX = ".chunked.json";
+  const POINTER_SUFFIX = ".ghrelease.json"; // large files the Uploader stored as a GitHub
+                                             // Release asset instead of a repo blob — this
+                                             // small file just points at the real download URL.
+  function suffixOf(name){
+    if (name.endsWith(CHUNK_SUFFIX)) return CHUNK_SUFFIX;
+    if (name.endsWith(POINTER_SUFFIX)) return POINTER_SUFFIX;
+    return "";
+  }
+  function realNameOf(name){
+    const s = suffixOf(name);
+    return s ? name.slice(0, -s.length) : name;
+  }
+  function chunkFolderFor(manifestPath){
+    const slash = manifestPath.lastIndexOf("/");
+    const dir = slash >= 0 ? manifestPath.slice(0, slash) : "";
+    const base = (slash >= 0 ? manifestPath.slice(slash + 1) : manifestPath).replace(/\.chunked\.json$/, "");
+    return (dir ? dir + "/" : "") + ".chunks-" + base;
+  }
+  const MIME_MAP = {
+    mp3:"audio/mpeg", m4a:"audio/mp4", wav:"audio/wav", aac:"audio/aac", flac:"audio/flac", ogg:"audio/ogg",
+    mp4:"video/mp4", mov:"video/quicktime", m4v:"video/mp4", webm:"video/webm",
+    pdf:"application/pdf"
+  };
+  function mimeFor(name){
+    return MIME_MAP[name.split(".").pop().toLowerCase()] || "application/octet-stream";
+  }
+
   function kindOf(name){
-    const ext = name.split(".").pop().toLowerCase();
+    const ext = realNameOf(name).split(".").pop().toLowerCase();
     if (AUDIO_EXT.includes(ext)) return "audio";
     if (VIDEO_EXT.includes(ext)) return "video";
     if (DOC_EXT.includes(ext)) return "docs";
     return "other";
   }
   function niceName(name){
-    return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+    return realNameOf(name).replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   }
   function slugify(name){
     return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || ("c" + Date.now());
@@ -344,8 +431,8 @@
 
   async function loadCollectionsData(){
     try{
-      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
-        headers: { "Accept": "application/vnd.github+json" }
+      const res = await relayFetch(`/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}`, {
+        method: "GET"
       });
       if (res.status === 404){ collectionsData = { collections: [], assignments: {} }; return; }
       if (!res.ok) throw new Error("load failed");
@@ -358,12 +445,28 @@
     }
   }
 
+  let savingCollections = false;
+
   async function saveCollectionsData(){
+    if (savingCollections) return false; // guard against double-submit (e.g. a fast double-tap)
+    savingCollections = true;
+    try{
+      return await saveCollectionsDataAttempt(1);
+    } finally {
+      savingCollections = false;
+    }
+  }
+
+  async function saveCollectionsDataAttempt(attempt){
     // Fetch the current sha right before writing to minimize the chance of a stale-sha conflict.
+    // This goes through the relay (authenticated) rather than the public API — unauthenticated
+    // GitHub API reads sit behind an edge cache that can serve a "not found" for a few seconds
+    // right after an authenticated write, which was causing "sha wasn't supplied" on the very
+    // next save.
     let sha = null;
     try{
-      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
-        headers: { "Accept": "application/vnd.github+json" }
+      const res = await relayFetch(`/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}`, {
+        method: "GET"
       });
       if (res.ok) sha = (await res.json()).sha;
     } catch(e){ /* file may not exist yet — that's fine, sha stays null */ }
@@ -382,7 +485,16 @@
           throw new Error("The relay rejected the app key (401) — make sure CONFIG.APP_KEY here matches APP_KEY in the Worker's settings exactly.");
         }
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || `HTTP ${res.status}`);
+        const msg = err.message || `HTTP ${res.status}`;
+        // "sha" conflicts happen when the file was created/changed between our sha read and
+        // this write (e.g. a near-simultaneous save, or GitHub's own replication lag).
+        // One silent retry with a fresh sha resolves the vast majority of these.
+        const isShaConflict = /sha/i.test(msg) && attempt < 3;
+        if (isShaConflict){
+          await new Promise(r => setTimeout(r, 400 * attempt));
+          return await saveCollectionsDataAttempt(attempt + 1);
+        }
+        throw new Error(msg);
       }
       return true;
     } catch(err){
@@ -450,6 +562,7 @@
     let entries;
     try { entries = await fetchFolder(path); } catch(e){ return acc; }
     for (const entry of entries){
+      if (entry.name.startsWith(".")) continue;
       if (entry.type === "dir") await collectAllAudio(entry.path, acc);
       else if (kindOf(entry.name) === "audio") acc.push(entry);
     }
@@ -465,7 +578,11 @@
       el("practiceTitle").textContent = niceName(pick.name);
       el("practiceSub").textContent = "Repeated today, from your library.";
       el("practiceCard").style.display = "block";
-      el("practicePlay").addEventListener("click", () => playAudio(pick));
+      el("practicePlay").addEventListener("click", () => {
+        if (pick.name.endsWith(CHUNK_SUFFIX)) playChunkedAudio(pick);
+        else if (pick.name.endsWith(POINTER_SUFFIX)) playPointerAudio(pick);
+        else playAudio(pick);
+      });
     } catch(e){ /* quietly skip if unavailable */ }
   }
 
@@ -550,27 +667,40 @@
 
   function renderFileRow(entry, organizing){
     const kind = kindOf(entry.name);
+    const isChunked = entry.name.endsWith(CHUNK_SUFFIX);
+    const isPointer = entry.name.endsWith(POINTER_SUFFIX);
     const row = document.createElement("div");
     row.className = "item";
     row.dataset.path = entry.path;
 
     const tags = collectionsData.assignments[entry.path];
     const tagStr = tags && tags.length ? " · " + tags.map(collectionName).join(", ") : "";
+    const sizeStr = isChunked ? " · multi-part" : isPointer ? " · hosted" : (entry.size ? " · " + (entry.size/(1024*1024)).toFixed(1) + " MB" : "");
 
     row.innerHTML = `
       <div class="item-icon">${iconFor(kind)}</div>
       <div class="item-body">
         <div class="item-title">${niceName(entry.name)}</div>
-        <div class="item-meta">${kind.toUpperCase()}${entry.size ? " · " + (entry.size/(1024*1024)).toFixed(1) + " MB" : ""}${tagStr}</div>
+        <div class="item-meta">${kind.toUpperCase()}${sizeStr}${tagStr}</div>
       </div>
-      ${organizing ? '<div class="organize-controls"><div class="icon-btn" data-act="tag" title="Collections">🏷</div><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div></div>' : ""}
+      ${organizing ? '<div class="organize-controls"><div class="icon-btn" data-act="tag" title="Collections">🏷</div><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div><div class="icon-btn danger" data-act="trash" title="Move to trash">🗑</div></div>' : ""}
     `;
 
     row.addEventListener("click", (e) => {
       if (e.target.closest(".organize-controls")) return;
-      if (kind === "audio") playAudio(entry);
-      else if (kind === "video") playVideo(entry);
-      else openDoc(entry);
+      if (isChunked){
+        if (kind === "audio") playChunkedAudio(entry);
+        else if (kind === "video") playChunkedVideo(entry);
+        else openChunkedDoc(entry);
+      } else if (isPointer){
+        if (kind === "audio") playPointerAudio(entry);
+        else if (kind === "video") playPointerVideo(entry);
+        else openPointerDoc(entry);
+      } else {
+        if (kind === "audio") playAudio(entry);
+        else if (kind === "video") playVideo(entry);
+        else openDoc(entry);
+      }
     });
 
     if (organizing){
@@ -586,25 +716,38 @@
         e.stopPropagation();
         startMove(entry);
       });
+      row.querySelector('[data-act="trash"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        trashFile(entry);
+      });
     }
     return row;
   }
 
   function startRename(row, entry){
     if (row.querySelector(".rename-row")) return;
+    const suffix = suffixOf(entry.name);
+    const displayName = suffix ? entry.name.slice(0, -suffix.length) : entry.name;
     const wrap = document.createElement("div");
     wrap.className = "rename-row";
-    wrap.innerHTML = `<input type="text" value="${entry.name}"><button>Save</button>`;
+    wrap.innerHTML = `<input type="text" value="${displayName}"><button>Save</button>`;
     row.appendChild(wrap);
     const input = wrap.querySelector("input");
     input.focus();
     wrap.querySelector("button").addEventListener("click", async (e) => {
       e.stopPropagation();
-      const newName = input.value.trim();
-      if (!newName || newName === entry.name) { wrap.remove(); return; }
+      let newName = input.value.trim();
+      if (!newName || newName === displayName) { wrap.remove(); return; }
+      if (suffix) newName = newName + suffix;
       const newPath = entry.path.replace(/[^/]+$/, newName);
       await moveFile(entry, newPath);
     });
+  }
+
+  function trashFile(entry){
+    if (!confirm(`Move "${niceName(entry.name)}" to trash?`)) return;
+    const newPath = `${MEDIA_PATH}/trash/${entry.name}`;
+    moveFile(entry, newPath);
   }
 
   function startMove(entry){
@@ -616,47 +759,81 @@
   }
 
   // ---------- relay-backed writes ----------
+  async function commitTreeEntries(treeEntries, message){
+    const refRes = await relayFetch("/ref", { method: "GET" });
+    if (!refRes.ok) throw new Error((await refRes.json().catch(()=>({}))).message || "ref read failed");
+    const refData = await refRes.json();
+    const parentSha = refData.object.sha;
+
+    const commitRes = await relayFetch(`/commit/${parentSha}`, { method: "GET" });
+    const commitData = await commitRes.json();
+    const baseTree = commitData.tree.sha;
+
+    const treeRes = await relayFetch("/tree", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base_tree: baseTree, tree: treeEntries })
+    });
+    if (!treeRes.ok) throw new Error((await treeRes.json().catch(()=>({}))).message || "tree error");
+    const newTreeSha = (await treeRes.json()).sha;
+
+    const commitNewRes = await relayFetch("/commit", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, tree: newTreeSha, parents: [parentSha] })
+    });
+    if (!commitNewRes.ok) throw new Error((await commitNewRes.json().catch(()=>({}))).message || "commit error");
+    const newCommitSha = (await commitNewRes.json()).sha;
+
+    const updateRes = await relayFetch("/ref", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sha: newCommitSha })
+    });
+    if (!updateRes.ok) throw new Error((await updateRes.json().catch(()=>({}))).message || "ref update error");
+  }
+
   async function moveFile(entry, newPath){
     try{
-      const refRes = await relayFetch("/ref", { method: "GET" });
-      if (!refRes.ok) throw new Error((await refRes.json().catch(()=>({}))).message || "ref read failed");
-      const refData = await refRes.json();
-      const parentSha = refData.object.sha;
-
-      const commitRes = await relayFetch(`/commit/${parentSha}`, { method: "GET" });
-      const commitData = await commitRes.json();
-      const baseTree = commitData.tree.sha;
-
-      const treeRes = await relayFetch("/tree", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          base_tree: baseTree,
-          tree: [
-            { path: entry.path, mode: "100644", type: "blob", sha: null },
-            { path: newPath, mode: "100644", type: "blob", sha: entry.sha }
-          ]
-        })
-      });
-      if (!treeRes.ok) throw new Error((await treeRes.json().catch(()=>({}))).message || "tree error");
-      const newTreeSha = (await treeRes.json()).sha;
-
-      const commitNewRes = await relayFetch("/commit", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: `Move ${entry.name}`, tree: newTreeSha, parents: [parentSha] })
-      });
-      if (!commitNewRes.ok) throw new Error((await commitNewRes.json().catch(()=>({}))).message || "commit error");
-      const newCommitSha = (await commitNewRes.json()).sha;
-
-      const updateRes = await relayFetch("/ref", {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sha: newCommitSha })
-      });
-      if (!updateRes.ok) throw new Error((await updateRes.json().catch(()=>({}))).message || "ref update error");
-
+      if (!entry.sha){
+        // Entries synthesized for the Collections view don't carry a sha — fetch it now.
+        const shaRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${entry.path.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
+          headers: { "Accept": "application/vnd.github+json" }
+        });
+        if (shaRes.ok) entry.sha = (await shaRes.json()).sha;
+      }
+      if (entry.name.endsWith(CHUNK_SUFFIX)){
+        await moveChunkedFile(entry, newPath);
+      } else {
+        await commitTreeEntries([
+          { path: entry.path, mode: "100644", type: "blob", sha: null },
+          { path: newPath, mode: "100644", type: "blob", sha: entry.sha }
+        ], `Move ${entry.name}`);
+      }
+      // Keep collection tags attached to whichever path the file lives at now.
+      if (collectionsData.assignments[entry.path]){
+        collectionsData.assignments[newPath] = collectionsData.assignments[entry.path];
+        delete collectionsData.assignments[entry.path];
+        await saveCollectionsData();
+      }
       loadCurrentFolder();
     } catch(err){
       alert("Move failed: " + err.message + "\n\nGitHub can have a brief replication delay — try again in a few seconds.");
     }
+  }
+
+  // Moves the manifest plus every part in its (derived) chunk folder in one atomic commit,
+  // reusing each part's existing blob sha — no re-upload needed.
+  async function moveChunkedFile(entry, newManifestPath){
+    const oldChunkFolder = chunkFolderFor(entry.path);
+    const newChunkFolder = chunkFolderFor(newManifestPath);
+    const parts = await fetchFolder(oldChunkFolder);
+    const treeEntries = [
+      { path: entry.path, mode: "100644", type: "blob", sha: null },
+      { path: newManifestPath, mode: "100644", type: "blob", sha: entry.sha }
+    ];
+    parts.forEach(p => {
+      treeEntries.push({ path: p.path, mode: "100644", type: "blob", sha: null });
+      treeEntries.push({ path: `${newChunkFolder}/${p.name}`, mode: "100644", type: "blob", sha: p.sha });
+    });
+    await commitTreeEntries(treeEntries, `Move ${entry.name}`);
   }
 
   async function createFolder(){
@@ -685,7 +862,8 @@
     el("listing").innerHTML = '<div class="loading">Loading…</div>';
     buildCrumbs();
     try{
-      allEntries = await fetchFolder(currentPath);
+      const raw = await fetchFolder(currentPath);
+      allEntries = raw.filter(e => !e.name.startsWith("."));
       allEntries.sort((a,b) => {
         if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
         return a.name.localeCompare(b.name);
@@ -845,6 +1023,147 @@
     el("modalContent").innerHTML = "";
     el("modalOverlay").classList.remove("show");
   });
+
+  // ---------- chunked file reconstruction ----------
+  async function fetchManifest(manifestPath){
+    const res = await fetch(rawUrl(manifestPath));
+    if (!res.ok) throw new Error("Could not load this file's manifest");
+    return res.json();
+  }
+
+  async function reconstructBlob(manifestPath, mimeType){
+    const manifest = await fetchManifest(manifestPath);
+    const chunkFolder = chunkFolderFor(manifestPath);
+    const buffers = [];
+    for (let i = 1; i <= manifest.parts; i++){
+      const partName = "part-" + String(i).padStart(3, "0");
+      const res = await fetch(rawUrl(`${chunkFolder}/${partName}`));
+      if (!res.ok) throw new Error(`Could not load part ${i} of ${manifest.parts}`);
+      buffers.push(await res.arrayBuffer());
+    }
+    return new Blob(buffers, { type: mimeType });
+  }
+
+  async function playChunkedAudio(entry){
+    el("miniTitle").textContent = "Loading " + niceName(entry.name) + "…";
+    el("miniPlayer").classList.add("show");
+    highlightPlaying(entry.path);
+    try{
+      const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)));
+      audioEl.src = URL.createObjectURL(blob);
+      audioEl.play();
+      el("miniTitle").textContent = niceName(entry.name);
+    } catch(err){
+      el("miniTitle").textContent = "Couldn't load: " + err.message;
+    }
+  }
+
+  async function playChunkedVideo(entry){
+    el("modalContent").innerHTML = `<div style="color:var(--text-dim); font-size:13px;">Loading ${niceName(entry.name)}…</div>`;
+    el("modalOverlay").classList.add("show");
+    try{
+      const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)));
+      const url = URL.createObjectURL(blob);
+      el("modalContent").innerHTML = `<video src="${url}" controls autoplay playsinline></video>`;
+    } catch(err){
+      el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
+    }
+  }
+
+  async function openChunkedDoc(entry){
+    const displayName = realNameOf(entry.name);
+    try{
+      const blob = await reconstructBlob(entry.path, mimeFor(displayName));
+      const url = URL.createObjectURL(blob);
+      if (displayName.toLowerCase().endsWith(".pdf")){
+        el("modalContent").innerHTML = `<iframe src="${url}"></iframe>`;
+        el("modalOverlay").classList.add("show");
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch(err){
+      alert("Couldn't load document: " + err.message);
+    }
+  }
+
+  // ---------- pointer files (GitHub Release assets) ----------
+  async function fetchPointer(path){
+    const res = await fetch(rawUrl(path));
+    if (!res.ok) throw new Error("Could not load this file's pointer");
+    return res.json();
+  }
+
+  async function playPointerAudio(entry){
+    el("miniTitle").textContent = "Loading " + niceName(entry.name) + "…";
+    el("miniPlayer").classList.add("show");
+    highlightPlaying(entry.path);
+    try{
+      const pointer = await fetchPointer(entry.path);
+      audioEl.src = pointer.url;
+      audioEl.play();
+      el("miniTitle").textContent = niceName(entry.name);
+    } catch(err){
+      el("miniTitle").textContent = "Couldn't load: " + err.message;
+    }
+  }
+
+  async function playPointerVideo(entry){
+    el("modalContent").innerHTML = `<div style="color:var(--text-dim); font-size:13px;">Loading ${niceName(entry.name)}…</div>`;
+    el("modalOverlay").classList.add("show");
+    try{
+      const pointer = await fetchPointer(entry.path);
+      el("modalContent").innerHTML = `<video src="${pointer.url}" controls autoplay playsinline></video>`;
+    } catch(err){
+      el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
+    }
+  }
+
+  async function openPointerDoc(entry){
+    try{
+      const pointer = await fetchPointer(entry.path);
+      window.open(pointer.url, "_blank");
+    } catch(err){
+      alert("Couldn't load document: " + err.message);
+    }
+  }
+
+  // ---------- theme ----------
+  const LS_THEME = "pdl_theme_v1";
+  function applyTheme(theme){
+    document.body.dataset.theme = theme;
+    el("themeToggle").textContent = theme === "light" ? "☀️" : "🌙";
+  }
+  applyTheme(localStorage.getItem(LS_THEME) || "dark");
+  el("themeToggle").addEventListener("click", () => {
+    const next = document.body.dataset.theme === "light" ? "dark" : "light";
+    localStorage.setItem(LS_THEME, next);
+    applyTheme(next);
+  });
+
+  // ---------- passcode lock ----------
+  // Note: this is a soft deterrent, not real security — the code lives in this file's
+  // source, which anyone with the URL can view. It just keeps the library from opening
+  // to a casual visitor or a photo of your screen.
+  const PASSCODE = "0286";
+  const LS_UNLOCKED = "pdl_unlocked_v1";
+  function attemptUnlock(){
+    if (el("lockInput").value.trim() === PASSCODE){
+      localStorage.setItem(LS_UNLOCKED, "1");
+      el("lockOverlay").classList.remove("show");
+      el("lockError").classList.remove("show");
+    } else {
+      el("lockError").classList.add("show");
+      el("lockInput").value = "";
+    }
+  }
+  if (localStorage.getItem(LS_UNLOCKED) === "1"){
+    el("lockOverlay").classList.remove("show");
+  } else {
+    el("lockInput").focus();
+  }
+  el("lockSubmit").addEventListener("click", attemptUnlock);
+  el("lockInput").addEventListener("keydown", e => { if (e.key === "Enter") attemptUnlock(); });
+  el("lockInput").addEventListener("input", () => { if (el("lockInput").value.length === 4) attemptUnlock(); });
 
   // ---------- init ----------
   loadTodaysPractice();
