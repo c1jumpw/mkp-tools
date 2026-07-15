@@ -60,6 +60,11 @@
   }
   .practice-play svg{width:13px; height:13px;}
 
+  /* view toggle */
+  .view-toggle{display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px; margin-bottom:16px;}
+  .view-tab{flex:1; text-align:center; padding:8px 0; border-radius:7px; cursor:pointer; font-size:12.5px; font-weight:600; color:var(--text-dim); user-select:none;}
+  .view-tab.active{background:var(--brass-dim); color:var(--brass);}
+
   /* search + filter */
   .controls{display:flex; gap:8px; margin-bottom:16px;}
   .search{
@@ -74,19 +79,22 @@
   }
   .filter-chip.active{background:var(--brass-dim); border-color:var(--brass); color:var(--brass);}
 
+  /* collections bar */
+  .collections-bar{display:none; gap:6px; flex-wrap:wrap; margin-bottom:16px;}
+  .collections-bar.show{display:flex;}
+
   /* folder breadcrumb */
   .crumbs{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); margin-bottom:12px; flex-wrap:wrap;}
   .crumbs .seg{cursor:pointer;}
   .crumbs .seg:hover{color:var(--brass);}
   .crumbs .sep{opacity:.5;}
   .crumbs .seg.current{color:var(--text); cursor:default;}
-  .new-folder-btn{
+  .pill-btn{
     margin-left:auto; padding:5px 11px; border-radius:20px; border:1px solid var(--brass-dim);
-    color:var(--brass); font-weight:600; cursor:pointer; white-space:nowrap;
+    color:var(--brass); font-weight:600; cursor:pointer; white-space:nowrap; font-size:12px;
   }
 
   /* list */
-  .section-label{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin:22px 0 10px; font-weight:600;}
   .item{
     display:flex; align-items:center; gap:12px; padding:12px 12px; border-radius:12px;
     background:var(--panel); border:1px solid var(--line); margin-bottom:8px; cursor:pointer;
@@ -99,7 +107,7 @@
   .item.playing .item-icon{background:var(--brass-dim);}
   .item-body{flex:1; min-width:0;}
   .item-title{font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .item-meta{font-size:11px; color:var(--text-dim); margin-top:2px;}
+  .item-meta{font-size:11px; color:var(--text-dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .item-chevron{color:var(--text-dim); font-size:13px; flex-shrink:0;}
 
   .organize-controls{display:flex; align-items:center; gap:6px; flex-shrink:0;}
@@ -141,16 +149,26 @@
   .modal-content video{max-width:100%; max-height:100%;}
   .modal-content iframe{width:100%; height:100%; border:none;}
 
-  /* token prompt */
-  .token-banner{
-    background:var(--panel); border:1px solid var(--brass-dim); border-radius:12px; padding:14px 16px;
-    margin-bottom:16px; font-size:12.5px; color:var(--text-dim); line-height:1.5;
+  /* tag modal */
+  .tag-modal-overlay{
+    position:fixed; inset:0; background:rgba(10,8,6,0.75); z-index:70; display:none;
+    align-items:center; justify-content:center; padding:20px;
   }
-  .token-banner input{
-    width:100%; margin-top:10px; background:var(--bg-2); border:1px solid var(--line); color:var(--text);
-    padding:9px 11px; border-radius:8px; font-size:13px;
-  }
-  .token-banner button{margin-top:10px; background:var(--brass); color:#221a0e; border:none; padding:8px 14px; border-radius:8px; font-weight:700; font-size:12.5px; cursor:pointer;}
+  .tag-modal-overlay.show{display:flex;}
+  .tag-modal{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:20px; width:100%; max-width:380px;}
+  .tag-modal-title{font-family:var(--serif); font-size:18px;}
+  .tag-modal-file{font-size:12px; color:var(--text-dim); margin-top:3px; margin-bottom:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tag-list{display:flex; flex-direction:column; gap:9px; max-height:200px; overflow-y:auto; margin-bottom:12px;}
+  .tag-row{display:flex; align-items:center; gap:10px; font-size:13.5px;}
+  .tag-row input{width:16px; height:16px; accent-color:var(--brass);}
+  .tag-empty{font-size:12.5px; color:var(--text-dim);}
+  .tag-new-row{display:flex; gap:7px; margin-bottom:16px;}
+  .tag-new-row input{flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px 10px; border-radius:8px; font-size:13px;}
+  .tag-new-row button{padding:8px 12px; border-radius:8px; border:none; background:var(--bg-2); color:var(--brass); border:1px solid var(--brass-dim); font-weight:700; font-size:12px; cursor:pointer;}
+  .tag-modal-actions{display:flex; gap:8px; justify-content:flex-end;}
+  .tag-modal-actions button{padding:9px 16px; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; border:none;}
+  .tag-cancel{background:var(--bg-2); color:var(--text); border:1px solid var(--line) !important;}
+  .tag-save{background:var(--brass); color:#221a0e;}
 
   .rename-row{display:flex; gap:6px; align-items:center; margin-top:8px;}
   .rename-row input{flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:7px 9px; border-radius:7px; font-size:12.5px;}
@@ -185,10 +203,9 @@
     </button>
   </div>
 
-  <div class="token-banner" id="tokenBanner" style="display:none;">
-    Organize mode needs write access to move or rename files. Paste a personal access token scoped to this repo — it's saved only in this browser.
-    <input type="password" id="orgToken" placeholder="github_pat_…">
-    <button id="orgTokenSave">Save token</button>
+  <div class="view-toggle">
+    <div class="view-tab active" data-view="browse">Browse</div>
+    <div class="view-tab" data-view="collections">Collections</div>
   </div>
 
   <div class="controls">
@@ -201,6 +218,7 @@
     <div class="filter-chip" data-filter="docs">Docs</div>
   </div>
 
+  <div class="collections-bar" id="collectionsBar"></div>
   <div class="crumbs" id="crumbs"></div>
 
   <div id="listing"><div class="loading">Loading your library…</div></div>
@@ -224,6 +242,22 @@
   <div class="modal-content" id="modalContent"></div>
 </div>
 
+<div class="tag-modal-overlay" id="tagModalOverlay">
+  <div class="tag-modal">
+    <div class="tag-modal-title">Add to collections</div>
+    <div class="tag-modal-file" id="tagModalFile"></div>
+    <div class="tag-list" id="tagList"></div>
+    <div class="tag-new-row">
+      <input type="text" id="newCollectionInput" placeholder="New collection name…">
+      <button id="newCollectionBtn">Add</button>
+    </div>
+    <div class="tag-modal-actions">
+      <button class="tag-cancel" id="tagModalCancel">Cancel</button>
+      <button class="tag-save" id="tagModalSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -234,20 +268,21 @@
   const BRANCH = "main";
   const ROOT_PATH = "pdl";
   const MEDIA_PATH = "pdl/media";
+  const COLLECTIONS_PATH = "pdl/media/.collections.json";
 
-  // Paste a fine-grained personal access token here (Contents: read & write, scoped to this
-  // repo only) to enable Organize mode — rename, move, and new-folder — without typing a
-  // token every visit. Leave the placeholder as-is to fall back to the one-time browser prompt.
-  const CONFIG_TOKEN = "PASTE_YOUR_GITHUB_TOKEN_HERE";
+  // Same relay used by the uploader — paste the Worker URL and app key from your setup here.
+  const CONFIG = {
+    WORKER_URL: "https://pdl-relay.c1-jumpw.workers.dev",
+    APP_KEY: "87rh49bfughdbvfa34rdasdfrge1SS4"
+  };
   // -----------------------------------
 
   const el = id => document.getElementById(id);
-  const LS_TOKEN = "pdl_org_token_v1";
-  const TOKEN_HARDCODED = CONFIG_TOKEN && CONFIG_TOKEN !== "PASTE_YOUR_GITHUB_TOKEN_HERE";
 
-  function getToken(){
-    if (TOKEN_HARDCODED) return CONFIG_TOKEN;
-    return localStorage.getItem(LS_TOKEN) || "";
+  function relayFetch(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ "X-App-Key": CONFIG.APP_KEY }, opts.headers || {});
+    return fetch(CONFIG.WORKER_URL.replace(/\/+$/, "") + path, opts);
   }
 
   el("todayDate").textContent = new Date().toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" });
@@ -266,22 +301,23 @@
   function niceName(name){
     return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   }
-
-  let currentPath = MEDIA_PATH;
-  let allEntries = []; // current folder contents from GitHub API
-  let activeFilter = "all";
-  let searchTerm = "";
-  let flatAudioCache = null; // for "today's practice" - flattened audio list across media root
-
-  function apiHeaders(){
-    const token = getToken();
-    const h = { "Accept": "application/vnd.github+json" };
-    if (token) h["Authorization"] = `Bearer ${token}`;
-    return h;
+  function slugify(name){
+    return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || ("c" + Date.now());
   }
 
+  let currentPath = MEDIA_PATH;
+  let allEntries = [];
+  let activeFilter = "all";
+  let searchTerm = "";
+  let currentView = "browse";
+  let selectedCollectionId = null;
+  let collectionsData = { collections: [], assignments: {} };
+  let currentTagEntry = null;
+
   async function fetchFolder(path){
-    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path).replace(/%2F/g,"/")}?ref=${BRANCH}`, { headers: apiHeaders() });
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
+      headers: { "Accept": "application/vnd.github+json" }
+    });
     if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
     return res.json();
   }
@@ -292,6 +328,114 @@
   function blobUrl(path){
     return `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/${path.split("/").map(encodeURIComponent).join("/")}`;
   }
+
+  // ---------- collections (tags) ----------
+  function b64ToUtf8(b64){
+    return decodeURIComponent(escape(atob(b64.replace(/\n/g, ""))));
+  }
+  function utf8ToB64(str){
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  async function loadCollectionsData(){
+    try{
+      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
+        headers: { "Accept": "application/vnd.github+json" }
+      });
+      if (res.status === 404){ collectionsData = { collections: [], assignments: {} }; return; }
+      if (!res.ok) throw new Error("load failed");
+      const json = await res.json();
+      collectionsData = JSON.parse(b64ToUtf8(json.content));
+      if (!collectionsData.collections) collectionsData.collections = [];
+      if (!collectionsData.assignments) collectionsData.assignments = {};
+    } catch(e){
+      collectionsData = { collections: [], assignments: {} };
+    }
+  }
+
+  async function saveCollectionsData(){
+    // Fetch the current sha right before writing to minimize the chance of a stale-sha conflict.
+    let sha = null;
+    try{
+      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
+        headers: { "Accept": "application/vnd.github+json" }
+      });
+      if (res.ok) sha = (await res.json()).sha;
+    } catch(e){ /* file may not exist yet — that's fine, sha stays null */ }
+
+    const body = { message: "Update collections", content: utf8ToB64(JSON.stringify(collectionsData, null, 2)) };
+    if (sha) body.sha = sha;
+
+    try{
+      const res = await relayFetch(`/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      return true;
+    } catch(err){
+      alert("Couldn't save collections: " + err.message);
+      return false;
+    }
+  }
+
+  function collectionName(id){
+    const c = collectionsData.collections.find(c => c.id === id);
+    return c ? c.name : id;
+  }
+
+  function openTagModal(entry){
+    currentTagEntry = entry;
+    el("tagModalFile").textContent = niceName(entry.name);
+    renderTagList();
+    el("tagModalOverlay").classList.add("show");
+  }
+  function closeTagModal(){
+    el("tagModalOverlay").classList.remove("show");
+    currentTagEntry = null;
+  }
+  function renderTagList(){
+    const box = el("tagList");
+    box.innerHTML = "";
+    if (!collectionsData.collections.length){
+      box.innerHTML = '<div class="tag-empty">No collections yet — add one below.</div>';
+      return;
+    }
+    const current = collectionsData.assignments[currentTagEntry.path] || [];
+    collectionsData.collections.forEach(c => {
+      const row = document.createElement("label");
+      row.className = "tag-row";
+      row.innerHTML = `<input type="checkbox" value="${c.id}" ${current.includes(c.id) ? "checked" : ""}> <span>${c.name}</span>`;
+      box.appendChild(row);
+    });
+  }
+  el("newCollectionBtn").addEventListener("click", () => {
+    const name = el("newCollectionInput").value.trim();
+    if (!name) return;
+    const id = slugify(name);
+    if (!collectionsData.collections.find(c => c.id === id)){
+      collectionsData.collections.push({ id, name });
+    }
+    el("newCollectionInput").value = "";
+    renderTagList();
+    const cb = el("tagList").querySelector(`input[value="${id}"]`);
+    if (cb) cb.checked = true;
+  });
+  el("tagModalCancel").addEventListener("click", closeTagModal);
+  el("tagModalSave").addEventListener("click", async () => {
+    const checked = Array.from(el("tagList").querySelectorAll("input[type=checkbox]:checked")).map(cb => cb.value);
+    if (checked.length) collectionsData.assignments[currentTagEntry.path] = checked;
+    else delete collectionsData.assignments[currentTagEntry.path];
+    const ok = await saveCollectionsData();
+    if (ok){
+      closeTagModal();
+      if (currentView === "collections") renderCollectionsView(); else renderListing();
+    }
+  });
 
   // ---------- Today's Practice ----------
   async function collectAllAudio(path, acc){
@@ -308,7 +452,6 @@
     try{
       const all = await collectAllAudio(MEDIA_PATH, []);
       if (!all.length) return;
-      flatAudioCache = all;
       const dayIndex = Math.floor(Date.now() / 86400000);
       const pick = all[dayIndex % all.length];
       el("practiceTitle").textContent = niceName(pick.name);
@@ -318,7 +461,7 @@
     } catch(e){ /* quietly skip if unavailable */ }
   }
 
-  // ---------- rendering the current folder ----------
+  // ---------- Browse view ----------
   function buildCrumbs(){
     const box = el("crumbs");
     box.innerHTML = "";
@@ -340,37 +483,10 @@
     });
     if (el("organizeToggle").checked){
       const btn = document.createElement("span");
-      btn.className = "new-folder-btn";
+      btn.className = "pill-btn";
       btn.textContent = "+ New folder";
       btn.addEventListener("click", createFolder);
       box.appendChild(btn);
-    }
-  }
-
-  async function createFolder(){
-    if (!getToken()){ alert("Add a token above first — organizing needs write access."); return; }
-    const name = prompt("Name for the new folder:", "");
-    if (!name) return;
-    const clean = name.trim().replace(/[\/\\]+/g, "-");
-    if (!clean) return;
-    const path = `${currentPath}/${clean}/.gitkeep`;
-    try{
-      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}`, {
-        method: "PUT",
-        headers: Object.assign({ "Content-Type": "application/json" }, apiHeaders()),
-        body: JSON.stringify({
-          message: `Create folder ${clean}`,
-          content: btoa("This file keeps the folder in git history."),
-          branch: BRANCH
-        })
-      });
-      if (!res.ok){
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.message || `HTTP ${res.status}`);
-      }
-      loadCurrentFolder();
-    } catch(err){
-      alert("Couldn't create the folder: " + err.message);
     }
   }
 
@@ -430,13 +546,16 @@
     row.className = "item";
     row.dataset.path = entry.path;
 
+    const tags = collectionsData.assignments[entry.path];
+    const tagStr = tags && tags.length ? " · " + tags.map(collectionName).join(", ") : "";
+
     row.innerHTML = `
       <div class="item-icon">${iconFor(kind)}</div>
       <div class="item-body">
         <div class="item-title">${niceName(entry.name)}</div>
-        <div class="item-meta">${kind.toUpperCase()}${entry.size ? " · " + (entry.size/(1024*1024)).toFixed(1) + " MB" : ""}</div>
+        <div class="item-meta">${kind.toUpperCase()}${entry.size ? " · " + (entry.size/(1024*1024)).toFixed(1) + " MB" : ""}${tagStr}</div>
       </div>
-      ${organizing ? '<div class="organize-controls"><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div></div>' : ""}
+      ${organizing ? '<div class="organize-controls"><div class="icon-btn" data-act="tag" title="Collections">🏷</div><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div></div>' : ""}
     `;
 
     row.addEventListener("click", (e) => {
@@ -447,6 +566,10 @@
     });
 
     if (organizing){
+      row.querySelector('[data-act="tag"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        openTagModal(entry);
+      });
       row.querySelector('[data-act="rename"]').addEventListener("click", (e) => {
         e.stopPropagation();
         startRename(row, entry);
@@ -484,20 +607,20 @@
     moveFile(entry, newPath);
   }
 
+  // ---------- relay-backed writes ----------
   async function moveFile(entry, newPath){
-    if (!getToken()){ alert("Add a token above first — organizing needs write access."); return; }
     try{
-      // 1. get latest commit + tree
-      const refRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, { headers: apiHeaders() });
+      const refRes = await relayFetch("/ref", { method: "GET" });
+      if (!refRes.ok) throw new Error((await refRes.json().catch(()=>({}))).message || "ref read failed");
       const refData = await refRes.json();
       const parentSha = refData.object.sha;
-      const commitRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/commits/${parentSha}`, { headers: apiHeaders() });
+
+      const commitRes = await relayFetch(`/commit/${parentSha}`, { method: "GET" });
       const commitData = await commitRes.json();
       const baseTree = commitData.tree.sha;
 
-      // 2. new tree: add file at newPath with same sha, remove old path
-      const treeRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/trees`, {
-        method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, apiHeaders()),
+      const treeRes = await relayFetch("/tree", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           base_tree: baseTree,
           tree: [
@@ -506,27 +629,47 @@
           ]
         })
       });
-      if (!treeRes.ok) throw new Error((await treeRes.json()).message || "tree error");
+      if (!treeRes.ok) throw new Error((await treeRes.json().catch(()=>({}))).message || "tree error");
       const newTreeSha = (await treeRes.json()).sha;
 
-      // 3. commit
-      const commitNewRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/commits`, {
-        method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, apiHeaders()),
+      const commitNewRes = await relayFetch("/commit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: `Move ${entry.name}`, tree: newTreeSha, parents: [parentSha] })
       });
-      if (!commitNewRes.ok) throw new Error((await commitNewRes.json()).message || "commit error");
+      if (!commitNewRes.ok) throw new Error((await commitNewRes.json().catch(()=>({}))).message || "commit error");
       const newCommitSha = (await commitNewRes.json()).sha;
 
-      // 4. update ref
-      const updateRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, {
-        method: "PATCH", headers: Object.assign({ "Content-Type": "application/json" }, apiHeaders()),
+      const updateRes = await relayFetch("/ref", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sha: newCommitSha })
       });
-      if (!updateRes.ok) throw new Error((await updateRes.json()).message || "ref update error");
+      if (!updateRes.ok) throw new Error((await updateRes.json().catch(()=>({}))).message || "ref update error");
 
       loadCurrentFolder();
     } catch(err){
       alert("Move failed: " + err.message + "\n\nGitHub can have a brief replication delay — try again in a few seconds.");
+    }
+  }
+
+  async function createFolder(){
+    const name = prompt("Name for the new folder:", "");
+    if (!name) return;
+    const clean = name.trim().replace(/[\/\\]+/g, "-");
+    if (!clean) return;
+    const path = `${currentPath}/${clean}/.gitkeep`;
+    try{
+      const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `Create folder ${clean}`, content: btoa("This file keeps the folder in git history.") })
+      });
+      if (!res.ok){
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || `HTTP ${res.status}`);
+      }
+      loadCurrentFolder();
+    } catch(err){
+      alert("Couldn't create the folder: " + err.message);
     }
   }
 
@@ -545,40 +688,96 @@
     }
   }
 
+  // ---------- Collections view ----------
+  function renderCollectionsView(){
+    const bar = el("collectionsBar");
+    bar.innerHTML = "";
+    collectionsData.collections.forEach(c => {
+      const count = Object.values(collectionsData.assignments).filter(ids => ids.includes(c.id)).length;
+      const chip = document.createElement("div");
+      chip.className = "filter-chip" + (selectedCollectionId === c.id ? " active" : "");
+      chip.textContent = `${c.name} (${count})`;
+      chip.addEventListener("click", () => { selectedCollectionId = c.id; renderCollectionsView(); });
+      bar.appendChild(chip);
+    });
+    if (el("organizeToggle").checked){
+      const addChip = document.createElement("div");
+      addChip.className = "pill-btn";
+      addChip.style.marginLeft = collectionsData.collections.length ? "4px" : "0";
+      addChip.textContent = "+ New collection";
+      addChip.addEventListener("click", async () => {
+        const name = prompt("Name for the new collection:", "");
+        if (!name) return;
+        const id = slugify(name);
+        if (!collectionsData.collections.find(c => c.id === id)) collectionsData.collections.push({ id, name });
+        const ok = await saveCollectionsData();
+        if (ok) renderCollectionsView();
+      });
+      bar.appendChild(addChip);
+    }
+
+    const box = el("listing");
+    box.innerHTML = "";
+    if (!selectedCollectionId){
+      box.innerHTML = collectionsData.collections.length
+        ? '<div class="empty">Choose a collection above.</div>'
+        : '<div class="empty">No collections yet. Turn on Organize, tap the tag icon on any file, or use "+ New collection".</div>';
+      return;
+    }
+    let paths = Object.keys(collectionsData.assignments).filter(p => collectionsData.assignments[p].includes(selectedCollectionId));
+    paths = paths.filter(p => {
+      const name = p.split("/").pop();
+      const kind = kindOf(name);
+      if (activeFilter !== "all" && kind !== activeFilter) return false;
+      if (searchTerm && !name.toLowerCase().includes(searchTerm)) return false;
+      return true;
+    });
+    if (!paths.length){
+      box.innerHTML = '<div class="empty">Nothing tagged here yet.</div>';
+      return;
+    }
+    const organizing = el("organizeToggle").checked;
+    paths.sort().forEach(p => {
+      box.appendChild(renderFileRow({ name: p.split("/").pop(), path: p }, organizing));
+    });
+  }
+
+  // ---------- view toggle ----------
+  document.querySelectorAll(".view-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      currentView = tab.dataset.view;
+      el("crumbs").style.display = currentView === "browse" ? "flex" : "none";
+      el("collectionsBar").classList.toggle("show", currentView === "collections");
+      if (currentView === "collections") renderCollectionsView(); else loadCurrentFolder();
+    });
+  });
+
   // ---------- filters / search ----------
   document.querySelectorAll(".filter-chip").forEach(chip => {
     chip.addEventListener("click", () => {
       document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
       chip.classList.add("active");
       activeFilter = chip.dataset.filter;
-      renderListing();
+      if (currentView === "collections") renderCollectionsView(); else renderListing();
     });
   });
   el("search").addEventListener("input", e => {
     searchTerm = e.target.value.toLowerCase();
-    renderListing();
+    if (currentView === "collections") renderCollectionsView(); else renderListing();
   });
 
-  // ---------- organize toggle / token ----------
-  el("organizeToggle").addEventListener("change", e => {
-    const on = e.target.checked;
-    el("tokenBanner").style.display = (on && !getToken()) ? "block" : "none";
-    buildCrumbs();
-    renderListing();
-  });
-  el("orgTokenSave").addEventListener("click", () => {
-    const t = el("orgToken").value.trim();
-    if (!t) return;
-    localStorage.setItem(LS_TOKEN, t);
-    el("tokenBanner").style.display = "none";
+  // ---------- organize toggle ----------
+  el("organizeToggle").addEventListener("change", () => {
+    if (currentView === "collections") renderCollectionsView();
+    else { buildCrumbs(); renderListing(); }
   });
 
   // ---------- audio (mini player) ----------
   const audioEl = el("audioEl");
-  let currentAudioEntry = null;
 
   function playAudio(entry){
-    currentAudioEntry = entry;
     audioEl.src = rawUrl(entry.path);
     audioEl.play();
     el("miniTitle").textContent = niceName(entry.name);
@@ -595,8 +794,7 @@
       : '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M8 5v14l11-7z"/></svg>';
   }
   el("miniPlayPause").addEventListener("click", () => {
-    if (audioEl.paused){ audioEl.play(); updatePlayPauseIcon(true); }
-    else { audioEl.pause(); updatePlayPauseIcon(false); }
+    if (audioEl.paused){ audioEl.play(); } else { audioEl.pause(); }
   });
   el("miniClose").addEventListener("click", () => {
     audioEl.pause(); audioEl.src = "";
@@ -606,6 +804,14 @@
   audioEl.addEventListener("timeupdate", () => {
     if (!audioEl.duration) return;
     el("miniProgressFill").style.width = (audioEl.currentTime / audioEl.duration * 100) + "%";
+  });
+  // Mobile browsers can pause/resume audio from the lock screen, OS media controls, or when
+  // the tab is backgrounded — always mirror the element's real state, not just button taps.
+  audioEl.addEventListener("play", () => updatePlayPauseIcon(true));
+  audioEl.addEventListener("pause", () => updatePlayPauseIcon(false));
+  audioEl.addEventListener("ended", () => updatePlayPauseIcon(false));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") updatePlayPauseIcon(!audioEl.paused);
   });
   el("miniProgress").addEventListener("click", (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -635,6 +841,7 @@
   // ---------- init ----------
   loadTodaysPractice();
   loadCurrentFolder();
+  loadCollectionsData().then(() => { if (currentView === "browse") renderListing(); });
 
 })();
 </script>
