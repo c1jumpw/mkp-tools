@@ -34,7 +34,7 @@
   *{box-sizing:border-box;}
   body{
     margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
-    -webkit-font-smoothing:antialiased; padding-bottom:90px;
+    -webkit-font-smoothing:antialiased; padding-bottom:150px;
   }
   a{color:inherit;}
   .wrap{max-width:640px; margin:0 auto; padding:28px 18px 40px;}
@@ -129,9 +129,9 @@
   .item-meta{font-size:11px; color:var(--text-dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .item-chevron{color:var(--text-dim); font-size:13px; flex-shrink:0;}
 
-  .organize-controls{display:flex; align-items:center; gap:6px; flex-shrink:0;}
+  .organize-controls{display:flex; align-items:center; gap:4px; flex-shrink:0;}
   .icon-btn{
-    width:30px; height:30px; border-radius:7px; border:1px solid var(--line); background:var(--bg-2);
+    width:30px; height:34px; border-radius:7px; border:1px solid var(--line); background:var(--bg-2);
     color:var(--text-dim); display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer;
   }
   .icon-btn:hover{color:var(--brass); border-color:var(--brass-dim);}
@@ -165,20 +165,36 @@
   /* mini player */
   .mini-player{
     position:fixed; bottom:0; left:0; right:0; background:var(--panel); border-top:1px solid var(--line);
-    padding:10px 16px calc(10px + env(safe-area-inset-bottom)); display:none; align-items:center; gap:12px;
-    z-index:40; backdrop-filter:blur(10px);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom)); display:none; flex-direction:column; gap:8px;
+    z-index:40; backdrop-filter:blur(10px); max-height:75vh;
   }
   .mini-player.show{display:flex;}
+  .mini-top{display:flex; align-items:center; gap:12px;}
   .mini-icon{width:34px; height:34px; border-radius:8px; background:var(--brass-dim); display:flex; align-items:center; justify-content:center; color:var(--brass); flex-shrink:0;}
   .mini-info{flex:1; min-width:0;}
   .mini-title{font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .mini-progress{height:3px; background:var(--line); border-radius:2px; margin-top:6px; cursor:pointer;}
   .mini-progress-fill{height:100%; background:var(--brass); border-radius:2px; width:0%;}
+  .mini-close{background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; flex-shrink:0; padding:8px;}
+
+  .mini-controls{display:flex; align-items:center; justify-content:center; gap:8px;}
+  .mini-skip{
+    background:none; border:none; color:var(--text); font-size:11px; font-weight:700; cursor:pointer;
+    width:46px; height:44px; border-radius:10px; flex-shrink:0;
+  }
+  .mini-skip:active{background:var(--bg-2);}
   .mini-btn{
-    width:34px; height:34px; border-radius:50%; background:var(--brass); border:none; color:#221a0e;
+    width:48px; height:48px; border-radius:50%; background:var(--brass); border:none; color:#221a0e;
     display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
   }
-  .mini-close{background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; flex-shrink:0; padding:4px;}
+  .mini-speed, .mini-transcript{
+    background:var(--bg-2); border:1px solid var(--line); color:var(--text-dim); font-size:11.5px; font-weight:700;
+    padding:0 12px; height:36px; border-radius:20px; cursor:pointer; white-space:nowrap; flex-shrink:0;
+  }
+  .mini-speed.active, .mini-transcript.active{color:var(--brass); border-color:var(--brass-dim); background:var(--brass-soft);}
+
+  .transcript-panel{display:none; max-height:32vh; overflow-y:auto; background:var(--bg-2); border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.65; color:var(--text-dim); white-space:pre-wrap;}
+  .transcript-panel.show{display:block;}
 
   /* video / doc modal */
   .modal-overlay{
@@ -186,7 +202,17 @@
     align-items:center; justify-content:center; padding:0;
   }
   .modal-overlay.show{display:flex;}
-  .modal-close{position:absolute; top:16px; right:16px; background:none; border:none; color:var(--text); font-size:26px; cursor:pointer; z-index:61;}
+  .modal-close{
+    position:absolute; top:calc(14px + env(safe-area-inset-top)); right:14px; background:rgba(0,0,0,0.45);
+    border:none; color:#fff; font-size:20px; width:40px; height:40px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:61;
+  }
+  .modal-speed{
+    position:absolute; top:calc(14px + env(safe-area-inset-top)); left:14px; background:rgba(0,0,0,0.45);
+    border:none; color:#fff; font-size:12.5px; font-weight:700; height:40px; padding:0 14px; border-radius:20px;
+    cursor:pointer; z-index:61; display:none;
+  }
+  .modal-speed.show{display:block;}
   .modal-content{width:100%; height:100%; display:flex; align-items:center; justify-content:center;}
   .modal-content video{max-width:100%; max-height:100%;}
   .modal-content iframe{width:100%; height:100%; border:none;}
@@ -280,19 +306,29 @@
 </div>
 
 <div class="mini-player" id="miniPlayer">
-  <div class="mini-icon">♪</div>
-  <div class="mini-info">
-    <div class="mini-title" id="miniTitle">—</div>
-    <div class="mini-progress" id="miniProgress"><div class="mini-progress-fill" id="miniProgressFill"></div></div>
+  <div class="mini-top">
+    <div class="mini-icon">♪</div>
+    <div class="mini-info">
+      <div class="mini-title" id="miniTitle">—</div>
+      <div class="mini-progress" id="miniProgress"><div class="mini-progress-fill" id="miniProgressFill"></div></div>
+    </div>
+    <button class="mini-close" id="miniClose">✕</button>
   </div>
-  <button class="mini-btn" id="miniPlayPause">
-    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-  </button>
-  <button class="mini-close" id="miniClose">✕</button>
+  <div class="mini-controls">
+    <button class="mini-skip" id="miniRewind" title="Back 15s">−15s</button>
+    <button class="mini-btn" id="miniPlayPause">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+    </button>
+    <button class="mini-skip" id="miniForward" title="Forward 15s">+15s</button>
+    <button class="mini-speed" id="miniSpeed">1x</button>
+    <button class="mini-transcript" id="miniTranscript">Transcript</button>
+  </div>
+  <div class="transcript-panel" id="transcriptPanel"><div id="transcriptText"></div></div>
 </div>
 <audio id="audioEl"></audio>
 
 <div class="modal-overlay" id="modalOverlay">
+  <button class="modal-speed" id="modalSpeed">1x</button>
   <button class="modal-close" id="modalClose">✕</button>
   <div class="modal-content" id="modalContent"></div>
 </div>
@@ -327,8 +363,8 @@
 
   // Same relay used by the uploader — paste the Worker URL and app key from your setup here.
   const CONFIG = {
-    WORKER_URL: "https://pdl-relay.c1-jumpw.workers.dev/",
-    APP_KEY: "87rh49bfughdbvfa34rdasdfrge1SS4"
+    WORKER_URL: "https://PASTE-YOUR-WORKER-URL.workers.dev",
+    APP_KEY: "PASTE_YOUR_APP_KEY"
   };
   // -----------------------------------
 
@@ -558,23 +594,42 @@
   });
 
   // ---------- Today's Practice ----------
-  async function collectAllAudio(path, acc){
+  // The old version rescanned the whole library, folder by folder, sequentially, on every
+  // single page load — on mobile networks that's the dominant source of "slow to open."
+  // Fixed two ways: (1) fan out sibling-folder fetches in parallel instead of one at a time,
+  // and (2) cache the result once per calendar day, so only the first visit each day pays
+  // the network cost at all.
+  const LS_PRACTICE_CACHE = "pdl_practice_cache_v1";
+  function todayStr(){
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  }
+
+  async function collectAllAudio(path){
     let entries;
-    try { entries = await fetchFolder(path); } catch(e){ return acc; }
-    for (const entry of entries){
-      if (entry.name.startsWith(".")) continue;
-      if (entry.type === "dir") await collectAllAudio(entry.path, acc);
-      else if (kindOf(entry.name) === "audio") acc.push(entry);
-    }
-    return acc;
+    try { entries = await fetchFolder(path); } catch(e){ return []; }
+    const visible = entries.filter(e => !e.name.startsWith("."));
+    const dirs = visible.filter(e => e.type === "dir");
+    const files = visible.filter(e => e.type !== "dir" && kindOf(e.name) === "audio");
+    const nested = await Promise.all(dirs.map(d => collectAllAudio(d.path)));
+    return files.concat(...nested);
   }
 
   async function loadTodaysPractice(){
     try{
-      const all = await collectAllAudio(MEDIA_PATH, []);
-      if (!all.length) return;
+      let paths;
+      let cache = null;
+      try { cache = JSON.parse(localStorage.getItem(LS_PRACTICE_CACHE) || "null"); } catch(e){}
+      if (cache && cache.date === todayStr() && Array.isArray(cache.paths) && cache.paths.length){
+        paths = cache.paths;
+      } else {
+        const all = await collectAllAudio(MEDIA_PATH);
+        if (!all.length) return;
+        paths = all.map(e => e.path);
+        localStorage.setItem(LS_PRACTICE_CACHE, JSON.stringify({ date: todayStr(), paths }));
+      }
       const dayIndex = Math.floor(Date.now() / 86400000);
-      const pick = all[dayIndex % all.length];
+      const pick = { name: paths[dayIndex % paths.length].split("/").pop(), path: paths[dayIndex % paths.length] };
       el("practiceTitle").textContent = niceName(pick.name);
       el("practiceSub").textContent = "Repeated today, from your library.";
       el("practiceCard").style.display = "block";
@@ -814,6 +869,7 @@
         await saveCollectionsData();
       }
       loadCurrentFolder();
+      try { localStorage.removeItem(LS_PRACTICE_CACHE); } catch(e){}
     } catch(err){
       alert("Move failed: " + err.message + "\n\nGitHub can have a brief replication delay — try again in a few seconds.");
     }
@@ -962,13 +1018,33 @@
 
   // ---------- audio (mini player) ----------
   const audioEl = el("audioEl");
+  const SKIP_SECONDS = 15;
+  const SPEEDS = [1, 1.25, 1.5, 2];
+  const LS_SPEED = "pdl_speed_v1";
+  let speedIndex = Math.max(0, SPEEDS.indexOf(Number(localStorage.getItem(LS_SPEED)) || 1));
+  let currentAudioEntry = null;
+
+  function setSpeedLabel(){
+    const rate = SPEEDS[speedIndex];
+    el("miniSpeed").textContent = rate + "x";
+    el("miniSpeed").classList.toggle("active", rate !== 1);
+    if (el("modalSpeed").classList.contains("show")){
+      el("modalSpeed").textContent = rate + "x";
+      el("modalSpeed").classList.toggle("active", rate !== 1);
+    }
+  }
 
   function playAudio(entry){
+    currentAudioEntry = entry;
     audioEl.src = rawUrl(entry.path);
+    audioEl.playbackRate = SPEEDS[speedIndex];
     audioEl.play();
     el("miniTitle").textContent = niceName(entry.name);
     el("miniPlayer").classList.add("show");
+    el("transcriptPanel").classList.remove("show");
+    el("miniTranscript").classList.remove("active");
     updatePlayPauseIcon(true);
+    setSpeedLabel();
     highlightPlaying(entry.path);
   }
   function highlightPlaying(path){
@@ -976,8 +1052,8 @@
   }
   function updatePlayPauseIcon(playing){
     el("miniPlayPause").innerHTML = playing
-      ? '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M8 5v14l11-7z"/></svg>';
+      ? '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>';
   }
   el("miniPlayPause").addEventListener("click", () => {
     if (audioEl.paused){ audioEl.play(); } else { audioEl.pause(); }
@@ -985,7 +1061,25 @@
   el("miniClose").addEventListener("click", () => {
     audioEl.pause(); audioEl.src = "";
     el("miniPlayer").classList.remove("show");
+    el("transcriptPanel").classList.remove("show");
     highlightPlaying(null);
+    currentAudioEntry = null;
+  });
+  el("miniRewind").addEventListener("click", () => {
+    audioEl.currentTime = Math.max(0, audioEl.currentTime - SKIP_SECONDS);
+  });
+  el("miniForward").addEventListener("click", () => {
+    const end = audioEl.duration || Infinity;
+    audioEl.currentTime = Math.min(end, audioEl.currentTime + SKIP_SECONDS);
+  });
+  el("miniSpeed").addEventListener("click", () => {
+    speedIndex = (speedIndex + 1) % SPEEDS.length;
+    audioEl.playbackRate = SPEEDS[speedIndex];
+    localStorage.setItem(LS_SPEED, String(SPEEDS[speedIndex]));
+    setSpeedLabel();
+  });
+  el("miniTranscript").addEventListener("click", () => {
+    if (currentAudioEntry) toggleTranscript(currentAudioEntry);
   });
   audioEl.addEventListener("timeupdate", () => {
     if (!audioEl.duration) return;
@@ -1005,10 +1099,56 @@
     if (audioEl.duration) audioEl.currentTime = pct * audioEl.duration;
   });
 
+  // ---------- transcripts (optional sidecar file) ----------
+  // Convention: a plain-text file named "<the real filename>.transcript.txt" sitting next to
+  // the media in the repo. Nothing generates these automatically — upload one yourself
+  // (via the Uploader, or straight on GitHub) if you want a transcript available here.
+  function transcriptPathFor(entry){
+    const slash = entry.path.lastIndexOf("/");
+    const dir = slash >= 0 ? entry.path.slice(0, slash + 1) : "";
+    return dir + realNameOf(entry.name) + ".transcript.txt";
+  }
+  let openTranscriptFor = null;
+  async function toggleTranscript(entry){
+    const panel = el("transcriptPanel");
+    const btn = el("miniTranscript");
+    if (panel.classList.contains("show") && openTranscriptFor === entry.path){
+      panel.classList.remove("show");
+      btn.classList.remove("active");
+      return;
+    }
+    openTranscriptFor = entry.path;
+    btn.classList.add("active");
+    panel.classList.add("show");
+    el("transcriptText").textContent = "Loading transcript…";
+    try{
+      const res = await fetch(rawUrl(transcriptPathFor(entry)));
+      if (!res.ok) throw new Error("none");
+      el("transcriptText").textContent = await res.text();
+    } catch(e){
+      el("transcriptText").textContent = `No transcript uploaded for this item yet. To add one, upload a plain-text file named "${realNameOf(entry.name)}.transcript.txt" in the same folder.`;
+    }
+  }
+
   // ---------- video / docs (modal) ----------
+  function wireVideoSpeed(){
+    const v = el("modalContent").querySelector("video");
+    if (!v) { el("modalSpeed").classList.remove("show"); return; }
+    v.playbackRate = SPEEDS[speedIndex];
+    el("modalSpeed").classList.add("show");
+    setSpeedLabel();
+  }
+  el("modalSpeed").addEventListener("click", () => {
+    speedIndex = (speedIndex + 1) % SPEEDS.length;
+    localStorage.setItem(LS_SPEED, String(SPEEDS[speedIndex]));
+    const v = el("modalContent").querySelector("video");
+    if (v) v.playbackRate = SPEEDS[speedIndex];
+    setSpeedLabel();
+  });
   function playVideo(entry){
     el("modalContent").innerHTML = `<video src="${rawUrl(entry.path)}" controls autoplay playsinline></video>`;
     el("modalOverlay").classList.add("show");
+    wireVideoSpeed();
   }
   function openDoc(entry){
     const ext = entry.name.split(".").pop().toLowerCase();
@@ -1022,6 +1162,7 @@
   el("modalClose").addEventListener("click", () => {
     el("modalContent").innerHTML = "";
     el("modalOverlay").classList.remove("show");
+    el("modalSpeed").classList.remove("show");
   });
 
   // ---------- chunked file reconstruction ----------
@@ -1045,14 +1186,19 @@
   }
 
   async function playChunkedAudio(entry){
+    currentAudioEntry = entry;
     el("miniTitle").textContent = "Loading " + niceName(entry.name) + "…";
     el("miniPlayer").classList.add("show");
+    el("transcriptPanel").classList.remove("show");
+    el("miniTranscript").classList.remove("active");
     highlightPlaying(entry.path);
     try{
       const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)));
       audioEl.src = URL.createObjectURL(blob);
+      audioEl.playbackRate = SPEEDS[speedIndex];
       audioEl.play();
       el("miniTitle").textContent = niceName(entry.name);
+      setSpeedLabel();
     } catch(err){
       el("miniTitle").textContent = "Couldn't load: " + err.message;
     }
@@ -1065,6 +1211,7 @@
       const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)));
       const url = URL.createObjectURL(blob);
       el("modalContent").innerHTML = `<video src="${url}" controls autoplay playsinline></video>`;
+      wireVideoSpeed();
     } catch(err){
       el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
     }
@@ -1094,14 +1241,19 @@
   }
 
   async function playPointerAudio(entry){
+    currentAudioEntry = entry;
     el("miniTitle").textContent = "Loading " + niceName(entry.name) + "…";
     el("miniPlayer").classList.add("show");
+    el("transcriptPanel").classList.remove("show");
+    el("miniTranscript").classList.remove("active");
     highlightPlaying(entry.path);
     try{
       const pointer = await fetchPointer(entry.path);
       audioEl.src = pointer.url;
+      audioEl.playbackRate = SPEEDS[speedIndex];
       audioEl.play();
       el("miniTitle").textContent = niceName(entry.name);
+      setSpeedLabel();
     } catch(err){
       el("miniTitle").textContent = "Couldn't load: " + err.message;
     }
@@ -1113,6 +1265,7 @@
     try{
       const pointer = await fetchPointer(entry.path);
       el("modalContent").innerHTML = `<video src="${pointer.url}" controls autoplay playsinline></video>`;
+      wireVideoSpeed();
     } catch(err){
       el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
     }
