@@ -6,7 +6,7 @@ compatibility_date = "2024-11-01"
 # https://yourname.github.io — restricts the proxy to your app only.
 # Leave unset (or "*") while testing locally.
 [vars]
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://c1jumpw.github.io"
 
 # CLICKUP_TOKEN is a secret, not a var — set it with:
 #   wrangler secret put CLICKUP_TOKEN
