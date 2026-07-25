@@ -180,6 +180,7 @@
     position:absolute; top:50%; width:13px; height:13px; border-radius:50%; background:var(--brass);
     transform:translate(-50%,-50%); left:0%; box-shadow:0 1px 3px rgba(0,0,0,.4);
   }
+  .mini-times{display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-dim); font-family:var(--sans); font-variant-numeric:tabular-nums; margin-top:-2px;}
   .mini-close{background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; flex-shrink:0; padding:8px;}
 
   .mini-controls{display:flex; align-items:center; justify-content:center; gap:8px;}
@@ -374,6 +375,10 @@
         <div class="mini-progress-track"></div>
         <div class="mini-progress-fill" id="miniProgressFill"></div>
         <div class="mini-progress-thumb" id="miniProgressThumb"></div>
+      </div>
+      <div class="mini-times">
+        <span id="miniCurrentTime">0:00</span>
+        <span id="miniRemainingTime">−0:00</span>
       </div>
     </div>
     <button class="mini-close" id="miniClose">✕</button>
@@ -1205,6 +1210,10 @@
     audioEl.pause(); audioEl.src = "";
     el("miniPlayer").classList.remove("show");
     el("transcriptPanel").classList.remove("show");
+    el("miniProgressFill").style.width = "0%";
+    el("miniProgressThumb").style.left = "0%";
+    el("miniCurrentTime").textContent = "0:00";
+    el("miniRemainingTime").textContent = "−0:00";
     highlightPlaying(null);
     currentAudioEntry = null;
   });
@@ -1229,6 +1238,8 @@
     const pct = audioEl.currentTime / audioEl.duration * 100;
     el("miniProgressFill").style.width = pct + "%";
     el("miniProgressThumb").style.left = pct + "%";
+    el("miniCurrentTime").textContent = formatTime(audioEl.currentTime);
+    el("miniRemainingTime").textContent = "−" + formatTime(audioEl.duration - audioEl.currentTime);
     updateActiveTranscriptLine();
     if (el("teOverlay").classList.contains("show")) el("teTime").textContent = formatTime(audioEl.currentTime);
   });
@@ -1258,7 +1269,12 @@
       pct = Math.max(0, Math.min(1, pct));
       el("miniProgressFill").style.width = (pct * 100) + "%";
       el("miniProgressThumb").style.left = (pct * 100) + "%";
-      if (audioEl.duration) audioEl.currentTime = pct * audioEl.duration;
+      if (audioEl.duration){
+        const t = pct * audioEl.duration;
+        audioEl.currentTime = t;
+        el("miniCurrentTime").textContent = formatTime(t);
+        el("miniRemainingTime").textContent = "−" + formatTime(audioEl.duration - t);
+      }
     }
     bar.addEventListener("pointerdown", (e) => {
       dragging = true;
