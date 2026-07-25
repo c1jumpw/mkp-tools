@@ -24,10 +24,6 @@
 #                    new auto-log-to-Chat feature (clickup-proxy.js v4).
 #                    CHAT_CHANNEL_ID is a best-effort placeholder, not
 #                    yet confirmed correct — see its inline comment.
-#   v5  2026-07-25  Corrected CHAT_CHANNEL_ID after verifying via GET
-#                    /chat/channels — the real value is the full slug
-#                    (e.g. "4-90170798185-8"), not the numeric-only
-#                    value guessed from the app URL in v4.
 # =============================================================================
 
 name = "dispatch-clickup-proxy"
@@ -58,12 +54,16 @@ WORKSPACE_ID = "25724879"
 
 # Destination Chat channel for the auto-log-to-chat feature (every
 # capture posts a short activity message here after it sends). ClickUp
-# Chat's API is "experimental" per their own docs. VERIFIED against
-# GET <worker-url>/chat/channels on 2026-07-25 — this is the channel
-# named "MKP Space" (matches the URL originally provided). Note the ID
-# is the full slug (type-numericId-variant), not just the numeric
-# portion visible in the app URL — that was the initial wrong guess.
-CHAT_CHANNEL_ID = "4-90170798185-8"
+# Chat's API is "experimental" per their own docs, and the ID visible
+# in a Chat URL's "/chat/r/..." slug is a front-end route segment, not
+# confirmed to match the ID the v3 API actually expects. VERIFY this
+# value before relying on it: after deploying, hit GET
+# <worker-url>/chat/channels (with header X-Dispatch-Key: <passcode>)
+# and match the channel by name — see handleChatChannelsLookup() in
+# clickup-proxy.js. Placeholder below is a best-effort guess extracted
+# from the pasted URL (app.clickup.com/25724879/chat/r/4-90170798185-8)
+# and has NOT been confirmed correct.
+CHAT_CHANNEL_ID = "90170798185"
 
 # -----------------------------------------------------------------------
 # KV namespace: persists the OAuth access_token between requests (the

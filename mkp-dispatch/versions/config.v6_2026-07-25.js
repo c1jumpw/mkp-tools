@@ -71,30 +71,6 @@
  *                    structure, not a live sync — see clickup-proxy.js
  *                    for why, and README.md "Editing what goes where"
  *                    for how to update it when Spaces/Lists change.
- *   v7  2026-07-25  Corrected JTG's subtitle: "Jump Tech Group" was
- *                    wrong, real name is "Gel Tech Group" — per a
- *                    fuller workspace-structure doc the user provided.
- *                    That doc also surfaced 3 JTG sub-brands (BarBoost,
- *                    Party Designers, Seeder Agency) with content-
- *                    strategy coverage but no Task list mapped here
- *                    yet, and an unmapped CRM list ("Plans & Products
- *                    Master List") — both pending the user confirming
- *                    List IDs before adding.
- *   v8  2026-07-25  Reverted v7's JTG subtitle back to "Jump Tech
- *                    Group" — the source doc's "(Gel Tech Group)" was
- *                    itself wrong per the user's direct correction; the
- *                    original name from the very first project brief
- *                    was right all along. Added the "Plan/Product Idea"
- *                    capture type to CRM & Operations (list ID
- *                    901715517147, confirmed by the user) — same
- *                    lightbulb schema as Lead Magnet Idea since the
- *                    workspace doc describes it as structurally
- *                    identical. BarBoost/Party Designers/Seeder Agency
- *                    remain unmapped — confirmed only 3 JTG sub-brands
- *                    currently have dedicated Task lists; the other 3
- *                    will need a config.js edit + redeploy whenever
- *                    their lists are created (no auto-sync — see the
- *                    static-snapshot note in v6 above).
  * =========================================================================
  */
 
@@ -239,8 +215,7 @@ const ENTITIES = [
       { id: 'task', label: 'CRM Task', icon: 'check', schema: 'task', listId: '901714539764' },
       { id: 'activity', label: 'Activity Log', icon: 'note', schema: 'log', listId: '901715117797' },
       { id: 'email', label: 'Email Follow-up', icon: 'note', schema: 'note', listId: '901715226645' },
-      { id: 'lead-magnet', label: 'Lead Magnet Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715467342' },
-      { id: 'plan-product', label: 'Plan/Product Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715517147' }
+      { id: 'lead-magnet', label: 'Lead Magnet Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715467342' }
     ]
   },
   {

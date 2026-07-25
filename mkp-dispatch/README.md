@@ -98,16 +98,12 @@ entity (ClickUp Space) has a list of capture types, and each capture
 type points at one List ID. To add a capture type, add an entry; to
 fix a destination, change the `listId`.
 
-**Before you rely on this for real work**, double check the entries
-flagged `verify: true` in `config.js` — a few List IDs came out
-identical in the export this was built from, which usually means a
-copy-paste artifact rather than the real destination. Tapping the red
-"!" on that capture type in the app explains this in place; the same
-list is here for quick reference:
-
-- MKP → Contact Follow-up / Meeting Note (both currently point at the To-Dos list)
-- Super Admin → Light Bulb (currently points at the same list as Task)
-- Unywebs → New Hosting Account Request (currently shares an ID with JTG's Content Idea list)
+**Before you rely on this for real work**, double check any entry
+flagged `verify: true` in `config.js` (none currently — the 4 that
+were ambiguous in the original export have since been corrected
+against a fresh one, confirmed 2026-07-25). If a future ClickUp
+restructure introduces a new ambiguity, it'll show the same way: a red
+"!" on that capture type in the app, tap it for an explanation.
 
 To find the correct ID: open the list in ClickUp, look at the URL —
 `app.clickup.com/<workspace>/v/li/<LIST_ID>` — and copy the number
