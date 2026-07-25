@@ -20,10 +20,6 @@
 #                    connected OAuth token meant anyone with the link
 #                    could create ClickUp tasks with no login at all.
 #                    See clickup-proxy.js v3 for enforcement details.
-#   v4  2026-07-25  Added WORKSPACE_ID and CHAT_CHANNEL_ID vars for the
-#                    new auto-log-to-Chat feature (clickup-proxy.js v4).
-#                    CHAT_CHANNEL_ID is a best-effort placeholder, not
-#                    yet confirmed correct — see its inline comment.
 # =============================================================================
 
 name = "dispatch-clickup-proxy"
@@ -47,23 +43,6 @@ APP_URL = "https://c1jumpw.github.io/mkp-tools/mkp-dispatch/"
 # ClickUp but grants no access on its own. Copied from ClickUp →
 # Settings → Apps → ClickUp API Settings → your app.
 CLICKUP_CLIENT_ID = "CB58HH6R33DAM091WKD5OG4EO5NSWP0I"
-
-# ClickUp Workspace ID — public, same value used in js/config.js.
-# Needed for the v3 Chat endpoints, which are scoped by workspace.
-WORKSPACE_ID = "25724879"
-
-# Destination Chat channel for the auto-log-to-chat feature (every
-# capture posts a short activity message here after it sends). ClickUp
-# Chat's API is "experimental" per their own docs, and the ID visible
-# in a Chat URL's "/chat/r/..." slug is a front-end route segment, not
-# confirmed to match the ID the v3 API actually expects. VERIFY this
-# value before relying on it: after deploying, hit GET
-# <worker-url>/chat/channels (with header X-Dispatch-Key: <passcode>)
-# and match the channel by name — see handleChatChannelsLookup() in
-# clickup-proxy.js. Placeholder below is a best-effort guess extracted
-# from the pasted URL (app.clickup.com/25724879/chat/r/4-90170798185-8)
-# and has NOT been confirmed correct.
-CHAT_CHANNEL_ID = "90170798185"
 
 # -----------------------------------------------------------------------
 # KV namespace: persists the OAuth access_token between requests (the

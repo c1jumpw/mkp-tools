@@ -44,16 +44,6 @@
  *                                   proxied request must include a
  *                                   matching X-Dispatch-Key header
  *                                   (secret)
- *     env.WORKSPACE_ID           - ClickUp Workspace ID, needed for the
- *                                   v3 Chat endpoints (var, public —
- *                                   same value as config.js's
- *                                   WORKSPACE_ID on the frontend)
- *     env.CHAT_CHANNEL_ID        - destination Chat channel for
- *                                   handleChatLog() (var). See
- *                                   handleChatChannelsLookup()'s doc
- *                                   comment for how to confirm this
- *                                   value — the URL slug alone isn't
- *                                   guaranteed to be the right format.
  *     env.TOKEN_STORE            - KV namespace binding storing the
  *                                   live access_token
  *
@@ -86,25 +76,6 @@
  *                    single shared passcode, appropriate for "me + my
  *                    assistants" scale per the original project brief,
  *                    not for a multi-tenant product.
- *   v4  2026-07-25  Three additions, all following the same pattern as
- *                    the OAuth token (no ClickUp credentials ever
- *                    reach the browser):
- *                    (1) Widened the v2 allowlist to include
- *                        `list/:id/member` (GET) — powers an assignee
- *                        dropdown in the app (see clickup.js
- *                        getListMembers()).
- *                    (2) Added handleChatLog() — proxies to ClickUp's
- *                        v3 Chat "create message" endpoint so each
- *                        capture can post a short activity log to a
- *                        configured Chat channel. Note this v3 API is
- *                        marked "experimental" in ClickUp's own docs —
- *                        subject to change on their end without notice.
- *                    (3) Added handleChatChannelsLookup() — a one-time
- *                        discovery route (GET /chat/channels) to find
- *                        the real channel_id for CHAT_CHANNEL_ID, since
- *                        the ID visible in a Chat URL's "/chat/r/..."
- *                        slug is a front-end route segment, not
- *                        confirmed to match what the v3 API expects.
  * =========================================================================
  */
 
@@ -151,24 +122,13 @@ export default {
     }
 
     // ---------------------------------------------------------------
-    // Route allowlist. Only these exact shapes are allowed through —
-    // anything else is rejected, so this Worker can't be repurposed as
-    // an open proxy to arbitrary ClickUp endpoints even if someone
-    // discovers its URL. Two families:
-    //   - v2 endpoints (task CRUD, attachments, list members, user
-    //     info) — proxied generically below via API_V2_PATHS.
-    //   - v3 Chat endpoints (still "experimental" per ClickUp's own
-    //     docs as of this writing) — handled as their own special
-    //     cases since Chat lives under a different base URL
-    //     (api/v3/workspaces/... vs api/v2/...) and needs
-    //     WORKSPACE_ID/CHAT_CHANNEL_ID substituted in, not just the
-    //     path forwarded as-is.
+    // Route: proxied ClickUp API calls. Only these three exact shapes
+    // are allowed through — anything else is rejected, so this Worker
+    // can't be repurposed as an open proxy to arbitrary ClickUp
+    // endpoints even if someone discovers its URL.
     // ---------------------------------------------------------------
-    const API_V2_PATHS = /^\/(user|list\/\d+\/task|list\/\d+\/member|task\/[A-Za-z0-9]+\/attachment)$/;
-    const isChatChannelsLookup = url.pathname === '/chat/channels' && request.method === 'GET';
-    const isChatLog = url.pathname === '/log/chat' && request.method === 'POST';
-
-    if (!API_V2_PATHS.test(url.pathname) && !isChatChannelsLookup && !isChatLog) {
+    const allowedPath = /^\/(user|list\/\d+\/task|task\/[A-Za-z0-9]+\/attachment)$/;
+    if (!allowedPath.test(url.pathname)) {
       return json({ error: 'Endpoint not allowed by proxy.' }, 404, corsHeaders);
     }
 
@@ -192,9 +152,6 @@ export default {
       // than letting ClickUp return a confusing generic auth error.
       return json({ error: 'Not connected to ClickUp yet. Open Settings → Connect to ClickUp.' }, 401, corsHeaders);
     }
-
-    if (isChatChannelsLookup) return handleChatChannelsLookup(accessToken, env, corsHeaders);
-    if (isChatLog) return handleChatLog(request, accessToken, env, corsHeaders);
 
     const upstream = new URL(`https://api.clickup.com/api/v2${url.pathname}`);
     const init = {
@@ -229,90 +186,6 @@ export default {
     }
   }
 };
-
-/**
- * handleChatChannelsLookup
- * One-time discovery helper: lists every Chat channel in the
- * Workspace so the real `channel_id` for CHAT_CHANNEL_ID can be
- * confirmed. Not used by the app's normal capture flow — this exists
- * because the channel ID embedded in a ClickUp Chat URL (the
- * "/chat/r/..." slug) is a front-end route segment, not confirmed to
- * be the same ID format the v3 API expects. Hit this once via browser
- * or curl (with the X-Dispatch-Key header) to find the right value,
- * then set it in wrangler.toml and redeploy — see README.md.
- * @param {string} accessToken - OAuth token from TOKEN_STORE
- * @param {object} env
- * @param {object} corsHeaders
- * @returns {Promise<Response>} ClickUp's channel list, relayed as-is
- */
-async function handleChatChannelsLookup(accessToken, env, corsHeaders) {
-  if (!env.WORKSPACE_ID) {
-    return json({ error: 'WORKSPACE_ID is not set on this Worker.' }, 500, corsHeaders);
-  }
-  try {
-    const res = await fetch(`https://api.clickup.com/api/v3/workspaces/${env.WORKSPACE_ID}/chat/channels`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const body = await res.text();
-    return new Response(body, {
-      status: res.status,
-      headers: { ...corsHeaders, 'Content-Type': res.headers.get('Content-Type') || 'application/json' }
-    });
-  } catch (err) {
-    return json({ error: 'Upstream request to ClickUp failed.', detail: String(err) }, 502, corsHeaders);
-  }
-}
-
-/**
- * handleChatLog
- * Posts a short activity message into the configured ClickUp Chat
- * channel (CHAT_CHANNEL_ID) — called by the app after a capture sends
- * successfully, as a lightweight "new activity" feed separate from
- * the task itself. Best-effort by design: the app treats a failure
- * here the same way it treats a failed attachment upload (logged
- * client-side, doesn't undo or block the capture that already
- * succeeded) — see clickup.js logCapture()'s caller in app.js.
- * @param {Request} request - expects JSON body { content: string }
- * @param {string} accessToken
- * @param {object} env - needs WORKSPACE_ID, CHAT_CHANNEL_ID
- * @param {object} corsHeaders
- * @returns {Promise<Response>}
- * Edge cases: if CHAT_CHANNEL_ID isn't set (setup not finished), fails
- * clearly with a 500 rather than silently posting nowhere. ClickUp's
- * Chat API is marked "experimental" in their own docs — a schema
- * change on their end would surface here as a non-2xx relayed as-is.
- */
-async function handleChatLog(request, accessToken, env, corsHeaders) {
-  if (!env.WORKSPACE_ID || !env.CHAT_CHANNEL_ID) {
-    return json({ error: 'WORKSPACE_ID or CHAT_CHANNEL_ID is not set on this Worker.' }, 500, corsHeaders);
-  }
-  let content;
-  try {
-    const payload = JSON.parse(await request.text());
-    content = payload.content;
-  } catch (err) {
-    return json({ error: 'Invalid JSON body.' }, 400, corsHeaders);
-  }
-  if (!content) return json({ error: 'Missing "content".' }, 400, corsHeaders);
-
-  try {
-    const res = await fetch(
-      `https://api.clickup.com/api/v3/workspaces/${env.WORKSPACE_ID}/chat/channels/${env.CHAT_CHANNEL_ID}/messages`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'message', content, content_format: 'text/md' })
-      }
-    );
-    const body = await res.text();
-    return new Response(body, {
-      status: res.status,
-      headers: { ...corsHeaders, 'Content-Type': res.headers.get('Content-Type') || 'application/json' }
-    });
-  } catch (err) {
-    return json({ error: 'Upstream request to ClickUp failed.', detail: String(err) }, 502, corsHeaders);
-  }
-}
 
 /**
  * checkPasscode

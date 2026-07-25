@@ -40,16 +40,6 @@
  *                    `.status` so app.js's passcode lock screen can
  *                    tell "wrong passcode" (403) apart from "ClickUp
  *                    not connected yet" (401) and react differently.
- *   v3  2026-07-25  Three additions:
- *                    (1) getListMembers() — powers the assignee
- *                        dropdown on Task-type forms.
- *                    (2) logCapture() — posts a short activity message
- *                        to a ClickUp Chat channel after a capture
- *                        sends (best-effort; caller in app.js swallows
- *                        failures the same way attachment upload
- *                        failures are swallowed).
- *                    (3) buildTaskPayload() now also assigns
- *                        entry.fields.assigneeId when present.
  * =========================================================================
  */
 
@@ -119,13 +109,6 @@ const ClickUp = (() => {
     }
     if (entry.fields.tags) {
       payload.tags = entry.fields.tags.split(',').map(t => t.trim()).filter(Boolean);
-    }
-    // Assignee: populated from a list-specific dropdown (see app.js
-    // renderForm's assignee section, backed by getListMembers() below)
-    // rather than a schema field, since valid options depend on which
-    // ClickUp List this capture is headed to and have to be fetched.
-    if (entry.fields.assigneeId) {
-      payload.assignees = [Number(entry.fields.assigneeId)];
     }
     return payload;
   }
@@ -206,58 +189,5 @@ const ClickUp = (() => {
     return res.json();
   }
 
-  /**
-   * getListMembers
-   * Fetches the Workspace members who have access to (and can be
-   * assigned tasks in) a given ClickUp List — powers the Assignee
-   * dropdown on Task-type capture forms. See app.js renderForm() for
-   * the caching layer (avoids re-fetching per keystroke/re-render).
-   * @param {string} listId
-   * @returns {Promise<Array<{id:number, username:string}>>}
-   * @throws apiError on non-2xx (403 wrong passcode, 401 not connected,
-   *   or a genuine ClickUp error e.g. the list ID doesn't exist)
-   */
-  async function getListMembers(listId) {
-    const res = await fetch(`${proxyUrl()}/list/${listId}/member`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_MEMBERS_${res.status}: ${text}`, res.status);
-    }
-    const data = await res.json();
-    return data.members || [];
-  }
-
-  /**
-   * logCapture
-   * Posts a short Markdown activity message to the configured ClickUp
-   * Chat channel, summarizing what was just captured and linking to
-   * it. Called by app.js right after a successful createTask(), as a
-   * lightweight "new activity" feed distinct from the task itself.
-   * Deliberately best-effort: callers should wrap this in a .catch()
-   * that swallows failures (same pattern as uploadAttachment callers)
-   * so a Chat-logging hiccup never undoes or blocks a capture that
-   * already succeeded. See clickup-proxy.js handleChatLog() for the
-   * server side, including the "experimental API" caveat.
-   * @param {object} entry - the capture entry (see submitCapture in app.js)
-   * @param {string} taskUrl - the created task's ClickUp URL
-   * @returns {Promise<object>} ClickUp's message-creation response
-   */
-  async function logCapture(entry, taskUrl) {
-    const content = `📥 **New ${entry.typeLabel}** — ${entry.entityName}\n${entry.title}\n${taskUrl}`;
-    const res = await fetch(`${proxyUrl()}/log/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ content })
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_CHATLOG_${res.status}: ${text}`, res.status);
-    }
-    return res.json();
-  }
-
-  return { createTask, uploadAttachment, testConnection, getListMembers, logCapture };
+  return { createTask, uploadAttachment, testConnection };
 })();

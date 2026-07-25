@@ -54,27 +54,6 @@
  *                        uncertain and how to fix it) instead of a bare
  *                        "!" with only a hover tooltip, which doesn't
  *                        work on touch devices anyway.
- *   v4  2026-07-25  Four additions:
- *                    (1) Assignee dropdown on Task-type forms, backed
- *                        by ClickUp.getListMembers() and a per-list
- *                        in-memory cache (loadAssigneeOptions()).
- *                    (2) Client-side attachment size guard
- *                        (MAX_ATTACHMENT_BYTES) — warns before Send
- *                        rather than failing after, since the Worker's
- *                        Cloudflare free-tier plan hard-caps request
- *                        bodies at 100MB regardless of ClickUp's own
- *                        (much higher) 1GB limit.
- *                    (3) "View in ClickUp" link on each Recent item,
- *                        using the URL ClickUp's create-task response
- *                        includes (entry.clickupUrl, set in both
- *                        submitCapture() and processQueue()'s retry
- *                        path). Older entries logged before this
- *                        change simply omit the link.
- *                    (4) Fires ClickUp.logCapture() (best-effort, not
- *                        awaited-to-block) after a successful send, to
- *                        post a short activity message to a configured
- *                        Chat channel — see clickup.js/clickup-proxy.js
- *                        for the rest of that flow.
  * =========================================================================
  */
 
@@ -176,7 +155,6 @@ const App = (() => {
                 <span class="tag" style="--tag-color:${r.color}">${r.entityName}</span>
                 <span class="recent-title">${escapeHtml(r.title)}</span>
                 <span class="recent-type">${r.typeLabel}</span>
-                ${r.clickupUrl ? `<a class="recent-link" href="${r.clickupUrl}" target="_blank" rel="noopener">${icon('link')}</a>` : ''}
               </li>`).join('')}
           </ul>` : `<p class="empty">Nothing sent yet. Your first capture will show up here.</p>`}
         </section>
@@ -265,19 +243,6 @@ const App = (() => {
   // ---------------------------------------------------------------
   // Screen: Dynamic capture form
   // ---------------------------------------------------------------
-  // Module-level cache of list members, keyed by listId, so switching
-  // between forms for the same List (or re-opening one) doesn't
-  // re-fetch every time. Cleared only on a full page reload — good
-  // enough since Workspace membership rarely changes mid-session.
-  const listMembersCache = {};
-
-  // Cloudflare's free-tier Worker plan hard-caps any request body at
-  // 100MB (ClickUp itself allows up to 1GB per attachment, but that
-  // never matters here — the proxy rejects first). Warn well under
-  // that ceiling rather than let someone attach a big file and only
-  // discover the failure after tapping Send.
-  const MAX_ATTACHMENT_BYTES = 90 * 1024 * 1024; // 90MB, leaving headroom for the rest of the multipart payload
-
   function renderForm(entityId, typeId) {
     const entity = ENTITIES.find(e => e.id === entityId);
     const type = entity && entity.captureTypes.find(t => t.id === typeId);
@@ -287,10 +252,6 @@ const App = (() => {
     const schema = FIELD_SCHEMAS[type.schema];
     const speechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     const recordSupported = !!(navigator.mediaDevices && window.MediaRecorder);
-    // Assignee only makes sense for Task-type captures — pulling list
-    // members is a real network call, so it's scoped narrowly rather
-    // than shown (and fetched) on every capture type.
-    const showAssignee = type.schema === 'task';
 
     root.innerHTML = `
       <header class="topbar">
@@ -301,12 +262,6 @@ const App = (() => {
       <main class="form">
         <form id="capture-form">
           ${schema.map(f => renderField(f)).join('')}
-          ${showAssignee ? `
-          <label class="field" for="field-assigneeId">Assignee
-            <select id="field-assigneeId" disabled>
-              <option value="">Loading team…</option>
-            </select>
-          </label>` : ''}
 
           <div class="voice-row">
             ${speechSupported ? `<button type="button" class="pill-btn" id="dictate-btn">${icon('mic')} Dictate</button>` : ''}
@@ -326,20 +281,9 @@ const App = (() => {
 
     bindBack();
 
-    if (showAssignee) loadAssigneeOptions(type.listId);
-
     const fileInput = root.querySelector('#file-input');
     fileInput.onchange = () => {
-      const incoming = Array.from(fileInput.files);
-      const tooBig = incoming.filter(f => f.size > MAX_ATTACHMENT_BYTES);
-      const ok = incoming.filter(f => f.size <= MAX_ATTACHMENT_BYTES);
-      if (tooBig.length) {
-        alert(
-          `${tooBig.map(f => f.name).join(', ')} ${tooBig.length > 1 ? 'are' : 'is'} over the 90MB limit for attachments sent through Dispatch and won\u2019t be included. ` +
-          `For larger files, add them directly in ClickUp once the task is created.`
-        );
-      }
-      state.attachments.push(...ok);
+      state.attachments.push(...Array.from(fileInput.files));
       renderAttachmentList();
       fileInput.value = '';
     };
@@ -390,39 +334,6 @@ const App = (() => {
     return `<label class="field" for="${id}">${f.label}${f.required ? ' *' : ''}
       <input type="text" id="${id}" name="${f.key}" placeholder="${f.placeholder || ''}" autocomplete="off">
     </label>`;
-  }
-
-  /**
-   * loadAssigneeOptions
-   * Fills the Assignee <select> on Task-type forms with the members
-   * who actually have access to the destination list, fetched via
-   * ClickUp.getListMembers(). Uses listMembersCache so switching
-   * capture types for the same list doesn't refetch. Fails quietly
-   * (dropdown just shows "Unavailable") rather than blocking the rest
-   * of the form — assignee is optional, a fetch failure here shouldn't
-   * stop someone from capturing and sending the task itself.
-   * @param {string} listId
-   */
-  async function loadAssigneeOptions(listId) {
-    const select = root.querySelector('#field-assigneeId');
-    if (!select) return;
-    try {
-      if (!listMembersCache[listId]) {
-        listMembersCache[listId] = ClickUp.getListMembers(listId);
-      }
-      const members = await listMembersCache[listId];
-      // Guard against the user having already navigated away from
-      // this form (e.g. tapped back) before the fetch resolved.
-      if (!root.contains(select)) return;
-      select.innerHTML = `<option value="">Unassigned</option>` +
-        members.map(m => `<option value="${m.id}">${escapeHtml(m.username || m.email || 'Member')}</option>`).join('');
-      select.disabled = false;
-    } catch (err) {
-      delete listMembersCache[listId]; // don't cache a failure — allow retry next time the form opens
-      if (root.contains(select)) {
-        select.innerHTML = `<option value="">Unavailable — you can still send without an assignee</option>`;
-      }
-    }
   }
 
   function renderAttachmentList() {
@@ -630,23 +541,12 @@ const App = (() => {
   // ---------------------------------------------------------------
   // Submit flow
   // ---------------------------------------------------------------
-  /**
-   * collectFields
-   * Reads the current form's input values into a plain object, keyed
-   * by field key. Also picks up #field-assigneeId if present — that
-   * field is rendered outside the schema array (see renderForm), since
-   * its options are fetched dynamically rather than fixed per type.
-   * @param {object[]} schema - the FIELD_SCHEMAS entry for this capture type
-   * @returns {object} fields keyed by f.key (only non-empty values included)
-   */
   function collectFields(schema) {
     const fields = {};
     schema.forEach(f => {
       const el = root.querySelector(`#field-${f.key}`);
       if (el && el.value) fields[f.key] = el.value;
     });
-    const assigneeEl = root.querySelector('#field-assigneeId');
-    if (assigneeEl && assigneeEl.value) fields.assigneeId = assigneeEl.value;
     return fields;
   }
 
@@ -681,20 +581,10 @@ const App = (() => {
     try {
       if (!navigator.onLine) throw new Error('OFFLINE');
       const result = await ClickUp.createTask(type.listId, entry);
-      // ClickUp's create-task response includes a direct URL to the
-      // task — stashed on the entry so Home's Recent list can offer
-      // "View in ClickUp" without reconstructing or guessing the URL.
-      entry.clickupUrl = result.url || (result.id ? `https://app.clickup.com/t/${result.id}` : null);
       if (state.attachments.length && result.id) {
         for (const file of state.attachments) {
           await ClickUp.uploadAttachment(result.id, file).catch(() => {});
         }
-      }
-      // Best-effort activity log to Chat — never lets a logging hiccup
-      // undo or block a capture that already succeeded (same pattern
-      // as attachment uploads above). See clickup.js logCapture().
-      if (entry.clickupUrl) {
-        ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
       }
       Storage.addRecent(entry);
       showSuccess();
@@ -735,14 +625,10 @@ const App = (() => {
     for (const entry of queue) {
       try {
         const result = await ClickUp.createTask(entry.listId, entry);
-        entry.clickupUrl = result.url || (result.id ? `https://app.clickup.com/t/${result.id}` : null);
         if (entry.pendingAttachments && result.id) {
           for (const a of entry.pendingAttachments) {
             await ClickUp.uploadAttachment(result.id, dataUrlToFile(a)).catch(() => {});
           }
-        }
-        if (entry.clickupUrl) {
-          ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
         }
         Storage.removeFromQueue(entry.id);
         Storage.addRecent(entry);

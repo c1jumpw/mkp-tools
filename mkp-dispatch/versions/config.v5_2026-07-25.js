@@ -29,9 +29,8 @@
  *     secret set. This file holds no credentials — only a public URL.
  *   - Every `listId` below is a ClickUp List ID copied from the list's
  *     URL in the ClickUp web app: app.clickup.com/<team>/v/li/<LIST_ID>.
- *   - As of v6, no entries are flagged `verify: true` — the 4 that were
- *     ambiguous in the original export have been corrected against a
- *     fresh one. See v6 in VERSION HISTORY below.
+ *   - Entries flagged `verify: true` had ambiguous/duplicate source data
+ *     when this file was generated — see the "verify" note near ENTITIES.
  *
  * -------------------------------------------------------------------------
  * VERSION HISTORY
@@ -60,17 +59,6 @@
  *                    toggle can be added later if needed). Placed
  *                    between Priority and Due date. Task-type-only for
  *                    now; not added to note/lightbulb/contact/etc.
- *   v6  2026-07-25  Corrected 4 list IDs that were flagged `verify:
- *                    true` in v1 (identical IDs in the original export
- *                    turned out to be a copy-paste artifact) using a
- *                    fresh export: MKP Contact Follow-up, MKP Meeting
- *                    Note, Super Admin Light Bulb, Unywebs New Hosting
- *                    Account Request. All now have distinct, correct
- *                    IDs — `verify` flags removed accordingly. NOTE:
- *                    this file is a static snapshot of ClickUp's
- *                    structure, not a live sync — see clickup-proxy.js
- *                    for why, and README.md "Editing what goes where"
- *                    for how to update it when Spaces/Lists change.
  * =========================================================================
  */
 
@@ -160,15 +148,15 @@ const FIELD_SCHEMAS = {
 //   within it = the buttons shown on the "Type" screen for that entity;
 //   each one maps directly to a destination ClickUp List via `listId`.
 //
-//   `verify: true` flags (none currently set — resolved in v6, see
-//   VERSION HISTORY above) mark entries where the ClickUp export had
+//   `verify: true` flags entries where the original ClickUp export had
 //   two different list names sharing the exact same URL/ID — almost
 //   certainly a copy-paste artifact rather than the real destination.
-//   If a future re-export introduces a new ambiguity, flag it the same
-//   way: add `verify: true` to that entry so the app surfaces a
-//   tap-to-explain "!" on it (see app.js renderTypePicker) instead of
-//   silently routing somewhere unconfirmed. Confirm the real ID via:
+//   These are still wired up and functional (so the app isn't broken
+//   while you check), but should be confirmed against the real list ID
+//   in ClickUp before relying on them for anything important:
 //     app.clickup.com/<workspace>/v/li/<LIST_ID>  ← the number after /li/
+//   Flagged currently: MKP → Contact Follow-up, MKP → Meeting Note,
+//   Super Admin → Light Bulb, Unywebs → New Hosting Account Request.
 // -----------------------------------------------------------------------
 const ENTITIES = [
   {
@@ -179,8 +167,8 @@ const ENTITIES = [
     captureTypes: [
       { id: 'task', label: 'To-Do', icon: 'check', schema: 'task', listId: '901702176129' },
       { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710575809' },
-      { id: 'contact', label: 'Contact Follow-up', icon: 'user', schema: 'contact', listId: '205582666' },
-      { id: 'meeting', label: 'Meeting Note', icon: 'calendar', schema: 'note', listId: '205582656' },
+      { id: 'contact', label: 'Contact Follow-up', icon: 'user', schema: 'contact', listId: '901702176129', verify: true },
+      { id: 'meeting', label: 'Meeting Note', icon: 'calendar', schema: 'note', listId: '901702176129', verify: true },
       { id: 'accounting', label: 'Accounting Item', icon: 'dollar', schema: 'task', listId: '901702176148' },
       { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711351925' }
     ]
@@ -192,7 +180,7 @@ const ENTITIES = [
     color: '#7C8AF6',
     captureTypes: [
       { id: 'task', label: 'Task', icon: 'check', schema: 'task', listId: '901702161386' },
-      { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710064693' },
+      { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901702161386', verify: true },
       { id: 'process', label: 'Process / System Idea', icon: 'gear', schema: 'note', listId: '901711745105' },
       { id: 'client-note', label: 'Client Account Note', icon: 'building', schema: 'log', listId: '901711853904' },
       { id: 'receivable', label: 'Receivable', icon: 'dollar', schema: 'task', listId: '901703199842' },
@@ -251,7 +239,7 @@ const ENTITIES = [
       { id: 'task', label: 'Task', icon: 'check', schema: 'task', listId: '901702157771' },
       { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710960459' },
       { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901711428018' },
-      { id: 'req-hosting', label: 'New Hosting Account Request', icon: 'gear', schema: 'request', listId: '182168594' },
+      { id: 'req-hosting', label: 'New Hosting Account Request', icon: 'gear', schema: 'request', listId: '901710065625', verify: true },
       { id: 'req-systemsio', label: 'New Systems.io Account Request', icon: 'gear', schema: 'request', listId: '188376548' },
       { id: 'req-zoho', label: 'New Zoho Email Request', icon: 'gear', schema: 'request', listId: '901701551198' }
     ]

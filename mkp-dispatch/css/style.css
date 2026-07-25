@@ -26,6 +26,8 @@
  *                    interactive <span>, now a real <button> needing
  *                    explicit padding/border reset), and Settings'
  *                    good/bad status hints (.hint--good/.hint--bad).
+ *   v3  2026-07-25  Added .recent-link (the "View in ClickUp" icon on
+ *                    each Recent item).
  * =========================================================================
  */
 
@@ -208,6 +210,14 @@ a { color: var(--amber); }
 }
 .recent-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-type { color: var(--text-dim); font-size: 12px; }
+.recent-link {
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.recent-link svg { width: 15px; height: 15px; }
+.recent-link:active { color: var(--amber); }
 
 .empty { color: var(--text-dim); font-size: 14px; }
 
