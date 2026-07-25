@@ -14,6 +14,12 @@
 #                    namespace binding used to persist the OAuth access
 #                    token. CLICKUP_CLIENT_SECRET set via `wrangler
 #                    secret put`, same as CLICKUP_TOKEN was previously.
+#   v3  2026-07-24  Added APP_PASSCODE (secret, set via `wrangler secret
+#                    put APP_PASSCODE`) — a shared-secret device gate,
+#                    since the public GitHub Pages URL + an already-
+#                    connected OAuth token meant anyone with the link
+#                    could create ClickUp tasks with no login at all.
+#                    See clickup-proxy.js v3 for enforcement details.
 # =============================================================================
 
 name = "dispatch-clickup-proxy"
@@ -53,9 +59,13 @@ id = "529827efc99e46b6aab8d32bb154edef"
 # Secrets (NOT stored in this file — set via terminal, held encrypted
 # by Cloudflare):
 #   wrangler secret put CLICKUP_CLIENT_SECRET   ← already done
+#   wrangler secret put APP_PASSCODE            ← the passcode this app
+#                                                  requires on every
+#                                                  device before it will
+#                                                  touch ClickUp
 #
 # CLICKUP_TOKEN (from the old personal-token setup) may still exist as
-# a secret on this Worker from v1 — it's unused by v2's code and safe
+# a secret on this Worker from v1 — it's unused by v2+'s code and safe
 # to leave in place, or remove later with:
 #   wrangler secret delete CLICKUP_TOKEN
 # -----------------------------------------------------------------------

@@ -1,3 +1,34 @@
+/**
+ * =========================================================================
+ * style.css — Dispatch visual identity ("dispatch manifest" theme)
+ * =========================================================================
+ * PURPOSE
+ *   All styling for the app, token-based (see :root below) so colors/
+ *   spacing/type stay consistent across every screen in app.js. Dark
+ *   ink surface, brass/amber signal accent, mono labels for tags and
+ *   headers (evokes a shipping-manifest/luggage-tag feel matching the
+ *   "Dispatch" name), humanist sans for body copy and form fields.
+ *
+ * ASSUMPTIONS / EXTERNAL DEPENDENCIES
+ *   - Assumes IBM Plex Mono / IBM Plex Sans are loaded via Google Fonts
+ *     in index.html's <head> — falls back to system fonts if that
+ *     fails to load (see --font-mono/--font-sans fallback stacks).
+ *   - Uses the CSS color-mix() function (for tag tint backgrounds) —
+ *     supported in modern Chrome/Edge/Safari, not in older browsers;
+ *     degrades to a plain surface color there, not a hard failure.
+ *
+ * -------------------------------------------------------------------------
+ * VERSION HISTORY
+ *   v1  2026-07-23  Initial visual identity: home/picker/form/success
+ *                    screens, ticket-notch "New Capture" button.
+ *   v2  2026-07-24  Added styles for: the passcode lock screen (.lock*),
+ *                    the tappable chip-flag button (was a non-
+ *                    interactive <span>, now a real <button> needing
+ *                    explicit padding/border reset), and Settings'
+ *                    good/bad status hints (.hint--good/.hint--bad).
+ * =========================================================================
+ */
+
 /* -------------------------------------------------------------------
    Design tokens — "dispatch manifest" identity: dark ink surface,
    brass/amber signal accent, mono labels for tags, humanist sans body.
@@ -236,6 +267,8 @@ a { color: var(--amber); }
   margin-left: auto;
   width: 18px;
   height: 18px;
+  padding: 0;
+  border: none;
   border-radius: 50%;
   background: var(--red);
   color: #fff;
@@ -244,7 +277,44 @@ a { color: var(--amber); }
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
+
+/* --------------------------- Lock screen --------------------------- */
+.lock {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+.lock-mark svg { width: 40px; height: 40px; color: var(--amber); }
+.lock-title {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 4px 0 0;
+}
+.lock-sub { color: var(--text-dim); font-size: 14px; margin: 0 0 12px; }
+.lock-input {
+  width: 100%;
+  max-width: 260px;
+  font-size: 18px;
+  text-align: center;
+  letter-spacing: 0.2em;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  color: var(--text);
+}
+.lock-input:focus { outline: none; border-color: var(--amber); }
+.lock-error { color: var(--red); font-size: 13px; margin: 0; }
+.lock .send-btn { max-width: 260px; margin-top: 8px; }
 
 /* --------------------------- Form --------------------------- */
 .form {

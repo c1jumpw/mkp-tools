@@ -37,6 +37,23 @@
  *                    SPA and query params live after the #. Replaces
  *                    the old flow, which only accepted a manually
  *                    pasted personal API token.
+ *   v3  2026-07-24  Three changes:
+ *                    (1) Added a passcode lock screen (renderLock/
+ *                        attemptUnlock) gating app entry, matching the
+ *                        Worker's new APP_PASSCODE enforcement — closes
+ *                        the gap where anyone with the app's public URL
+ *                        could create ClickUp tasks with no login.
+ *                    (2) Settings now runs a live connection check
+ *                        (refreshConnectionStatus) every time it opens,
+ *                        not only right after the OAuth redirect — the
+ *                        old version showed no status at all on a
+ *                        normal reload even though the connection was
+ *                        genuinely fine.
+ *                    (3) The "verify this list ID" flag on capture-type
+ *                        chips is now tap-to-explain (shows what's
+ *                        uncertain and how to fix it) instead of a bare
+ *                        "!" with only a hover tooltip, which doesn't
+ *                        work on touch devices anyway.
  * =========================================================================
  */
 
@@ -198,7 +215,7 @@ const App = (() => {
             <button class="chip" style="--tile-color:${entity.color}" data-type="${t.id}">
               <span class="chip-icon">${icon(t.icon)}</span>
               <span>${t.label}</span>
-              ${t.verify ? '<span class="chip-flag" title="Double-check this list ID">!</span>' : ''}
+              ${t.verify ? `<button type="button" class="chip-flag" data-verify-label="${escapeHtml(t.label)}" data-verify-list="${t.listId}" aria-label="This destination needs verifying">!</button>` : ''}
             </button>
           `).join('')}
         </div>
@@ -207,6 +224,19 @@ const App = (() => {
     bindBack();
     root.querySelectorAll('[data-type]').forEach(btn => {
       btn.onclick = () => go(`/form/${entityId}/${btn.dataset.type}`);
+    });
+    // Tapping the "!" flag explains itself instead of opening the
+    // capture form — stopPropagation keeps the tap from also
+    // triggering the parent chip's own onclick (click events bubble
+    // from this child button up through the chip button it sits in).
+    root.querySelectorAll('[data-verify-label]').forEach(flag => {
+      flag.onclick = (e) => {
+        e.stopPropagation();
+        alert(
+          `"${flag.dataset.verifyLabel}" points at ClickUp List ${flag.dataset.verifyList}, which came out identical to another list's ID in the original export \u2014 most likely a copy-paste artifact, not confirmed wrong.\n\n` +
+          `Sending to it will still work, but worth double-checking: open the real list in ClickUp and look at the URL \u2014 app.clickup.com/<workspace>/v/li/<LIST_ID>. If that ID doesn't match ${flag.dataset.verifyList}, update it in js/config.js.`
+        );
+      };
     });
   }
 
@@ -400,11 +430,19 @@ const App = (() => {
    * Shows connection status to ClickUp and a "Connect to ClickUp"
    * button that starts the OAuth handshake (see config.js
    * buildClickUpAuthorizeUrl() and worker/clickup-proxy.js
-   * handleOAuthCallback()). Also reads query params on this route to
-   * surface the result of a just-completed handshake, since the
-   * Worker redirects back here with ?connected=1 on success or
-   * ?connect_error=<reason> if something went wrong (user declined,
-   * bad code, misconfigured client secret, etc).
+   * handleOAuthCallback()).
+   *
+   * Status is checked live, every time this screen opens (not only
+   * right after the OAuth redirect) — earlier versions only showed a
+   * "Connected ✓" banner driven by the ?connected=1 query param from
+   * the redirect, so a normal reload or a second device showed no
+   * status at all even though the connection was genuinely working
+   * server-side. refreshConnectionStatus() now always re-checks.
+   *
+   * The transient ?connected=1 / ?connect_error=... banners (from the
+   * Worker's redirect) are still shown when present, layered above
+   * the live-checked line, since they carry information the live
+   * check can't (e.g. *why* a connect attempt just failed).
    *
    * The "Proxy Worker URL" field is left editable for advanced use
    * (e.g. pointing at a second/test Worker) even though it's
@@ -428,15 +466,15 @@ const App = (() => {
       </header>
       <main class="form">
         <div class="connect-status" id="connect-status">
-          ${justConnected ? '<p class="hint hint--good">Connected to ClickUp ✓</p>' : ''}
+          ${justConnected ? '<p class="hint hint--good">Just connected to ClickUp ✓</p>' : ''}
           ${connectError ? `<p class="hint hint--bad">Couldn\u2019t connect: ${escapeHtml(connectError)}</p>` : ''}
+          <p class="hint" id="live-status">Checking connection…</p>
         </div>
 
         <button class="pill-btn pill-btn--wide" id="connect-btn">${icon('link')} Connect to ClickUp</button>
         <p class="hint">Opens ClickUp\u2019s own approval screen. Dispatch only ever talks to ClickUp through the Worker proxy \u2014 your access token is stored there, never on this device.</p>
 
-        <button class="pill-btn" id="test-connection">Test connection</button>
-        <p id="test-result" class="hint"></p>
+        <button class="pill-btn" id="test-connection">Re-check connection</button>
 
         <label class="field" for="proxy-url">Proxy Worker URL <span class="field-optional">(advanced)</span>
           <input type="url" id="proxy-url" placeholder="https://your-worker.your-subdomain.workers.dev" value="${settings.proxyUrl || ''}">
@@ -461,17 +499,43 @@ const App = (() => {
       go('/home');
     };
 
-    root.querySelector('#test-connection').onclick = async () => {
-      const result = root.querySelector('#test-result');
+    root.querySelector('#test-connection').onclick = () => {
       Storage.saveSettings({ proxyUrl: root.querySelector('#proxy-url').value.trim() });
-      result.textContent = 'Checking…';
-      try {
-        const user = await ClickUp.testConnection();
-        result.textContent = `Connected as ${user.user ? user.user.username : 'ClickUp user'} ✓`;
-      } catch (e) {
-        result.textContent = 'Not connected yet \u2014 tap \u201cConnect to ClickUp\u201d above.';
-      }
+      refreshConnectionStatus();
     };
+
+    // Always re-check on open — see the function doc comment above
+    // for why this replaced the old "only after redirect" behavior.
+    refreshConnectionStatus();
+  }
+
+  /**
+   * refreshConnectionStatus
+   * Pings the Worker's /user endpoint and updates the #live-status
+   * line in Settings with a plain-language, current read of where
+   * things stand. Distinguishes failure kinds via the thrown error's
+   * `.status` (see clickup.js testConnection()) so the message is
+   * actually actionable rather than a generic "could not connect".
+   */
+  async function refreshConnectionStatus() {
+    const el = root.querySelector('#live-status');
+    if (!el) return;
+    el.textContent = 'Checking connection…';
+    el.className = 'hint';
+    try {
+      const user = await ClickUp.testConnection();
+      el.textContent = `Connected as ${user.user ? user.user.username : 'ClickUp user'} ✓`;
+      el.className = 'hint hint--good';
+    } catch (err) {
+      if (err.status === 401) {
+        el.textContent = 'Not connected to ClickUp yet \u2014 tap \u201cConnect to ClickUp\u201d above.';
+      } else if (err.status === 403) {
+        el.textContent = 'This device\u2019s passcode was rejected. Reload the app to re-enter it.';
+      } else {
+        el.textContent = 'Couldn\u2019t reach the proxy \u2014 check your internet connection.';
+      }
+      el.className = 'hint hint--bad';
+    }
   }
 
   // ---------------------------------------------------------------
@@ -614,15 +678,90 @@ const App = (() => {
     record: '<circle cx="12" cy="12" r="8"/>',
     paperclip: '<path d="M21.4 11.6l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8.5-8.5"/>',
     clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-    link: '<path d="M10 13a5 5 0 007.07 0l1.5-1.5a5 5 0 00-7.07-7.07L10 6"/><path d="M14 11a5 5 0 00-7.07 0l-1.5 1.5a5 5 0 007.07 7.07L14 18"/>'
+    link: '<path d="M10 13a5 5 0 007.07 0l1.5-1.5a5 5 0 00-7.07-7.07L10 6"/><path d="M14 11a5 5 0 00-7.07 0l-1.5 1.5a5 5 0 007.07 7.07L14 18"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>'
   };
   function icon(name) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
   }
 
+  /**
+   * init — app entry point (called on DOMContentLoaded).
+   * Gates entry behind the device passcode: if this device hasn't
+   * stored (and had verified) a passcode yet, shows the lock screen
+   * instead of the normal router. See renderLock()/attemptUnlock().
+   * This is a convenience gate, not the real security boundary — the
+   * Worker re-checks the passcode on every single request regardless
+   * (clickup-proxy.js checkPasscode()), so even a bypass of this
+   * client-side check can't actually reach ClickUp.
+   */
   function init() {
-    render();
+    if (!Storage.getDeviceKey()) {
+      renderLock();
+    } else {
+      render();
+    }
     window.addEventListener('online', () => processQueue(false));
+  }
+
+  /**
+   * renderLock
+   * Shows a simple passcode entry screen, blocking access to the rest
+   * of the app until attemptUnlock() confirms it against the Worker.
+   * @param {string} [errorMsg] - shown above the input, e.g. after a
+   *   wrong attempt ("Wrong passcode — try again.")
+   */
+  function renderLock(errorMsg) {
+    root.innerHTML = `
+      <main class="lock">
+        <div class="lock-mark">${icon('lock')}</div>
+        <h1 class="lock-title">Dispatch</h1>
+        <p class="lock-sub">Enter the passcode to continue.</p>
+        <input type="password" inputmode="numeric" autocomplete="off" id="lock-input" class="lock-input" placeholder="Passcode">
+        ${errorMsg ? `<p class="lock-error">${escapeHtml(errorMsg)}</p>` : ''}
+        <button class="send-btn" id="lock-submit">Unlock</button>
+      </main>
+    `;
+    const input = root.querySelector('#lock-input');
+    input.focus();
+    const submit = () => attemptUnlock(input.value);
+    root.querySelector('#lock-submit').onclick = submit;
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  }
+
+  /**
+   * attemptUnlock
+   * Verifies a candidate passcode against the Worker before letting
+   * the device in permanently. Saves it to Storage optimistically
+   * (so the very next request carries it), then rolls back on a
+   * confirmed-wrong (403) response.
+   * @param {string} candidate - passcode text from the lock screen input
+   * Edge cases:
+   *   - 403 (Worker confirms it's wrong) → clear it, show error, retry.
+   *   - 401 ("passcode fine, ClickUp not connected yet") → let them
+   *     in; that's a separate, later step (Settings → Connect).
+   *   - any other failure (Worker unreachable, offline) → let them in
+   *     rather than block on a check we can't complete; this isn't a
+   *     real security gap since the Worker re-validates every future
+   *     request independently regardless of what this screen decided.
+   */
+  async function attemptUnlock(candidate) {
+    if (!candidate) return;
+    const submitBtn = root.querySelector('#lock-submit');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Checking…';
+    Storage.saveDeviceKey(candidate);
+    try {
+      await ClickUp.testConnection();
+      render();
+    } catch (err) {
+      if (err.status === 403) {
+        Storage.clearDeviceKey();
+        renderLock('Wrong passcode — try again.');
+      } else {
+        render();
+      }
+    }
   }
 
   return { init };

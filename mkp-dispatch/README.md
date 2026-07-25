@@ -13,29 +13,38 @@ a "recent captures" list stored on your own device).
 
 ## How it's put together
 
-Two pieces, because of one unavoidable constraint: **ClickUp's API
+Two pieces, because of two unavoidable constraints: **ClickUp's API
 doesn't allow browsers to call it directly** (no CORS headers), and a
-static site can't hide a secret token in its own code — anyone could
+static site can't hide a credential in its own code — anyone could
 open dev tools and read it. So:
 
 ```
 ┌─────────────────┐        ┌──────────────────────┐        ┌───────────────┐
 │  Dispatch (PWA)  │  ───▶  │  Proxy (Cloudflare    │  ───▶  │  ClickUp API  │
 │  GitHub Pages    │        │  Worker, free tier)   │        │               │
-│  static, no key  │  ◀───  │  holds your token     │  ◀───  │               │
+│  static, no key  │  ◀───  │  holds the connection │  ◀───  │               │
 └─────────────────┘        └──────────────────────┘        └───────────────┘
 ```
 
 - **Frontend** — plain HTML/CSS/JS, no build step, no framework. Lives
   in this repo's root and deploys straight to GitHub Pages.
-- **Proxy** — a ~70-line Cloudflare Worker (free tier comfortably
-  covers personal use: 100,000 requests/day). It holds your ClickUp
-  token as an encrypted secret and forwards only the three endpoints
-  Dispatch needs (create task, upload attachment, verify connection).
+- **Proxy** — a Cloudflare Worker (free tier comfortably covers
+  personal use: 100,000 requests/day). It:
+  1. **Holds the ClickUp connection.** Dispatch is registered as its
+     own ClickUp OAuth app (not a shared personal API token — see
+     `worker/clickup-proxy.js`'s version history for why that changed).
+     After a one-time "Connect to ClickUp" approval, the resulting
+     access token lives in Cloudflare KV storage, never in the browser
+     or this repo.
+  2. **Enforces a device passcode.** Since the app's URL is public,
+     every proxied request must include a shared passcode
+     (`APP_PASSCODE`) that only this Worker knows — without it, the
+     URL alone doesn't let anyone touch your ClickUp data.
+  3. **Adds CORS headers** so the browser is allowed to call it at all.
 
-Your ClickUp token **never touches the browser or this repo**. The
-only thing stored on your phone is the Worker's URL, plus any drafts
-that haven't sent yet.
+Nothing sensitive ever touches the browser or this repo: not the
+ClickUp connection, not the passcode's canonical value (only a
+device's own copy, entered once, saved locally after it's verified).
 
 ---
 
@@ -47,19 +56,27 @@ that haven't sent yet.
    npm install -g wrangler
    wrangler login
    ```
-3. From the `worker/` folder in this repo:
+3. From the `worker/` folder in this repo, create the KV namespace that stores the ClickUp connection:
+   ```
+   wrangler kv namespace create TOKEN_STORE
+   ```
+   Copy the `id` it prints into `worker/wrangler.toml`'s `[[kv_namespaces]]` block (already done in this repo's copy — only needed again if you're setting this up fresh elsewhere).
+4. Register Dispatch as its own ClickUp OAuth app: ClickUp → avatar → **Settings** → **Apps** → **ClickUp API Settings** tab → **Create an App**. Redirect URL must be `<your-worker-url>/oauth/callback`. Put the resulting **Client ID** in `wrangler.toml` (`CLICKUP_CLIENT_ID`, safe to commit — it's public) and the **Client Secret** in Cloudflare as a secret (below — never commit this one).
+5. Deploy:
    ```
    cd worker
    wrangler deploy
    ```
-4. Set your ClickUp token as a secret (generate one at ClickUp →
-   Settings → Apps → API Token):
+6. Set the two secrets (never stored in any file — held encrypted by Cloudflare):
    ```
-   wrangler secret put CLICKUP_TOKEN
+   wrangler secret put CLICKUP_CLIENT_SECRET
    ```
-   Paste the token (starts with `pk_`) when prompted.
-5. Wrangler prints a URL like `https://dispatch-clickup-proxy.<you>.workers.dev` — save it, you'll paste it into the app in step 3 below.
-6. Once you know your GitHub Pages URL (step 2), open `worker/wrangler.toml`, set `ALLOWED_ORIGIN` to that exact URL, and run `wrangler deploy` again so only your app can use the proxy.
+   ```
+   wrangler secret put APP_PASSCODE
+   ```
+   For `APP_PASSCODE`, pick any passcode you'll remember (this is what every device will need to enter once) — it's a shared-secret gate, not a per-user login, appropriate for "me + my assistants" scale.
+7. Wrangler prints a URL like `https://dispatch-clickup-proxy.<you>.workers.dev` — this is baked into `js/config.js` as `DEFAULT_PROXY_URL` already; update it there if you deploy your own copy under a different name.
+8. Once you know your GitHub Pages URL (step 2), set `ALLOWED_ORIGIN` and `APP_URL` in `wrangler.toml` accordingly and run `wrangler deploy` again.
 
 ## 2. Deploy the frontend (GitHub Pages)
 
@@ -67,12 +84,10 @@ that haven't sent yet.
 2. In the repo: **Settings → Pages → Source → Deploy from a branch**, pick `main` and `/ (root)`.
 3. GitHub gives you a URL like `https://yourname.github.io/dispatch/`. Open it on your phone and **Add to Home Screen** — it installs like a native app.
 
-## 3. Connect the app to the proxy
+## 3. First-time device setup
 
-1. Open Dispatch → the gear icon (top right) → **Settings**.
-2. Paste your Worker URL from step 1.5.
-3. Tap **Test connection** — it should say "Connected as …".
-4. Tap **Save**. You're done.
+1. Open Dispatch. You'll land on a passcode lock screen — enter the `APP_PASSCODE` you set in step 1.6. This is saved on this device only; you won't be asked again unless you clear the site's storage.
+2. Gear icon → **Settings**. If this is the very first device ever, tap **Connect to ClickUp** and approve access on ClickUp's page — this only needs to happen once, ever, for the whole app (the connection is stored server-side on the Worker, not per-device). Every other device just needs the passcode from step 1.
 
 ---
 
@@ -86,7 +101,9 @@ fix a destination, change the `listId`.
 **Before you rely on this for real work**, double check the entries
 flagged `verify: true` in `config.js` — a few List IDs came out
 identical in the export this was built from, which usually means a
-copy-paste artifact rather than the real destination:
+copy-paste artifact rather than the real destination. Tapping the red
+"!" on that capture type in the app explains this in place; the same
+list is here for quick reference:
 
 - MKP → Contact Follow-up / Meeting Note (both currently point at the To-Dos list)
 - Super Admin → Light Bulb (currently points at the same list as Task)

@@ -53,6 +53,12 @@
  *                    that was found revoked (see worker/clickup-proxy.js
  *                    v2 history for the full reasoning). No routing
  *                    changes.
+ *   v5  2026-07-24  Added a "Start date" field to the task schema
+ *                    (date-only, no time picker — kept deliberately
+ *                    simple to preserve fast capture; a time-of-day
+ *                    toggle can be added later if needed). Placed
+ *                    between Priority and Due date. Task-type-only for
+ *                    now; not added to note/lightbulb/contact/etc.
  * =========================================================================
  */
 
@@ -99,6 +105,7 @@ const FIELD_SCHEMAS = {
     { key: 'title', label: 'Title', type: 'text', required: true, placeholder: 'What needs to get done?' },
     { key: 'description', label: 'Details', type: 'textarea', placeholder: 'Any context, links, or notes…' },
     { key: 'priority', label: 'Priority', type: 'priority' },
+    { key: 'startDate', label: 'Start date', type: 'date' },
     { key: 'dueDate', label: 'Due date', type: 'date' },
     { key: 'tags', label: 'Tags', type: 'text', placeholder: 'comma, separated, tags' }
   ],

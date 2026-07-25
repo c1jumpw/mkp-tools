@@ -41,6 +41,15 @@
  *                    A user-entered override in Settings still always
  *                    wins once one has been saved. Added full
  *                    file/function documentation.
+ *   v3  2026-07-24  Added device passcode storage (getDeviceKey/
+ *                    saveDeviceKey/clearDeviceKey). Added after
+ *                    realizing the public GitHub Pages URL + automatic
+ *                    OAuth connection meant literally anyone who found
+ *                    the link could create tasks in the owner's
+ *                    ClickUp — the passcode is a shared secret enforced
+ *                    Worker-side (see clickup-proxy.js v3); this file
+ *                    just remembers it on this device after entry so
+ *                    the lock screen only shows once per device.
  * =========================================================================
  */
 
@@ -51,7 +60,8 @@ const Storage = (() => {
     settings: 'dispatch:settings',
     queue: 'dispatch:queue',
     recent: 'dispatch:recent',
-    draft: 'dispatch:draft'
+    draft: 'dispatch:draft',
+    deviceKey: 'dispatch:deviceKey'
   };
 
   /**
@@ -162,10 +172,32 @@ const Storage = (() => {
     write(KEYS.recent, recent);
   }
 
+  // --- Device passcode (gates use of this device's copy of the app) --
+  // Stored as plain text in localStorage — this is a low-friction
+  // shared-secret gate, not bank-grade security. It stops casual/
+  // accidental use by someone who stumbles on the URL; it does not
+  // stop a determined attacker who has the device unlocked and open
+  // DevTools. The real enforcement is server-side, in the Worker
+  // (clickup-proxy.js checkPasscode()) — this is just what lets a
+  // legitimate device skip re-entering it every time.
+  /** getDeviceKey - returns the passcode saved on this device, or null. */
+  function getDeviceKey() {
+    return read(KEYS.deviceKey, null);
+  }
+  /** saveDeviceKey - remembers a passcode on this device after it's been verified. */
+  function saveDeviceKey(key) {
+    write(KEYS.deviceKey, key);
+  }
+  /** clearDeviceKey - forgets the passcode (e.g. after a failed verification). */
+  function clearDeviceKey() {
+    localStorage.removeItem(KEYS.deviceKey);
+  }
+
   return {
     getSettings, saveSettings,
     saveDraft, getDraft, clearDraft,
     getQueue, enqueue, removeFromQueue,
-    getRecent, addRecent
+    getRecent, addRecent,
+    getDeviceKey, saveDeviceKey, clearDeviceKey
   };
 })();
