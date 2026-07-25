@@ -1,43 +1,5 @@
 /**
- * =========================================================================
- * app.js — screen rendering, navigation, form logic, capture + send flow
- * =========================================================================
- * PURPOSE
- *   The entire UI of Dispatch. A tiny hash-based single-page router
- *   (no framework) drives five screens: Home, Entity picker, Type
- *   picker, capture Form, and Settings. Reads ENTITIES/FIELD_SCHEMAS
- *   from config.js to build screens, reads/writes drafts and the
- *   offline queue via storage.js, and sends captures via clickup.js.
- *
- * DATA FLOW
- *   User taps through Home → Entity → Type → Form → Send. On submit,
- *   collectFields() reads the DOM into a plain object, ClickUp.
- *   createTask() posts it through the Worker proxy; on success it's
- *   logged locally via Storage.addRecent(), on failure (including
- *   being offline) it's queued via Storage.enqueue() and retried
- *   automatically on the next 'online' event or app load.
- *
- * ASSUMPTIONS / EXTERNAL DEPENDENCIES
- *   Expects config.js, storage.js, and clickup.js to already be loaded
- *   (see index.html script order) — this file uses their globals
- *   (ENTITIES, FIELD_SCHEMAS, Storage, ClickUp, buildClickUpAuthorizeUrl)
- *   directly rather than importing them.
- *
- * -------------------------------------------------------------------------
- * VERSION HISTORY
- *   v1  2026-07-23  Initial implementation: 5-screen router, dynamic
- *                    forms, dictation + voice-note recording, offline
- *                    queue with base64-encoded attachments.
- *   v2  2026-07-23  Settings screen reworked for OAuth: added a
- *                    "Connect to ClickUp" button (navigates to
- *                    buildClickUpAuthorizeUrl()) and handling for the
- *                    Worker's post-approval redirect, which returns as
- *                    #/settings?connected=1 or ?connect_error=...
- *                    Added getQueryParams() since this is a hash-routed
- *                    SPA and query params live after the #. Replaces
- *                    the old flow, which only accepted a manually
- *                    pasted personal API token.
- * =========================================================================
+ * app.js — screen rendering, navigation, form logic, capture + send flow.
  */
 
 const App = (() => {
@@ -62,33 +24,9 @@ const App = (() => {
     window.location.hash = hash;
   }
 
-  /**
-   * currentRoute
-   * Parses window.location.hash into path segments, e.g.
-   * "#/form/mkp/task" -> ['form', 'mkp', 'task'].
-   * Query params (e.g. "#/settings?connected=1", used by the OAuth
-   * callback redirect in worker/clickup-proxy.js) are stripped from
-   * the path here — use getQueryParams() separately to read them.
-   * @returns {string[]} non-empty path segments
-   */
   function currentRoute() {
     const hash = window.location.hash.replace(/^#\/?/, '');
-    const [path] = hash.split('?');
-    return path.split('/').filter(Boolean);
-  }
-
-  /**
-   * getQueryParams
-   * Reads the query string portion of the current hash route (if any)
-   * as a URLSearchParams object. Needed because this is a hash-routed
-   * SPA — the "real" URL query string (before the #) is never used,
-   * so params like ?connected=1 live after the hash instead.
-   * @returns {URLSearchParams}
-   */
-  function getQueryParams() {
-    const hash = window.location.hash.replace(/^#\/?/, '');
-    const [, query] = hash.split('?');
-    return new URLSearchParams(query || '');
+    return hash.split('/').filter(Boolean);
   }
 
   function render() {
@@ -395,31 +333,8 @@ const App = (() => {
   // ---------------------------------------------------------------
   // Screen: Settings
   // ---------------------------------------------------------------
-  /**
-   * renderSettings
-   * Shows connection status to ClickUp and a "Connect to ClickUp"
-   * button that starts the OAuth handshake (see config.js
-   * buildClickUpAuthorizeUrl() and worker/clickup-proxy.js
-   * handleOAuthCallback()). Also reads query params on this route to
-   * surface the result of a just-completed handshake, since the
-   * Worker redirects back here with ?connected=1 on success or
-   * ?connect_error=<reason> if something went wrong (user declined,
-   * bad code, misconfigured client secret, etc).
-   *
-   * The "Proxy Worker URL" field is left editable for advanced use
-   * (e.g. pointing at a second/test Worker) even though it's
-   * pre-filled from DEFAULT_PROXY_URL — but changing it here does NOT
-   * change where ClickUp's OAuth redirect goes (that's fixed to
-   * OAUTH_REDIRECT_URI, matching what's registered in ClickUp's app
-   * settings), so an edited value only affects normal capture
-   * requests, not the connect flow itself.
-   */
   function renderSettings() {
     const settings = Storage.getSettings();
-    const params = getQueryParams();
-    const justConnected = params.get('connected') === '1';
-    const connectError = params.get('connect_error');
-
     root.innerHTML = `
       <header class="topbar">
         <button class="icon-btn" data-nav="back" aria-label="Back">${icon('back')}</button>
@@ -427,40 +342,22 @@ const App = (() => {
         <span class="icon-btn-spacer"></span>
       </header>
       <main class="form">
-        <div class="connect-status" id="connect-status">
-          ${justConnected ? '<p class="hint hint--good">Connected to ClickUp ✓</p>' : ''}
-          ${connectError ? `<p class="hint hint--bad">Couldn\u2019t connect: ${escapeHtml(connectError)}</p>` : ''}
-        </div>
-
-        <button class="pill-btn pill-btn--wide" id="connect-btn">${icon('link')} Connect to ClickUp</button>
-        <p class="hint">Opens ClickUp\u2019s own approval screen. Dispatch only ever talks to ClickUp through the Worker proxy \u2014 your access token is stored there, never on this device.</p>
-
-        <button class="pill-btn" id="test-connection">Test connection</button>
-        <p id="test-result" class="hint"></p>
-
-        <label class="field" for="proxy-url">Proxy Worker URL <span class="field-optional">(advanced)</span>
+        <label class="field" for="proxy-url">Proxy Worker URL
           <input type="url" id="proxy-url" placeholder="https://your-worker.your-subdomain.workers.dev" value="${settings.proxyUrl || ''}">
         </label>
+        <p class="hint">This points at the small proxy that forwards requests to ClickUp on your behalf. Your ClickUp token is stored there, not on this device. See the README for setup.</p>
+        <button class="pill-btn" id="test-connection">Test connection</button>
+        <p id="test-result" class="hint"></p>
       </main>
       <div class="form-footer">
         <button class="send-btn" id="save-settings">Save</button>
       </div>
     `;
     bindBack();
-
-    root.querySelector('#connect-btn').onclick = () => {
-      // Full-page navigation (not fetch) — ClickUp needs to show its
-      // own UI and set its own cookies, so this can't happen inside
-      // an iframe/XHR. The browser leaves the app here and comes back
-      // via the Worker's redirect once the user approves or declines.
-      window.location.href = buildClickUpAuthorizeUrl();
-    };
-
     root.querySelector('#save-settings').onclick = () => {
       Storage.saveSettings({ proxyUrl: root.querySelector('#proxy-url').value.trim() });
       go('/home');
     };
-
     root.querySelector('#test-connection').onclick = async () => {
       const result = root.querySelector('#test-result');
       Storage.saveSettings({ proxyUrl: root.querySelector('#proxy-url').value.trim() });
@@ -469,7 +366,7 @@ const App = (() => {
         const user = await ClickUp.testConnection();
         result.textContent = `Connected as ${user.user ? user.user.username : 'ClickUp user'} ✓`;
       } catch (e) {
-        result.textContent = 'Not connected yet \u2014 tap \u201cConnect to ClickUp\u201d above.';
+        result.textContent = 'Could not connect. Check the URL and that the Worker is deployed.';
       }
     };
   }
@@ -613,8 +510,7 @@ const App = (() => {
     mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0"/><path d="M12 19v3"/>',
     record: '<circle cx="12" cy="12" r="8"/>',
     paperclip: '<path d="M21.4 11.6l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8.5-8.5"/>',
-    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-    link: '<path d="M10 13a5 5 0 007.07 0l1.5-1.5a5 5 0 00-7.07-7.07L10 6"/><path d="M14 11a5 5 0 00-7.07 0l-1.5 1.5a5 5 0 007.07 7.07L14 18"/>'
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'
   };
   function icon(name) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;

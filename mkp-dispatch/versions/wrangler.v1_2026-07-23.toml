@@ -1,0 +1,13 @@
+name = "dispatch-clickup-proxy"
+main = "clickup-proxy.js"
+compatibility_date = "2024-11-01"
+
+# Set after deploying, once you know your GitHub Pages URL, e.g.
+# https://yourname.github.io — restricts the proxy to your app only.
+# Leave unset (or "*") while testing locally.
+[vars]
+ALLOWED_ORIGIN = "*"
+
+# CLICKUP_TOKEN is a secret, not a var — set it with:
+#   wrangler secret put CLICKUP_TOKEN
+# (do this after `wrangler deploy`; never put the token in this file)

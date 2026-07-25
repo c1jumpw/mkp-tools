@@ -339,6 +339,26 @@ a { color: var(--amber); }
 .send-btn:disabled { opacity: 0.6; }
 
 .hint { color: var(--text-dim); font-size: 13px; line-height: 1.5; }
+.hint--good { color: var(--green); }
+.hint--bad { color: var(--red); }
+
+.pill-btn--wide {
+  width: 100%;
+  justify-content: center;
+  background: var(--amber);
+  color: #1A1200;
+  border: none;
+  padding: 13px 16px;
+  font-weight: 600;
+}
+
+.field-optional {
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--font-sans);
+  color: var(--text-dim);
+  font-size: 11px;
+}
 
 /* --------------------------- Success --------------------------- */
 .success {

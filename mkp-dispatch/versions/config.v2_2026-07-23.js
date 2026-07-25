@@ -43,16 +43,6 @@
  *                    auto-fills instead of requiring manual entry.
  *                    Added full file/function-level documentation per
  *                    user's commenting standard. No routing changes.
- *   v3  2026-07-23  (No functional change — version bump reserved
- *                    while diagnosing the OAUTH_025 "revoked token"
- *                    issue; root cause was on the ClickUp/Worker side,
- *                    not this file.)
- *   v4  2026-07-23  Added CLICKUP_CLIENT_ID + buildClickUpAuthorizeUrl()
- *                    now that Dispatch is registered as its own ClickUp
- *                    OAuth app, replacing the shared personal token
- *                    that was found revoked (see worker/clickup-proxy.js
- *                    v2 history for the full reasoning). No routing
- *                    changes.
  * =========================================================================
  */
 
@@ -238,33 +228,3 @@ const ENTITIES = [
     ]
   }
 ];
-
-// -----------------------------------------------------------------------
-// OAuth connect (added in v4)
-//   Dispatch is registered as its own ClickUp OAuth app (rather than
-//   sharing a personal API token with other integrations — see the
-//   v2/v3 version history in worker/clickup-proxy.js for why). These
-//   two values build the URL that sends the browser to ClickUp's
-//   consent screen; the Worker (not this file) holds the matching
-//   Client Secret and completes the handshake server-side.
-// -----------------------------------------------------------------------
-
-// Public app identifier — safe to ship in client-side code. Grants no
-// access by itself; it only identifies which app is asking.
-const CLICKUP_CLIENT_ID = 'CB58HH6R33DAM091WKD5OG4EO5NSWP0I';
-
-// Must exactly match the Redirect URL registered for this app in
-// ClickUp → Settings → Apps → ClickUp API Settings, or ClickUp will
-// reject the request with a redirect_uri mismatch error.
-const OAUTH_REDIRECT_URI = `${DEFAULT_PROXY_URL}/oauth/callback`;
-
-/**
- * buildClickUpAuthorizeUrl
- * Builds the URL that starts the OAuth handshake — navigating the
- * browser here (a full page redirect, not a fetch) shows the user
- * ClickUp's own "Allow Dispatch to access your Workspace?" screen.
- * @returns {string} the ClickUp authorization URL
- */
-function buildClickUpAuthorizeUrl() {
-  return `https://app.clickup.com/api?client_id=${CLICKUP_CLIENT_ID}&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT_URI)}`;
-}
