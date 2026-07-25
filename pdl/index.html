@@ -172,9 +172,14 @@
   .mini-top{display:flex; align-items:center; gap:12px;}
   .mini-icon{width:34px; height:34px; border-radius:8px; background:var(--brass-dim); display:flex; align-items:center; justify-content:center; color:var(--brass); flex-shrink:0;}
   .mini-info{flex:1; min-width:0;}
-  .mini-title{font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .mini-progress{height:3px; background:var(--line); border-radius:2px; margin-top:6px; cursor:pointer;}
-  .mini-progress-fill{height:100%; background:var(--brass); border-radius:2px; width:0%;}
+  .mini-title{font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;}
+  .mini-progress{position:relative; height:22px; display:flex; align-items:center; cursor:pointer; touch-action:none;}
+  .mini-progress-track{position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); height:3px; background:var(--line); border-radius:2px;}
+  .mini-progress-fill{position:absolute; left:0; top:50%; transform:translateY(-50%); height:3px; background:var(--brass); border-radius:2px; width:0%;}
+  .mini-progress-thumb{
+    position:absolute; top:50%; width:13px; height:13px; border-radius:50%; background:var(--brass);
+    transform:translate(-50%,-50%); left:0%; box-shadow:0 1px 3px rgba(0,0,0,.4);
+  }
   .mini-close{background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; flex-shrink:0; padding:8px;}
 
   .mini-controls{display:flex; align-items:center; justify-content:center; gap:8px;}
@@ -193,8 +198,63 @@
   }
   .mini-speed.active, .mini-transcript.active{color:var(--brass); border-color:var(--brass-dim); background:var(--brass-soft);}
 
-  .transcript-panel{display:none; max-height:32vh; overflow-y:auto; background:var(--bg-2); border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.65; color:var(--text-dim); white-space:pre-wrap;}
+  .transcript-panel{display:none; max-height:32vh; overflow-y:auto; background:var(--bg-2); border-radius:10px; padding:10px 12px; font-size:12.5px; line-height:1.6; color:var(--text-dim);}
   .transcript-panel.show{display:block;}
+  .transcript-plain{white-space:pre-wrap;}
+  .transcript-line{padding:5px 6px; border-radius:6px; cursor:pointer;}
+  .transcript-line:hover{background:var(--panel);}
+  .transcript-line.active{background:var(--brass-soft); color:var(--text); font-weight:600;}
+  .transcript-line-time{color:var(--brass); font-family:var(--sans); font-size:10.5px; font-weight:700; margin-right:7px;}
+  .te-open-btn{
+    display:block; margin-top:10px; background:var(--bg-2); border:1px solid var(--brass-dim); color:var(--brass);
+    font-size:11.5px; font-weight:700; padding:8px 12px; border-radius:8px; cursor:pointer;
+  }
+
+  /* transcript editor */
+  .te-overlay{
+    position:fixed; inset:0; background:rgba(10,8,6,0.8); z-index:80; display:none;
+    align-items:flex-end; justify-content:center; padding:0;
+  }
+  .te-overlay.show{display:flex;}
+  .te-card{
+    background:var(--panel); border-top:1px solid var(--line); border-radius:18px 18px 0 0; padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+    width:100%; max-width:480px; max-height:88vh; overflow-y:auto;
+  }
+  .te-header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;}
+  .te-title{font-family:var(--serif); font-size:17px; line-height:1.3;}
+  .te-title span{color:var(--brass);}
+  .te-close{background:none; border:none; color:var(--text-dim); font-size:18px; cursor:pointer; padding:4px;}
+  .te-tabs{display:flex; gap:4px; background:var(--bg-2); border:1px solid var(--line); border-radius:10px; padding:4px; margin-bottom:14px;}
+  .te-tab{flex:1; text-align:center; padding:8px 0; border-radius:7px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-dim);}
+  .te-tab.active{background:var(--brass-dim); color:var(--brass);}
+  .te-transport{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
+  .te-transport button{
+    background:var(--bg-2); border:1px solid var(--line); color:var(--text); font-weight:700; font-size:12.5px;
+    height:38px; padding:0 14px; border-radius:19px; cursor:pointer;
+  }
+  .te-time{font-family:var(--sans); font-size:13px; color:var(--text-dim); font-weight:600;}
+  .te-add-row{display:flex; gap:8px; margin-bottom:14px;}
+  .te-add-row input{
+    flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); border-radius:9px;
+    padding:11px 12px; font-size:16px;
+  }
+  .te-add-row button{background:var(--brass); color:#221a0e; border:none; border-radius:9px; padding:0 16px; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap;}
+  .te-cues{max-height:26vh; overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin-bottom:6px;}
+  .te-cue-row{display:flex; align-items:center; gap:9px; background:var(--bg-2); border-radius:8px; padding:8px 10px; font-size:12.5px;}
+  .te-cue-time{color:var(--brass); font-weight:700; font-size:11px; flex-shrink:0; width:36px;}
+  .te-cue-text{flex:1; color:var(--text);}
+  .te-cue-del{color:var(--text-dim); cursor:pointer; padding:2px 4px; flex-shrink:0;}
+  .te-empty{font-size:12px; color:var(--text-dim); text-align:center; padding:14px 0;}
+  #tePasteArea{
+    width:100%; min-height:160px; background:var(--bg-2); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; padding:12px; font-size:13px; font-family:var(--sans); resize:vertical; box-sizing:border-box;
+  }
+  .te-hint{font-size:11px; color:var(--text-dim); margin-top:6px; line-height:1.5;}
+  .te-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px;}
+  .te-actions button{padding:10px 18px; border-radius:9px; font-weight:700; font-size:13px; cursor:pointer; border:none;}
+  .te-cancel-btn{background:var(--bg-2); color:var(--text); border:1px solid var(--line) !important;}
+  .te-save-btn{background:var(--brass); color:#221a0e;}
+  .te-save-btn:disabled{opacity:.5; cursor:not-allowed;}
 
   /* video / doc modal */
   .modal-overlay{
@@ -310,7 +370,11 @@
     <div class="mini-icon">♪</div>
     <div class="mini-info">
       <div class="mini-title" id="miniTitle">—</div>
-      <div class="mini-progress" id="miniProgress"><div class="mini-progress-fill" id="miniProgressFill"></div></div>
+      <div class="mini-progress" id="miniProgress">
+        <div class="mini-progress-track"></div>
+        <div class="mini-progress-fill" id="miniProgressFill"></div>
+        <div class="mini-progress-thumb" id="miniProgressThumb"></div>
+      </div>
     </div>
     <button class="mini-close" id="miniClose">✕</button>
   </div>
@@ -349,6 +413,44 @@
   </div>
 </div>
 
+<div class="te-overlay" id="teOverlay">
+  <div class="te-card">
+    <div class="te-header">
+      <div class="te-title">Transcript — <span id="teFileName"></span></div>
+      <button class="te-close" id="teClose">✕</button>
+    </div>
+
+    <div class="te-tabs">
+      <div class="te-tab active" data-mode="timed">Tap along</div>
+      <div class="te-tab" data-mode="paste">Paste text</div>
+    </div>
+
+    <div id="tePanelTimed">
+      <div class="te-transport">
+        <button id="teRewind5" type="button">−5s</button>
+        <button id="tePlayPause" type="button">▶</button>
+        <span class="te-time" id="teTime">0:00</span>
+      </div>
+      <div class="te-add-row">
+        <input type="text" id="teLineInput" placeholder="Type the line you just heard…">
+        <button id="teAddLine" type="button">+ Add</button>
+      </div>
+      <div class="te-cues" id="teCuesList"></div>
+      <div class="te-hint">Play the track above, pause whenever you like, type the line, and tap Add — it captures the current time automatically. Tap any saved line's ✕ to remove it.</div>
+    </div>
+
+    <div id="tePanelPaste" style="display:none;">
+      <textarea id="tePasteArea" placeholder="Paste plain text, or the contents of an SRT/VTT captions file…"></textarea>
+      <div class="te-hint">Pasting SRT or VTT content (with timestamps like 00:00:04,500 --&gt; 00:00:07,000) is picked up automatically and becomes time-synced. Plain text is saved as-is, without sync.</div>
+    </div>
+
+    <div class="te-actions">
+      <button class="te-cancel-btn" id="teCancel" type="button">Cancel</button>
+      <button class="te-save-btn" id="teSave" type="button">Save transcript</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -369,6 +471,21 @@
   // -----------------------------------
 
   const el = id => document.getElementById(id);
+
+  // Warms up the DNS/TLS handshake for these origins before the first real request —
+  // shaves a meaningful chunk off first-request latency, especially on mobile networks.
+  ["https://api.github.com", "https://raw.githubusercontent.com"].forEach(origin => {
+    const l = document.createElement("link");
+    l.rel = "preconnect"; l.href = origin; l.crossOrigin = "anonymous";
+    document.head.appendChild(l);
+  });
+  try{
+    if (!CONFIG.WORKER_URL.includes("PASTE-YOUR")){
+      const l = document.createElement("link");
+      l.rel = "preconnect"; l.href = new URL(CONFIG.WORKER_URL).origin;
+      document.head.appendChild(l);
+    }
+  } catch(e){}
 
   function relayFetch(path, opts){
     opts = opts || {};
@@ -465,7 +582,17 @@
     return btoa(unescape(encodeURIComponent(str)));
   }
 
+  const LS_COLLECTIONS_CACHE = "pdl_collections_cache_v1";
+
+  function loadCollectionsCacheSync(){
+    try{
+      const cached = JSON.parse(localStorage.getItem(LS_COLLECTIONS_CACHE) || "null");
+      if (cached && cached.collections && cached.assignments) collectionsData = cached;
+    } catch(e){}
+  }
+
   async function loadCollectionsData(){
+    loadCollectionsCacheSync(); // instant, so tags aren't blank while the network call is in flight
     try{
       const res = await relayFetch(`/contents/${COLLECTIONS_PATH.split("/").map(encodeURIComponent).join("/")}`, {
         method: "GET"
@@ -476,8 +603,9 @@
       collectionsData = JSON.parse(b64ToUtf8(json.content));
       if (!collectionsData.collections) collectionsData.collections = [];
       if (!collectionsData.assignments) collectionsData.assignments = {};
+      localStorage.setItem(LS_COLLECTIONS_CACHE, JSON.stringify(collectionsData));
     } catch(e){
-      collectionsData = { collections: [], assignments: {} };
+      // network failed — keep whatever the cache seeded above rather than wiping it blank
     }
   }
 
@@ -532,6 +660,7 @@
         }
         throw new Error(msg);
       }
+      try { localStorage.setItem(LS_COLLECTIONS_CACHE, JSON.stringify(collectionsData)); } catch(e){}
       return true;
     } catch(err){
       alert("Couldn't save collections: " + err.message);
@@ -698,8 +827,10 @@
     const folders = visible.filter(e => e.type === "dir");
     const files = visible.filter(e => e.type !== "dir");
 
-    folders.forEach(f => box.appendChild(renderFolderRow(f, organizing)));
-    files.forEach(f => box.appendChild(renderFileRow(f, organizing)));
+    const frag = document.createDocumentFragment();
+    folders.forEach(f => frag.appendChild(renderFolderRow(f, organizing)));
+    files.forEach(f => frag.appendChild(renderFileRow(f, organizing)));
+    box.appendChild(frag);
   }
 
   function renderFolderRow(entry, organizing){
@@ -868,6 +999,7 @@
         delete collectionsData.assignments[entry.path];
         await saveCollectionsData();
       }
+      folderCache.clear();
       loadCurrentFolder();
       try { localStorage.removeItem(LS_PRACTICE_CACHE); } catch(e){}
     } catch(err){
@@ -908,25 +1040,36 @@
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.message || `HTTP ${res.status}`);
       }
+      folderCache.clear();
       loadCurrentFolder();
     } catch(err){
       alert("Couldn't create the folder: " + err.message);
     }
   }
 
+  const folderCache = new Map(); // path -> sorted entries, cleared on any write action
+
   async function loadCurrentFolder(){
-    el("listing").innerHTML = '<div class="loading">Loading…</div>';
     buildCrumbs();
+    const cached = folderCache.get(currentPath);
+    if (cached){
+      allEntries = cached;
+      renderListing(); // show instantly, then quietly refresh below
+    } else {
+      el("listing").innerHTML = '<div class="loading">Loading…</div>';
+    }
     try{
       const raw = await fetchFolder(currentPath);
-      allEntries = raw.filter(e => !e.name.startsWith("."));
-      allEntries.sort((a,b) => {
+      const entries = raw.filter(e => !e.name.startsWith("."));
+      entries.sort((a,b) => {
         if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
         return a.name.localeCompare(b.name);
       });
+      folderCache.set(currentPath, entries);
+      allEntries = entries;
       renderListing();
     } catch(e){
-      el("listing").innerHTML = `<div class="empty">Couldn't load this folder. ${e.message}</div>`;
+      if (!cached) el("listing").innerHTML = `<div class="empty">Couldn't load this folder. ${e.message}</div>`;
     }
   }
 
@@ -1083,52 +1226,279 @@
   });
   audioEl.addEventListener("timeupdate", () => {
     if (!audioEl.duration) return;
-    el("miniProgressFill").style.width = (audioEl.currentTime / audioEl.duration * 100) + "%";
+    const pct = audioEl.currentTime / audioEl.duration * 100;
+    el("miniProgressFill").style.width = pct + "%";
+    el("miniProgressThumb").style.left = pct + "%";
+    updateActiveTranscriptLine();
+    if (el("teOverlay").classList.contains("show")) el("teTime").textContent = formatTime(audioEl.currentTime);
   });
   // Mobile browsers can pause/resume audio from the lock screen, OS media controls, or when
   // the tab is backgrounded — always mirror the element's real state, not just button taps.
-  audioEl.addEventListener("play", () => updatePlayPauseIcon(true));
-  audioEl.addEventListener("pause", () => updatePlayPauseIcon(false));
+  audioEl.addEventListener("play", () => {
+    updatePlayPauseIcon(true);
+    if (el("teOverlay").classList.contains("show")) el("tePlayPause").textContent = "⏸";
+  });
+  audioEl.addEventListener("pause", () => {
+    updatePlayPauseIcon(false);
+    if (el("teOverlay").classList.contains("show")) el("tePlayPause").textContent = "▶";
+  });
   audioEl.addEventListener("ended", () => updatePlayPauseIcon(false));
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") updatePlayPauseIcon(!audioEl.paused);
   });
-  el("miniProgress").addEventListener("click", (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    if (audioEl.duration) audioEl.currentTime = pct * audioEl.duration;
-  });
 
-  // ---------- transcripts (optional sidecar file) ----------
-  // Convention: a plain-text file named "<the real filename>.transcript.txt" sitting next to
-  // the media in the repo. Nothing generates these automatically — upload one yourself
-  // (via the Uploader, or straight on GitHub) if you want a transcript available here.
-  function transcriptPathFor(entry){
+  // Pointer Events unify mouse (desktop) and touch (mobile) drag-to-seek in one listener set,
+  // and setPointerCapture keeps the drag tracking even if the finger/cursor slips off the bar.
+  (function setupScrubber(){
+    const bar = el("miniProgress");
+    let dragging = false;
+    function seekFromEvent(e){
+      const rect = bar.getBoundingClientRect();
+      let pct = (e.clientX - rect.left) / rect.width;
+      pct = Math.max(0, Math.min(1, pct));
+      el("miniProgressFill").style.width = (pct * 100) + "%";
+      el("miniProgressThumb").style.left = (pct * 100) + "%";
+      if (audioEl.duration) audioEl.currentTime = pct * audioEl.duration;
+    }
+    bar.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      bar.setPointerCapture(e.pointerId);
+      seekFromEvent(e);
+    });
+    bar.addEventListener("pointermove", (e) => { if (dragging) seekFromEvent(e); });
+    bar.addEventListener("pointerup", () => { dragging = false; });
+    bar.addEventListener("pointercancel", () => { dragging = false; });
+  })();
+
+  // ---------- transcripts ----------
+  // Two sidecar files are checked, next to the media, both derived purely from its filename:
+  //   <realname>.transcript.json  { text?, cues?: [{start, end?, text}] }  — written by the editor below
+  //   <realname>.transcript.txt   plain text                              — legacy / hand-uploaded fallback
+  // Nothing generates these automatically (no speech-to-text available here) — the "Tap along"
+  // editor is the practical way to build a timed one without typing timestamps by hand.
+  function transcriptBase(entry){
     const slash = entry.path.lastIndexOf("/");
     const dir = slash >= 0 ? entry.path.slice(0, slash + 1) : "";
-    return dir + realNameOf(entry.name) + ".transcript.txt";
+    return dir + realNameOf(entry.name);
   }
+  function transcriptJsonPath(entry){ return transcriptBase(entry) + ".transcript.json"; }
+  function transcriptTxtPath(entry){ return transcriptBase(entry) + ".transcript.txt"; }
+
+  function formatTime(sec){
+    sec = Math.max(0, Math.floor(sec || 0));
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
+  async function loadTranscriptData(entry){
+    try{
+      const res = await fetch(rawUrl(transcriptJsonPath(entry)));
+      if (res.ok) return await res.json();
+    } catch(e){}
+    try{
+      const res = await fetch(rawUrl(transcriptTxtPath(entry)));
+      if (res.ok) return { text: await res.text() };
+    } catch(e){}
+    return null;
+  }
+
+  async function saveTranscriptFile(path, contentObj){
+    let sha = null;
+    try{
+      const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, { method: "GET" });
+      if (res.ok) sha = (await res.json()).sha;
+    } catch(e){}
+    const body = { message: `Update transcript: ${path}`, content: utf8ToB64(JSON.stringify(contentObj, null, 2)) };
+    if (sha) body.sha = sha;
+    const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    if (!res.ok){
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+  }
+
   let openTranscriptFor = null;
+  let currentTranscriptCues = null;
+
+  function renderTranscriptPanel(data, entry){
+    const box = el("transcriptText");
+    box.innerHTML = "";
+    currentTranscriptCues = null;
+
+    if (data && data.cues && data.cues.length){
+      currentTranscriptCues = data.cues;
+      data.cues.forEach(cue => {
+        const line = document.createElement("div");
+        line.className = "transcript-line";
+        line.innerHTML = `<span class="transcript-line-time">${formatTime(cue.start)}</span>${cue.text}`;
+        line.addEventListener("click", () => {
+          audioEl.currentTime = cue.start;
+          if (audioEl.paused) audioEl.play();
+        });
+        box.appendChild(line);
+      });
+    } else if (data && data.text){
+      const p = document.createElement("div");
+      p.className = "transcript-plain";
+      p.textContent = data.text;
+      box.appendChild(p);
+    } else {
+      const p = document.createElement("div");
+      p.textContent = "No transcript yet for this item.";
+      box.appendChild(p);
+    }
+
+    if (el("organizeToggle").checked){
+      const btn = document.createElement("button");
+      btn.className = "te-open-btn";
+      btn.textContent = (data && (data.cues || data.text)) ? "✎ Edit transcript" : "+ Add transcript";
+      btn.addEventListener("click", () => openTranscriptEditor(entry, data));
+      box.appendChild(btn);
+    }
+  }
+
+  function updateActiveTranscriptLine(){
+    if (!currentTranscriptCues || !el("transcriptPanel").classList.contains("show")) return;
+    const t = audioEl.currentTime;
+    const cues = currentTranscriptCues;
+    let activeIdx = -1;
+    for (let i = 0; i < cues.length; i++){
+      const start = cues[i].start;
+      const end = cues[i].end != null ? cues[i].end : (cues[i + 1] ? cues[i + 1].start : Infinity);
+      if (t >= start && t < end){ activeIdx = i; break; }
+    }
+    const lines = el("transcriptText").querySelectorAll(".transcript-line");
+    lines.forEach((l, i) => l.classList.toggle("active", i === activeIdx));
+    if (activeIdx >= 0 && lines[activeIdx]) lines[activeIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
   async function toggleTranscript(entry){
     const panel = el("transcriptPanel");
     const btn = el("miniTranscript");
     if (panel.classList.contains("show") && openTranscriptFor === entry.path){
       panel.classList.remove("show");
       btn.classList.remove("active");
+      currentTranscriptCues = null;
       return;
     }
     openTranscriptFor = entry.path;
     btn.classList.add("active");
     panel.classList.add("show");
     el("transcriptText").textContent = "Loading transcript…";
-    try{
-      const res = await fetch(rawUrl(transcriptPathFor(entry)));
-      if (!res.ok) throw new Error("none");
-      el("transcriptText").textContent = await res.text();
-    } catch(e){
-      el("transcriptText").textContent = `No transcript uploaded for this item yet. To add one, upload a plain-text file named "${realNameOf(entry.name)}.transcript.txt" in the same folder.`;
-    }
+    const data = await loadTranscriptData(entry);
+    renderTranscriptPanel(data, entry);
+    updateActiveTranscriptLine();
   }
+
+  // ---------- transcript editor (tap-along + paste/import) ----------
+  let teEntry = null;
+  let teCues = [];
+
+  function timeStrToSeconds(t){
+    const clean = t.trim().replace(",", ".");
+    const parts = clean.split(":").map(Number);
+    if (parts.some(isNaN)) return 0;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parts[0];
+  }
+  function looksLikeTimedFormat(content){
+    return /\d{1,2}:\d{2}(:\d{2})?[.,]\d{1,3}\s*-->/.test(content);
+  }
+  function parseSrtVtt(content){
+    const lines = content.replace(/\r/g, "").split("\n");
+    const cues = [];
+    let i = (lines[0] && lines[0].trim().toUpperCase().startsWith("WEBVTT")) ? 1 : 0;
+    while (i < lines.length){
+      while (i < lines.length && (lines[i].trim() === "" || /^\d+$/.test(lines[i].trim()))) i++;
+      if (i >= lines.length) break;
+      const m = lines[i].match(/(\d{1,2}:\d{2}(?::\d{2})?[.,]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}(?::\d{2})?[.,]\d{1,3})/);
+      if (!m){ i++; continue; }
+      const start = timeStrToSeconds(m[1]), end = timeStrToSeconds(m[2]);
+      i++;
+      const textLines = [];
+      while (i < lines.length && lines[i].trim() !== ""){ textLines.push(lines[i]); i++; }
+      cues.push({ start, end, text: textLines.join(" ").trim() });
+    }
+    return cues;
+  }
+
+  function openTranscriptEditor(entry, existingData){
+    teEntry = entry;
+    teCues = (existingData && existingData.cues) ? existingData.cues.map(c => ({ ...c })) : [];
+    el("teFileName").textContent = niceName(entry.name);
+    el("tePasteArea").value = (existingData && !existingData.cues && existingData.text) ? existingData.text : "";
+    renderTeCues();
+    switchTeTab(teCues.length || !(existingData && existingData.text) ? "timed" : "paste");
+    el("teOverlay").classList.add("show");
+  }
+  function switchTeTab(mode){
+    document.querySelectorAll(".te-tab").forEach(t => t.classList.toggle("active", t.dataset.mode === mode));
+    el("tePanelTimed").style.display = mode === "timed" ? "block" : "none";
+    el("tePanelPaste").style.display = mode === "paste" ? "block" : "none";
+  }
+  document.querySelectorAll(".te-tab").forEach(t => t.addEventListener("click", () => switchTeTab(t.dataset.mode)));
+
+  function renderTeCues(){
+    const box = el("teCuesList");
+    box.innerHTML = "";
+    if (!teCues.length){
+      box.innerHTML = '<div class="te-empty">No lines yet — play the track above and tap "+ Add" as you go.</div>';
+      return;
+    }
+    teCues.forEach((c, i) => {
+      const row = document.createElement("div");
+      row.className = "te-cue-row";
+      row.innerHTML = `<span class="te-cue-time">${formatTime(c.start)}</span><span class="te-cue-text">${c.text}</span><span class="te-cue-del" data-i="${i}">✕</span>`;
+      box.appendChild(row);
+    });
+    box.querySelectorAll(".te-cue-del").forEach(b => b.addEventListener("click", () => {
+      teCues.splice(+b.dataset.i, 1);
+      renderTeCues();
+    }));
+  }
+
+  el("teClose").addEventListener("click", () => el("teOverlay").classList.remove("show"));
+  el("teCancel").addEventListener("click", () => el("teOverlay").classList.remove("show"));
+  el("teRewind5").addEventListener("click", () => { audioEl.currentTime = Math.max(0, audioEl.currentTime - 5); });
+  el("tePlayPause").addEventListener("click", () => { if (audioEl.paused) audioEl.play(); else audioEl.pause(); });
+  el("teAddLine").addEventListener("click", () => {
+    const text = el("teLineInput").value.trim();
+    if (!text) return;
+    teCues.push({ start: audioEl.currentTime, text });
+    teCues.sort((a, b) => a.start - b.start);
+    el("teLineInput").value = "";
+    renderTeCues();
+    el("teLineInput").focus();
+  });
+  el("teLineInput").addEventListener("keydown", e => { if (e.key === "Enter") el("teAddLine").click(); });
+
+  el("teSave").addEventListener("click", async () => {
+    el("teSave").disabled = true;
+    el("teSave").textContent = "Saving…";
+    try{
+      const activeMode = document.querySelector(".te-tab.active").dataset.mode;
+      let payload;
+      if (activeMode === "paste"){
+        const raw = el("tePasteArea").value;
+        payload = looksLikeTimedFormat(raw) ? { cues: parseSrtVtt(raw) } : { text: raw };
+      } else {
+        payload = { cues: teCues };
+      }
+      await saveTranscriptFile(transcriptJsonPath(teEntry), payload);
+      el("teOverlay").classList.remove("show");
+      if (currentAudioEntry && currentAudioEntry.path === teEntry.path){
+        renderTranscriptPanel(payload, teEntry);
+      }
+    } catch(err){
+      alert("Couldn't save transcript: " + err.message);
+    } finally {
+      el("teSave").disabled = false;
+      el("teSave").textContent = "Save transcript";
+    }
+  });
 
   // ---------- video / docs (modal) ----------
   function wireVideoSpeed(){
