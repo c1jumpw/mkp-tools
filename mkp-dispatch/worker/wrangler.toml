@@ -63,7 +63,7 @@ WORKSPACE_ID = "25724879"
 # clickup-proxy.js. Placeholder below is a best-effort guess extracted
 # from the pasted URL (app.clickup.com/25724879/chat/r/4-90170798185-8)
 # and has NOT been confirmed correct.
-CHAT_CHANNEL_ID = "90170798185"
+CHAT_CHANNEL_ID = "4-90170798185-8"
 
 # -----------------------------------------------------------------------
 # KV namespace: persists the OAuth access_token between requests (the
