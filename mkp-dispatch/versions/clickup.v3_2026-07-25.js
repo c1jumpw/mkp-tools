@@ -50,15 +50,6 @@
  *                        failures are swallowed).
  *                    (3) buildTaskPayload() now also assigns
  *                        entry.fields.assigneeId when present.
- *   v4  2026-07-25  Added getListTasks() and getTaskById() for the
- *                    "make this a subtask of an existing task" search
- *                    (see app.js loadParentTaskOptions()), and a
- *                    parent mapping in buildTaskPayload(). ClickUp
- *                    requires (a) the parent to live in the exact same
- *                    List as the new task, and (b) the parent to not
- *                    itself already be a subtask — both are enforced
- *                    by how getListTasks() scopes and filters its
- *                    results, not by any check in buildTaskPayload().
  * =========================================================================
  */
 
@@ -135,15 +126,6 @@ const ClickUp = (() => {
     // ClickUp List this capture is headed to and have to be fetched.
     if (entry.fields.assigneeId) {
       payload.assignees = [Number(entry.fields.assigneeId)];
-    }
-    // Subtask nesting: entry.parentTaskId is set by app.js's "subtask
-    // of an existing task" flow (see loadParentTaskOptions/selectParentTask),
-    // not a schema field — same reasoning as assigneeId above. ClickUp
-    // requires the parent to already live in this same List (see
-    // clickup.js version history) and to not itself be a subtask; both
-    // are enforced by how the search is scoped, not here.
-    if (entry.parentTaskId) {
-      payload.parent = entry.parentTaskId;
     }
     return payload;
   }
@@ -277,62 +259,5 @@ const ClickUp = (() => {
     return res.json();
   }
 
-  /**
-   * getListTasks
-   * Fetches the (open + closed) tasks that live in a given ClickUp
-   * List, for the "make this a subtask of an existing task" search —
-   * see app.js loadParentTaskOptions(). ClickUp's API has no name
-   * search endpoint (confirmed via their own public feedback board as
-   * of this writing), so the app fetches once and filters client-side
-   * as the user types, rather than hitting the API per keystroke.
-   * @param {string} listId
-   * @returns {Promise<Array<object>>} top-level tasks only — tasks
-   *   that are themselves subtasks are filtered out, since ClickUp's
-   *   create-task API rejects a parent that is itself a subtask (only
-   *   one level of nesting is supported when creating via the API).
-   * @throws apiError on non-2xx
-   * Edge case: ClickUp caps this endpoint at 100 tasks/page and this
-   * function only fetches page 0 — for a list with 100+ tasks, very
-   * old entries might not appear in the search. getTaskById() is the
-   * fallback for finding something outside that window by pasting its
-   * exact task ID.
-   */
-  async function getListTasks(listId) {
-    const res = await fetch(`${proxyUrl()}/list/${listId}/task?include_closed=true`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_LISTTASKS_${res.status}: ${text}`, res.status);
-    }
-    const data = await res.json();
-    return (data.tasks || []).filter(t => !t.parent);
-  }
-
-  /**
-   * getTaskById
-   * Direct lookup of a single task by its exact ClickUp ID — the
-   * fallback path in the subtask-parent search when a pasted ID isn't
-   * found in the (max 100) tasks getListTasks() already fetched.
-   * @param {string} taskId
-   * @returns {Promise<object|null>} the task, or null if not found
-   *   (404) — callers treat "not found" as a normal outcome, not an
-   *   error, since the user may have simply mistyped the ID.
-   * @throws apiError on any non-404 non-2xx response
-   */
-  async function getTaskById(taskId) {
-    const res = await fetch(`${proxyUrl()}/task/${taskId}`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_TASKLOOKUP_${res.status}: ${text}`, res.status);
-    }
-    return res.json();
-  }
-
-  return { createTask, uploadAttachment, testConnection, getListMembers, logCapture, getListTasks, getTaskById };
+  return { createTask, uploadAttachment, testConnection, getListMembers, logCapture };
 })();

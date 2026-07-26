@@ -75,22 +75,6 @@
  *                        post a short activity message to a configured
  *                        Chat channel — see clickup.js/clickup-proxy.js
  *                        for the rest of that flow.
- *   v5  2026-07-25  Added "make this a subtask of an existing task"
- *                    (Task-type forms only, alongside Assignee):
- *                    renderSubtaskBlock() drives a 3-state UI (idle /
- *                    searching / selected) rendered into its own
- *                    #subtask-block container so opening/closing it
- *                    doesn't disturb the rest of the form. Search is
- *                    client-side substring filtering over a cached
- *                    per-list task fetch (loadParentTaskOptions) rather
- *                    than a live query per keystroke, since ClickUp's
- *                    API has no name-search endpoint — see
- *                    clickup.js's getListTasks() doc comment. Falls
- *                    back to a direct by-ID lookup (getTaskById) when
- *                    nothing local matches and the query looks like a
- *                    task ID, covering lists larger than the cached
- *                    page. Selected parent flows into submitCapture()
- *                    via entry.parentTaskId/parentTaskName.
  * =========================================================================
  */
 
@@ -287,13 +271,6 @@ const App = (() => {
   // enough since Workspace membership rarely changes mid-session.
   const listMembersCache = {};
 
-  // Same caching idea as listMembersCache, for the "make this a
-  // subtask" search — see loadParentTaskOptions() below. Keyed by
-  // listId; holds a Promise so concurrent triggers (e.g. opening the
-  // panel twice quickly) share one in-flight fetch rather than firing
-  // duplicates.
-  const listTasksCache = {};
-
   // Cloudflare's free-tier Worker plan hard-caps any request body at
   // 100MB (ClickUp itself allows up to 1GB per attachment, but that
   // never matters here — the proxy rejects first). Warn well under
@@ -306,7 +283,7 @@ const App = (() => {
     const type = entity && entity.captureTypes.find(t => t.id === typeId);
     if (!entity || !type) return go('/entity');
 
-    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null };
+    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null };
     const schema = FIELD_SCHEMAS[type.schema];
     const speechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     const recordSupported = !!(navigator.mediaDevices && window.MediaRecorder);
@@ -324,7 +301,6 @@ const App = (() => {
       <main class="form">
         <form id="capture-form">
           ${schema.map(f => renderField(f)).join('')}
-          ${showAssignee ? `<div id="subtask-block"></div>` : ''}
           ${showAssignee ? `
           <label class="field" for="field-assigneeId">Assignee
             <select id="field-assigneeId" disabled>
@@ -350,10 +326,7 @@ const App = (() => {
 
     bindBack();
 
-    if (showAssignee) {
-      loadAssigneeOptions(type.listId);
-      renderSubtaskBlock(type.listId);
-    }
+    if (showAssignee) loadAssigneeOptions(type.listId);
 
     const fileInput = root.querySelector('#file-input');
     fileInput.onchange = () => {
@@ -450,181 +423,6 @@ const App = (() => {
         select.innerHTML = `<option value="">Unavailable — you can still send without an assignee</option>`;
       }
     }
-  }
-
-  // -----------------------------------------------------------------
-  // "Make this a subtask of an existing task"
-  // -----------------------------------------------------------------
-  // Three-state UI, re-rendered into the #subtask-block container
-  // (not the whole form) whenever state changes, to avoid disturbing
-  // whatever else the user has already typed elsewhere on the form:
-  //   'idle'      — just a "Make this a subtask" toggle button
-  //   'searching' — a search box + live-filtered results list
-  //   'selected'  — a summary chip naming the chosen parent, + remove
-  // The mode itself isn't stored in `state` (it's pure UI, discarded
-  // on re-render) — only the actual selection (state.parentTaskId /
-  // state.parentTaskName) persists, since that's what submitCapture()
-  // needs.
-
-  /**
-   * renderSubtaskBlock
-   * (Re)renders the #subtask-block container based on current
-   * selection state and the given UI mode.
-   * @param {string} listId - destination list, scopes the search
-   * @param {'idle'|'searching'|'selected'} [mode] - defaults to
-   *   'selected' if a parent is already chosen, else 'idle'
-   */
-  function renderSubtaskBlock(listId, mode) {
-    const container = root.querySelector('#subtask-block');
-    if (!container) return;
-    const effectiveMode = mode || (state.parentTaskId ? 'selected' : 'idle');
-
-    if (effectiveMode === 'idle') {
-      container.innerHTML = `<button type="button" class="pill-btn" id="subtask-toggle">${icon('nest')} Make this a subtask</button>`;
-      container.querySelector('#subtask-toggle').onclick = () => renderSubtaskBlock(listId, 'searching');
-      return;
-    }
-
-    if (effectiveMode === 'selected') {
-      container.innerHTML = `
-        <div class="subtask-chip">
-          <span>${icon('nest')} Subtask of: <strong>${escapeHtml(state.parentTaskName)}</strong></span>
-          <button type="button" id="subtask-remove">Remove</button>
-        </div>`;
-      container.querySelector('#subtask-remove').onclick = () => {
-        state.parentTaskId = null;
-        state.parentTaskName = null;
-        renderSubtaskBlock(listId, 'idle');
-      };
-      return;
-    }
-
-    // 'searching'
-    container.innerHTML = `
-      <div class="subtask-panel">
-        <input type="text" id="subtask-search" class="subtask-search" placeholder="Search tasks in this list by name or ID…" autocomplete="off">
-        <div id="subtask-results" class="subtask-results">
-          <p class="hint">Type at least 2 characters to search.</p>
-        </div>
-        <button type="button" class="link-btn" id="subtask-cancel">Cancel</button>
-      </div>`;
-
-    const searchInput = container.querySelector('#subtask-search');
-    const resultsEl = container.querySelector('#subtask-results');
-    searchInput.focus();
-
-    container.querySelector('#subtask-cancel').onclick = () => renderSubtaskBlock(listId, 'idle');
-
-    searchInput.oninput = () => filterAndRenderSubtaskResults(listId, searchInput.value.trim(), resultsEl);
-
-    // Kick off the (cached) fetch immediately on opening the panel,
-    // so results appear the instant 2+ characters are typed rather
-    // than waiting on a fetch that starts only once the user types.
-    loadParentTaskOptions(listId).catch(() => {
-      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks for this list. You can still send without a parent.</p>`;
-    });
-  }
-
-  /**
-   * loadParentTaskOptions
-   * Ensures listTasksCache[listId] is populated (fetching once via
-   * ClickUp.getListTasks if not already cached/in-flight).
-   * @param {string} listId
-   * @returns {Promise<object[]>}
-   */
-  function loadParentTaskOptions(listId) {
-    if (!listTasksCache[listId]) {
-      listTasksCache[listId] = ClickUp.getListTasks(listId).catch(err => {
-        delete listTasksCache[listId]; // don't cache a failure — allow retry next open
-        throw err;
-      });
-    }
-    return listTasksCache[listId];
-  }
-
-  /**
-   * filterAndRenderSubtaskResults
-   * Filters the cached task list by substring match (case-insensitive)
-   * against name/id/custom_id, renders up to 8 matches as clickable
-   * results. Falls back to a direct-by-ID lookup button when nothing
-   * local matches and the query looks like it could be a task ID —
-   * covers lists with more tasks than the single cached page holds
-   * (see getListTasks()'s doc comment).
-   * @param {string} listId
-   * @param {string} query
-   * @param {HTMLElement} resultsEl
-   */
-  async function filterAndRenderSubtaskResults(listId, query, resultsEl) {
-    if (query.length < 2) {
-      resultsEl.innerHTML = `<p class="hint">Type at least 2 characters to search.</p>`;
-      return;
-    }
-    let tasks;
-    try {
-      tasks = await loadParentTaskOptions(listId);
-    } catch (err) {
-      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks for this list.</p>`;
-      return;
-    }
-
-    const q = query.toLowerCase();
-    const matches = tasks.filter(t =>
-      (t.name && t.name.toLowerCase().includes(q)) ||
-      (t.id && t.id.toLowerCase().includes(q)) ||
-      (t.custom_id && t.custom_id.toLowerCase().includes(q))
-    ).slice(0, 8);
-
-    let html = matches.map(t => `
-      <button type="button" class="subtask-result" data-task-id="${t.id}" data-task-name="${escapeHtml(t.name)}">
-        <span class="subtask-result-name">${escapeHtml(t.name)}</span>
-        <span class="subtask-result-meta">${escapeHtml(t.status && t.status.status || '')}</span>
-      </button>
-    `).join('');
-
-    // Looks plausibly like a ClickUp task ID (short alphanumeric, no
-    // spaces) and nothing local matched — offer to look it up directly
-    // rather than silently coming up empty.
-    const looksLikeId = /^[a-z0-9]{6,10}$/i.test(query);
-    if (!matches.length && looksLikeId) {
-      html += `<button type="button" class="subtask-result subtask-result--lookup" id="subtask-direct-lookup">Look up task "${escapeHtml(query)}" directly</button>`;
-    }
-
-    resultsEl.innerHTML = html || `<p class="hint">No matching tasks found in this list.</p>`;
-
-    resultsEl.querySelectorAll('.subtask-result[data-task-id]').forEach(btn => {
-      btn.onclick = () => selectParentTask(listId, btn.dataset.taskId, btn.dataset.taskName);
-    });
-
-    const lookupBtn = resultsEl.querySelector('#subtask-direct-lookup');
-    if (lookupBtn) {
-      lookupBtn.onclick = async () => {
-        lookupBtn.disabled = true;
-        lookupBtn.textContent = 'Looking up…';
-        try {
-          const task = await ClickUp.getTaskById(query);
-          if (task && !task.parent) {
-            selectParentTask(listId, task.id, task.name);
-          } else if (task && task.parent) {
-            resultsEl.innerHTML = `<p class="hint hint--bad">That task is itself a subtask, so it can\u2019t be used as a parent.</p>`;
-          } else {
-            resultsEl.innerHTML = `<p class="hint hint--bad">No task found with that ID.</p>`;
-          }
-        } catch (err) {
-          resultsEl.innerHTML = `<p class="hint hint--bad">Lookup failed \u2014 double-check the ID.</p>`;
-        }
-      };
-    }
-  }
-
-  /**
-   * selectParentTask
-   * Records the chosen parent on `state` and switches the subtask
-   * block into its 'selected' summary view.
-   */
-  function selectParentTask(listId, taskId, taskName) {
-    state.parentTaskId = taskId;
-    state.parentTaskName = taskName;
-    renderSubtaskBlock(listId, 'selected');
   }
 
   function renderAttachmentList() {
@@ -877,11 +675,7 @@ const App = (() => {
       listId: type.listId,
       fields,
       title: fields.title || fields.name || '(untitled)',
-      createdAt: Date.now(),
-      // Set via the "Make this a subtask" flow (renderSubtaskBlock /
-      // selectParentTask) — null for a normal top-level task.
-      parentTaskId: state.parentTaskId || null,
-      parentTaskName: state.parentTaskName || null
+      createdAt: Date.now()
     };
 
     try {
@@ -999,8 +793,7 @@ const App = (() => {
     paperclip: '<path d="M21.4 11.6l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8.5-8.5"/>',
     clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     link: '<path d="M10 13a5 5 0 007.07 0l1.5-1.5a5 5 0 00-7.07-7.07L10 6"/><path d="M14 11a5 5 0 00-7.07 0l-1.5 1.5a5 5 0 007.07 7.07L14 18"/>',
-    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>',
-    nest: '<path d="M7 3v10a4 4 0 004 4h6"/><path d="M13 13l4 4-4 4"/>'
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>'
   };
   function icon(name) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;

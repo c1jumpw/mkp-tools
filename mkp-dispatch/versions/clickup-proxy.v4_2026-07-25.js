@@ -105,23 +105,6 @@
  *                        the ID visible in a Chat URL's "/chat/r/..."
  *                        slug is a front-end route segment, not
  *                        confirmed to match what the v3 API expects.
- *   v5  2026-07-25  Two changes supporting "make this a subtask of an
- *                    existing task":
- *                    (1) Fixed a latent bug — the generic v2 passthrough
- *                        was dropping query strings entirely (built the
- *                        upstream URL from url.pathname only, never
- *                        url.search). Harmless until now since no GET
- *                        route needed query params; getListTasks()
- *                        needs ?include_closed=true so this had to be
- *                        fixed first.
- *                    (2) Widened the allowlist to include bare
- *                        `task/:id` (GET) for direct-by-ID lookup —
- *                        ClickUp's API has no task name-search endpoint
- *                        (confirmed via their own public feedback
- *                        board), so the app fetches a list's tasks
- *                        once and filters client-side; this route is
- *                        the fallback for finding a specific task
- *                        outside that fetched batch by pasting its ID.
  * =========================================================================
  */
 
@@ -181,7 +164,7 @@ export default {
     //     WORKSPACE_ID/CHAT_CHANNEL_ID substituted in, not just the
     //     path forwarded as-is.
     // ---------------------------------------------------------------
-    const API_V2_PATHS = /^\/(user|list\/\d+\/task|list\/\d+\/member|task\/[A-Za-z0-9]+|task\/[A-Za-z0-9]+\/attachment)$/;
+    const API_V2_PATHS = /^\/(user|list\/\d+\/task|list\/\d+\/member|task\/[A-Za-z0-9]+\/attachment)$/;
     const isChatChannelsLookup = url.pathname === '/chat/channels' && request.method === 'GET';
     const isChatLog = url.pathname === '/log/chat' && request.method === 'POST';
 
@@ -213,7 +196,7 @@ export default {
     if (isChatChannelsLookup) return handleChatChannelsLookup(accessToken, env, corsHeaders);
     if (isChatLog) return handleChatLog(request, accessToken, env, corsHeaders);
 
-    const upstream = new URL(`https://api.clickup.com/api/v2${url.pathname}${url.search}`);
+    const upstream = new URL(`https://api.clickup.com/api/v2${url.pathname}`);
     const init = {
       method: request.method,
       // OAuth-issued tokens use the "Bearer " prefix (unlike ClickUp's
