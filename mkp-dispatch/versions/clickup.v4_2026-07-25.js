@@ -59,11 +59,6 @@
  *                    itself already be a subtask — both are enforced
  *                    by how getListTasks() scopes and filters its
  *                    results, not by any check in buildTaskPayload().
- *   v5  2026-07-25  logCapture()'s Chat message now includes a
- *                    "↳ Subtask of: <parent name>" line when the
- *                    capture was nested under an existing task —
- *                    previously a subtask logged identically to a
- *                    top-level task, losing that context in the feed.
  * =========================================================================
  */
 
@@ -269,15 +264,7 @@ const ClickUp = (() => {
    * @returns {Promise<object>} ClickUp's message-creation response
    */
   async function logCapture(entry, taskUrl) {
-    const lines = [`📥 **New ${entry.typeLabel}** — ${entry.entityName}`, entry.title];
-    // Surface subtask nesting in the log — otherwise a subtask shows
-    // up identically to a top-level task, losing useful context about
-    // where it actually landed in the hierarchy.
-    if (entry.parentTaskId && entry.parentTaskName) {
-      lines.push(`\u21b3 Subtask of: ${entry.parentTaskName}`);
-    }
-    lines.push(taskUrl);
-    const content = lines.join('\n');
+    const content = `📥 **New ${entry.typeLabel}** — ${entry.entityName}\n${entry.title}\n${taskUrl}`;
     const res = await fetch(`${proxyUrl()}/log/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },

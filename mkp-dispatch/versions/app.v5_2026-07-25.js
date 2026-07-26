@@ -91,13 +91,6 @@
  *                    task ID, covering lists larger than the cached
  *                    page. Selected parent flows into submitCapture()
  *                    via entry.parentTaskId/parentTaskName.
- *   v6  2026-07-25  Added a refresh icon to Home's top bar
- *                    (checkForUpdates()) — installed home-screen PWAs
- *                    have no browser chrome to pull-to-refresh from,
- *                    and browsers rarely check for a new service
- *                    worker on their own in standalone mode, so a
- *                    manual way to force the check was needed. See
- *                    sw.js's header comment for the fuller picture.
  * =========================================================================
  */
 
@@ -175,7 +168,6 @@ const App = (() => {
 
     root.innerHTML = `
       <header class="topbar">
-        <button class="icon-btn" id="refresh-btn" aria-label="Check for updates">${icon('refresh')}</button>
         <span class="brand">Dispatch</span>
         <button class="icon-btn" data-nav="settings" aria-label="Settings">${icon('gear')}</button>
       </header>
@@ -209,36 +201,10 @@ const App = (() => {
 
     root.querySelector('[data-nav="settings"]').onclick = () => go('/settings');
     root.querySelector('[data-nav="entity"]').onclick = () => go('/entity');
-    root.querySelector('#refresh-btn').onclick = checkForUpdates;
     const retryBtn = root.querySelector('#retry-queue');
     if (retryBtn) retryBtn.onclick = () => processQueue(true);
 
     processQueue(false);
-  }
-
-  /**
-   * checkForUpdates
-   * Forces an immediate service-worker update check instead of
-   * waiting on the browser's own schedule (which barely runs for an
-   * installed home-screen PWA — see sw.js's header comment for why
-   * this exists at all). Spins the refresh icon while checking, then
-   * reloads regardless of outcome — if nothing was new, the reload is
-   * harmless; if something was, the reload picks it up.
-   */
-  async function checkForUpdates() {
-    const btn = root.querySelector('#refresh-btn');
-    if (btn) { btn.disabled = true; btn.classList.add('spinning'); }
-    try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) await reg.update();
-      }
-    } catch (err) {
-      // Swallow — reload below happens either way, which is the
-      // actual fallback if the update check itself fails (e.g. no
-      // network right now).
-    }
-    setTimeout(() => window.location.reload(), 250);
   }
 
   // ---------------------------------------------------------------
@@ -1034,8 +1000,7 @@ const App = (() => {
     clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     link: '<path d="M10 13a5 5 0 007.07 0l1.5-1.5a5 5 0 00-7.07-7.07L10 6"/><path d="M14 11a5 5 0 00-7.07 0l-1.5 1.5a5 5 0 007.07 7.07L14 18"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>',
-    nest: '<path d="M7 3v10a4 4 0 004 4h6"/><path d="M13 13l4 4-4 4"/>',
-    refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>'
+    nest: '<path d="M7 3v10a4 4 0 004 4h6"/><path d="M13 13l4 4-4 4"/>'
   };
   function icon(name) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;

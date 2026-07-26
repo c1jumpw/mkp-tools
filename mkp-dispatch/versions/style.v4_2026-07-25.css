@@ -32,12 +32,6 @@
  *                    feature: .subtask-panel/.subtask-search/
  *                    .subtask-results/.subtask-result* (the search UI)
  *                    and .subtask-chip (the selected-parent summary).
- *   v5  2026-07-25  Added .icon-btn.spinning + @keyframes spin for the
- *                    new Home refresh/check-for-updates icon. Removed
- *                    the now-dead `.topbar .brand:first-child` rule —
- *                    Home's topbar gained a leading icon (matching
- *                    every other screen's back-btn/brand/action
- *                    layout), so .brand is never first-child anymore.
  * =========================================================================
  */
 
@@ -117,14 +111,7 @@ a { color: var(--amber); }
   text-align: center;
 }
 
-/* Note: previously had a `.topbar .brand:first-child { text-align: left; }`
-   rule here for Home's topbar specifically — removed in style.css v5
-   since Home's topbar now has a leading refresh icon like every other
-   screen, so .brand is never first-child anymore; the default centered
-   rule above already applies correctly everywhere. */
-
-.icon-btn.spinning svg { animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.topbar .brand:first-child { text-align: left; }
 
 .icon-btn, .icon-btn-spacer {
   width: 36px;
