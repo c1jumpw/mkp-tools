@@ -64,25 +64,6 @@
  *                    capture was nested under an existing task —
  *                    previously a subtask logged identically to a
  *                    top-level task, losing that context in the feed.
- *   v6  2026-07-26  Three additions:
- *                    (1) capitalizeWords() + applied to the task title
- *                        in buildTaskPayload() — cosmetic-only, only
- *                        ever uppercases (never lowercases), so
- *                        acronyms typed correctly (F5, CEO, AWS) are
- *                        never mangled.
- *                    (2) addComment() — posts a comment on an existing
- *                        task, the mechanism behind "Follow-up /
- *                        Reminder" (no task created).
- *                    (3) postToChannel() — posts to a specific Chat
- *                        channel (vs logCapture()'s fixed default),
- *                        the mechanism behind "Add to Accounts". Note:
- *                        account-type captures include a password
- *                        field passed straight through to this
- *                        function — it is sent as plain text in the
- *                        Chat message body, same as ClickUp Chat
- *                        always works; see app.js for what's done (and
- *                        NOT done, i.e. never persisted locally) with
- *                        that field client-side.
  * =========================================================================
  */
 
@@ -125,23 +106,8 @@ const ClickUp = (() => {
    * omitted key differently from an explicit empty value for some
    * fields (e.g. due_date).
    */
-  /**
-   * capitalizeWords
-   * Cosmetic-only title formatting: uppercases the first letter of
-   * each word. Deliberately only ever uppercases, never lowercases —
-   * "F5 CEO" stays "F5 CEO", "aws project" becomes "Aws Project" —
-   * so acronyms and intentional casing typed by the user survive
-   * untouched, and only the common "typed it all lowercase in a rush"
-   * case gets fixed.
-   * @param {string} str
-   * @returns {string}
-   */
-  function capitalizeWords(str) {
-    return str.replace(/\b\p{L}/gu, (ch) => ch.toUpperCase());
-  }
-
   function buildTaskPayload(entry) {
-    const payload = { name: capitalizeWords(entry.fields.title || entry.fields.name || '(untitled)') };
+    const payload = { name: entry.fields.title || entry.fields.name || '(untitled)' };
 
     const descriptionParts = [];
     if (entry.fields.description) descriptionParts.push(entry.fields.description);
@@ -302,44 +268,13 @@ const ClickUp = (() => {
    * @param {string} taskUrl - the created task's ClickUp URL
    * @returns {Promise<object>} ClickUp's message-creation response
    */
-  /**
-   * logCapture
-   * Posts a short Markdown activity message to the configured ClickUp
-   * Chat channel, summarizing what was just captured and linking to
-   * it. Called by app.js after a successful send, as a lightweight
-   * "new activity" feed distinct from the task itself. Deliberately
-   * best-effort: callers should wrap this in a .catch() that swallows
-   * failures (same pattern as uploadAttachment callers) so a
-   * Chat-logging hiccup never undoes or blocks a capture that already
-   * succeeded. See clickup-proxy.js handleChatLog() for the server
-   * side, including the "experimental API" caveat.
-   * @param {object} entry - the capture entry (see submitCapture in app.js)
-   * @param {string} taskUrl - the relevant ClickUp URL (a task URL for
-   *   action:'task'/'comment'; not called at all for action:'chat' —
-   *   see performSend() in app.js)
-   * @returns {Promise<object>} ClickUp's message-creation response
-   * Note: entry.parentTaskId/parentTaskName carry two different
-   * meanings depending on entry.action — "subtask nested under X" for
-   * a normal task capture, vs "comment added to X" for a Follow-up.
-   * Branching on entry.action here keeps the log message honest about
-   * which actually happened, rather than always saying "Subtask of".
-   */
   async function logCapture(entry, taskUrl) {
-    let lines;
-    if (entry.action === 'comment') {
-      lines = [
-        `\ud83d\udcac **Follow-up** \u2014 ${entry.entityName}`,
-        entry.fields && entry.fields.note ? entry.fields.note : entry.title,
-        `On: ${entry.parentTaskName || 'existing task'}`
-      ];
-    } else {
-      lines = [`📥 **New ${entry.typeLabel}** — ${entry.entityName}`, entry.title];
-      // Surface subtask nesting in the log — otherwise a subtask shows
-      // up identically to a top-level task, losing useful context
-      // about where it actually landed in the hierarchy.
-      if (entry.parentTaskId && entry.parentTaskName) {
-        lines.push(`\u21b3 Subtask of: ${entry.parentTaskName}`);
-      }
+    const lines = [`📥 **New ${entry.typeLabel}** — ${entry.entityName}`, entry.title];
+    // Surface subtask nesting in the log — otherwise a subtask shows
+    // up identically to a top-level task, losing useful context about
+    // where it actually landed in the hierarchy.
+    if (entry.parentTaskId && entry.parentTaskName) {
+      lines.push(`\u21b3 Subtask of: ${entry.parentTaskName}`);
     }
     lines.push(taskUrl);
     const content = lines.join('\n');
@@ -358,20 +293,16 @@ const ClickUp = (() => {
   /**
    * getListTasks
    * Fetches the (open + closed) tasks that live in a given ClickUp
-   * List — used by both "make this a subtask of an existing task" and
-   * "Follow-up / Reminder" (see app.js loadParentTaskOptions()).
-   * ClickUp's API has no name search endpoint (confirmed via their own
-   * public feedback board as of this writing), so the app fetches
-   * once and filters client-side as the user types, rather than
-   * hitting the API per keystroke.
+   * List, for the "make this a subtask of an existing task" search —
+   * see app.js loadParentTaskOptions(). ClickUp's API has no name
+   * search endpoint (confirmed via their own public feedback board as
+   * of this writing), so the app fetches once and filters client-side
+   * as the user types, rather than hitting the API per keystroke.
    * @param {string} listId
-   * @returns {Promise<Array<object>>} all tasks as ClickUp returns
-   *   them — including ones that are themselves subtasks (each has a
-   *   `.parent` field). Whether subtasks-of-subtasks should be
-   *   filtered out is caller-specific (the subtask-parent feature
-   *   must exclude them per ClickUp's API rules; Follow-up/Reminder
-   *   does not, since commenting on an existing subtask is fine) — see
-   *   app.js filterAndRenderSubtaskResults()'s excludeSubtasks param.
+   * @returns {Promise<Array<object>>} top-level tasks only — tasks
+   *   that are themselves subtasks are filtered out, since ClickUp's
+   *   create-task API rejects a parent that is itself a subtask (only
+   *   one level of nesting is supported when creating via the API).
    * @throws apiError on non-2xx
    * Edge case: ClickUp caps this endpoint at 100 tasks/page and this
    * function only fetches page 0 — for a list with 100+ tasks, very
@@ -389,7 +320,7 @@ const ClickUp = (() => {
       throw apiError(`CLICKUP_LISTTASKS_${res.status}: ${text}`, res.status);
     }
     const data = await res.json();
-    return data.tasks || [];
+    return (data.tasks || []).filter(t => !t.parent);
   }
 
   /**
@@ -416,61 +347,5 @@ const ClickUp = (() => {
     return res.json();
   }
 
-  /**
-   * addComment
-   * Adds a comment to an existing task — the mechanism behind
-   * "Follow-up / Reminder" (see app.js). Used instead of creating a
-   * new task, and instead of ClickUp's native Reminders (which have
-   * no public API at all — confirmed via ClickUp's own feedback
-   * board, a 5+ year open request).
-   * @param {string} taskId
-   * @param {string} commentText - plain text; ClickUp renders it as a
-   *   normal comment, not markdown (unlike Chat messages)
-   * @returns {Promise<object>} ClickUp's comment-creation response
-   * @throws apiError on non-2xx
-   */
-  async function addComment(taskId, commentText) {
-    const res = await fetch(`${proxyUrl()}/task/${taskId}/comment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ comment_text: commentText })
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_COMMENT_${res.status}: ${text}`, res.status);
-    }
-    return res.json();
-  }
-
-  /**
-   * postToChannel
-   * Posts a message to a specific ClickUp Chat channel — the
-   * mechanism behind "Add to Accounts" (see app.js), which needs a
-   * different destination than the general activity log logCapture()
-   * posts to. Both go through the same Worker route
-   * (handleChatLog) — passing channel_id here is what tells the
-   * Worker to use this destination instead of its CHAT_CHANNEL_ID
-   * default.
-   * @param {string} channelId
-   * @param {string} content - Markdown-formatted message text
-   * @returns {Promise<object>} ClickUp's message-creation response
-   * @throws apiError on non-2xx
-   */
-  async function postToChannel(channelId, content) {
-    const res = await fetch(`${proxyUrl()}/log/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ content, channel_id: channelId })
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_CHATPOST_${res.status}: ${text}`, res.status);
-    }
-    return res.json();
-  }
-
-  return {
-    createTask, uploadAttachment, testConnection, getListMembers, logCapture,
-    getListTasks, getTaskById, addComment, postToChannel
-  };
+  return { createTask, uploadAttachment, testConnection, getListMembers, logCapture, getListTasks, getTaskById };
 })();

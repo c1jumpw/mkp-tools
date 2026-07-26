@@ -122,20 +122,6 @@
  *                        once and filters client-side; this route is
  *                        the fallback for finding a specific task
  *                        outside that fetched batch by pasting its ID.
- *   v6  2026-07-26  Two changes supporting "Follow-up / Reminder" and
- *                    "Add to Accounts":
- *                    (1) Widened the allowlist to include
- *                        `task/:id/comment` (POST) — Follow-up posts a
- *                        comment on an existing task instead of
- *                        creating a new one, since ClickUp's native
- *                        Reminders feature has no public API at all
- *                        (confirmed via their feedback board).
- *                    (2) Generalized handleChatLog() to accept an
- *                        optional client-specified channel_id (falls
- *                        back to CHAT_CHANNEL_ID) — Add to Accounts
- *                        posts to a different Chat channel than the
- *                        general activity log, so the Worker needed a
- *                        second destination without a second route.
  * =========================================================================
  */
 
@@ -195,7 +181,7 @@ export default {
     //     WORKSPACE_ID/CHAT_CHANNEL_ID substituted in, not just the
     //     path forwarded as-is.
     // ---------------------------------------------------------------
-    const API_V2_PATHS = /^\/(user|list\/\d+\/task|list\/\d+\/member|task\/[A-Za-z0-9]+|task\/[A-Za-z0-9]+\/attachment|task\/[A-Za-z0-9]+\/comment)$/;
+    const API_V2_PATHS = /^\/(user|list\/\d+\/task|list\/\d+\/member|task\/[A-Za-z0-9]+|task\/[A-Za-z0-9]+\/attachment)$/;
     const isChatChannelsLookup = url.pathname === '/chat/channels' && request.method === 'GET';
     const isChatLog = url.pathname === '/log/chat' && request.method === 'POST';
 
@@ -296,54 +282,39 @@ async function handleChatChannelsLookup(accessToken, env, corsHeaders) {
 
 /**
  * handleChatLog
- * Posts a message into a ClickUp Chat channel. Defaults to the
- * general activity channel (CHAT_CHANNEL_ID) when the request body
- * doesn't specify one — used by the normal "new capture" activity log
- * (clickup.js logCapture()). A request can instead pass its own
- * `channel_id` to target a different channel — used by "Add to
- * Accounts" (clickup.js postToChannel()) to post into a dedicated
- * accounts channel instead. Trusting a client-specified channel_id is
- * a deliberate, narrow trade-off: this Worker already sits behind the
- * passcode gate (single trusted owner + assistants, not a public
- * multi-tenant service), so allowing a second known-good destination
- * is a feature, not a meaningful new attack surface — it does NOT let
- * a caller post to arbitrary ClickUp resources outside Chat messages.
- * Best-effort by design: the app treats a failure here the same way
- * it treats a failed attachment upload (logged client-side, doesn't
- * undo or block the capture that already succeeded).
- * @param {Request} request - expects JSON body { content: string, channel_id?: string }
+ * Posts a short activity message into the configured ClickUp Chat
+ * channel (CHAT_CHANNEL_ID) — called by the app after a capture sends
+ * successfully, as a lightweight "new activity" feed separate from
+ * the task itself. Best-effort by design: the app treats a failure
+ * here the same way it treats a failed attachment upload (logged
+ * client-side, doesn't undo or block the capture that already
+ * succeeded) — see clickup.js logCapture()'s caller in app.js.
+ * @param {Request} request - expects JSON body { content: string }
  * @param {string} accessToken
- * @param {object} env - needs WORKSPACE_ID, CHAT_CHANNEL_ID (default)
+ * @param {object} env - needs WORKSPACE_ID, CHAT_CHANNEL_ID
  * @param {object} corsHeaders
  * @returns {Promise<Response>}
- * Edge cases: if no channel_id is resolvable (neither provided nor
- * defaulted), fails clearly with a 500 rather than silently posting
- * nowhere. ClickUp's Chat API is marked "experimental" in their own
- * docs — a schema change on their end would surface here as a
- * non-2xx relayed as-is.
+ * Edge cases: if CHAT_CHANNEL_ID isn't set (setup not finished), fails
+ * clearly with a 500 rather than silently posting nowhere. ClickUp's
+ * Chat API is marked "experimental" in their own docs — a schema
+ * change on their end would surface here as a non-2xx relayed as-is.
  */
 async function handleChatLog(request, accessToken, env, corsHeaders) {
-  if (!env.WORKSPACE_ID) {
-    return json({ error: 'WORKSPACE_ID is not set on this Worker.' }, 500, corsHeaders);
+  if (!env.WORKSPACE_ID || !env.CHAT_CHANNEL_ID) {
+    return json({ error: 'WORKSPACE_ID or CHAT_CHANNEL_ID is not set on this Worker.' }, 500, corsHeaders);
   }
-  let content, requestedChannelId;
+  let content;
   try {
     const payload = JSON.parse(await request.text());
     content = payload.content;
-    requestedChannelId = payload.channel_id;
   } catch (err) {
     return json({ error: 'Invalid JSON body.' }, 400, corsHeaders);
   }
   if (!content) return json({ error: 'Missing "content".' }, 400, corsHeaders);
 
-  const channelId = requestedChannelId || env.CHAT_CHANNEL_ID;
-  if (!channelId) {
-    return json({ error: 'No channel_id provided and CHAT_CHANNEL_ID is not set on this Worker.' }, 500, corsHeaders);
-  }
-
   try {
     const res = await fetch(
-      `https://api.clickup.com/api/v3/workspaces/${env.WORKSPACE_ID}/chat/channels/${channelId}/messages`,
+      `https://api.clickup.com/api/v3/workspaces/${env.WORKSPACE_ID}/chat/channels/${env.CHAT_CHANNEL_ID}/messages`,
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },

@@ -98,41 +98,6 @@
  *                    worker on their own in standalone mode, so a
  *                    manual way to force the check was needed. See
  *                    sw.js's header comment for the fuller picture.
- *   v7  2026-07-26  Generalized the form/submit architecture beyond
- *                    "always creates a ClickUp task", to support two
- *                    new capture-type actions (config.js `action`
- *                    field, defaults to 'task' for every pre-existing
- *                    entry — fully backward compatible):
- *                    (1) action:'comment' — "Follow-up / Reminder".
- *                        renderForm() now requires (not optional-
- *                        toggles) the task-search UI up front; the
- *                        subtask-search component (v5) was generalized
- *                        to accept multiple listIds (search spans
- *                        every task-schema list in the entity) and an
- *                        excludeSubtasks flag (false here — unlike the
- *                        subtask feature, commenting on an existing
- *                        subtask is fine). Posts via
- *                        ClickUp.addComment(), no task created.
- *                    (2) action:'chat' — "Add to Accounts". Posts a
- *                        formatted message (formatAccountMessage())
- *                        to a specific Chat channel via
- *                        ClickUp.postToChannel(), no task created.
- *                        Carries a password field — added
- *                        sanitizeForRecent() so it's stripped before
- *                        ever reaching the local Recent-captures log
- *                        (still present in the offline queue if
- *                        offline when sent — see queueForRetry()'s
- *                        doc comment for that trade-off).
- *                    Extracted performSend() as the single place that
- *                    branches on action and talks to ClickUp, shared
- *                    by submitCapture() (live) and processQueue()
- *                    (offline retry) so the branching logic exists
- *                    exactly once. Attachments are now passed to it
- *                    explicitly rather than read from the shared
- *                    `state` object, so a background retry can never
- *                    clobber whatever a different form has in progress.
- *                    Also added a `password` field type to renderField
- *                    (masked input) and bell/key icons.
  * =========================================================================
  */
 
@@ -375,31 +340,14 @@ const App = (() => {
     const type = entity && entity.captureTypes.find(t => t.id === typeId);
     if (!entity || !type) return go('/entity');
 
-    // What this capture type actually does on submit — see
-    // submitCapture()'s branch on the same value. Entries without an
-    // explicit `action` in config.js default to 'task' (the original,
-    // still most common behavior), so this stays backward-compatible
-    // with every capture type defined before Follow-up/Add-to-Accounts
-    // existed.
-    const action = type.action || 'task';
-
-    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null, parentTaskUrl: null };
+    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null };
     const schema = FIELD_SCHEMAS[type.schema];
     const speechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     const recordSupported = !!(navigator.mediaDevices && window.MediaRecorder);
-    // Assignee and optional subtask-nesting only make sense when this
-    // capture actually creates a ClickUp task.
-    const showAssignee = action === 'task' && type.schema === 'task';
-    // File/voice-note attachments need a task to attach to.
-    const showAttachments = action === 'task';
-    // Follow-up (action:'comment') requires picking a target task
-    // first — searched across every task-schema list in this entity
-    // at once, since posting a comment isn't restricted to one
-    // specific list the way a new subtask's parent is.
-    const requiresTaskSearch = action === 'comment';
-    const taskSearchListIds = requiresTaskSearch
-      ? entity.captureTypes.filter(t => t.schema === 'task').map(t => t.listId)
-      : (showAssignee ? [type.listId] : []);
+    // Assignee only makes sense for Task-type captures — pulling list
+    // members is a real network call, so it's scoped narrowly rather
+    // than shown (and fetched) on every capture type.
+    const showAssignee = type.schema === 'task';
 
     root.innerHTML = `
       <header class="topbar">
@@ -409,7 +357,6 @@ const App = (() => {
       </header>
       <main class="form">
         <form id="capture-form">
-          ${requiresTaskSearch ? `<div id="subtask-block"></div>` : ''}
           ${schema.map(f => renderField(f)).join('')}
           ${showAssignee ? `<div id="subtask-block"></div>` : ''}
           ${showAssignee ? `
@@ -419,7 +366,6 @@ const App = (() => {
             </select>
           </label>` : ''}
 
-          ${showAttachments ? `
           <div class="voice-row">
             ${speechSupported ? `<button type="button" class="pill-btn" id="dictate-btn">${icon('mic')} Dictate</button>` : ''}
             ${recordSupported ? `<button type="button" class="pill-btn" id="record-btn">${icon('record')} Voice note</button>` : ''}
@@ -429,7 +375,6 @@ const App = (() => {
           </div>
           <div id="attachment-list" class="attachment-list"></div>
           <div id="recording-indicator" class="recording-indicator hidden">Recording… <span id="rec-time">0:00</span></div>
-          ` : (speechSupported ? `<div class="voice-row"><button type="button" class="pill-btn" id="dictate-btn">${icon('mic')} Dictate</button></div>` : '')}
         </form>
       </main>
       <div class="form-footer">
@@ -441,34 +386,30 @@ const App = (() => {
 
     if (showAssignee) {
       loadAssigneeOptions(type.listId);
-      renderSubtaskBlock(taskSearchListIds, undefined, false, true, 'subtask');
-    }
-    if (requiresTaskSearch) {
-      renderSubtaskBlock(taskSearchListIds, 'searching', true, false, 'task to follow up on');
+      renderSubtaskBlock(type.listId);
     }
 
-    if (showAttachments) {
-      const fileInput = root.querySelector('#file-input');
-      fileInput.onchange = () => {
-        const incoming = Array.from(fileInput.files);
-        const tooBig = incoming.filter(f => f.size > MAX_ATTACHMENT_BYTES);
-        const ok = incoming.filter(f => f.size <= MAX_ATTACHMENT_BYTES);
-        if (tooBig.length) {
-          alert(
-            `${tooBig.map(f => f.name).join(', ')} ${tooBig.length > 1 ? 'are' : 'is'} over the 90MB limit for attachments sent through Dispatch and won\u2019t be included. ` +
-            `For larger files, add them directly in ClickUp once the task is created.`
-          );
-        }
-        state.attachments.push(...ok);
-        renderAttachmentList();
-        fileInput.value = '';
-      };
-      const recordBtn = root.querySelector('#record-btn');
-      if (recordBtn) recordBtn.onclick = () => toggleRecording();
-    }
+    const fileInput = root.querySelector('#file-input');
+    fileInput.onchange = () => {
+      const incoming = Array.from(fileInput.files);
+      const tooBig = incoming.filter(f => f.size > MAX_ATTACHMENT_BYTES);
+      const ok = incoming.filter(f => f.size <= MAX_ATTACHMENT_BYTES);
+      if (tooBig.length) {
+        alert(
+          `${tooBig.map(f => f.name).join(', ')} ${tooBig.length > 1 ? 'are' : 'is'} over the 90MB limit for attachments sent through Dispatch and won\u2019t be included. ` +
+          `For larger files, add them directly in ClickUp once the task is created.`
+        );
+      }
+      state.attachments.push(...ok);
+      renderAttachmentList();
+      fileInput.value = '';
+    };
 
     const dictateBtn = root.querySelector('#dictate-btn');
     if (dictateBtn) dictateBtn.onclick = () => toggleDictate(schema);
+
+    const recordBtn = root.querySelector('#record-btn');
+    if (recordBtn) recordBtn.onclick = () => toggleRecording();
 
     root.querySelector('#send-btn').onclick = (e) => {
       e.preventDefault();
@@ -505,16 +446,6 @@ const App = (() => {
     if (f.type === 'date') {
       return `<label class="field" for="${id}">${f.label}
         <input type="date" id="${id}" name="${f.key}">
-      </label>`;
-    }
-    if (f.type === 'password') {
-      // Masked on screen — same reasoning as any password field: avoid
-      // it being visible over someone's shoulder while typing quickly
-      // on a phone. Doesn't add any real encryption; see the security
-      // note on "Add to Accounts" in config.js/clickup.js/app.js
-      // version history for what this field's data actually does.
-      return `<label class="field" for="${id}">${f.label}
-        <input type="password" id="${id}" name="${f.key}" autocomplete="new-password">
       </label>`;
     }
     return `<label class="field" for="${id}">${f.label}${f.required ? ' *' : ''}
@@ -559,65 +490,45 @@ const App = (() => {
   // "Make this a subtask of an existing task"
   // -----------------------------------------------------------------
   // Three-state UI, re-rendered into the #subtask-block container
-  // -----------------------------------------------------------------
-  // Task search/picker — shared by two features:
-  //   "Make this a subtask of an existing task" (Task-type forms,
-  //     optional, single-list — ClickUp requires the parent to live
-  //     in the exact same list as the new task)
-  //   "Follow-up / Reminder" (its own capture type, required,
-  //     multi-list — searches every task-schema list in the entity at
-  //     once, since a comment isn't restricted to one specific list)
-  // Three-state UI, re-rendered into the #subtask-block container
   // (not the whole form) whenever state changes, to avoid disturbing
   // whatever else the user has already typed elsewhere on the form:
-  //   'idle'      — just a toggle button (skipped entirely when required)
+  //   'idle'      — just a "Make this a subtask" toggle button
   //   'searching' — a search box + live-filtered results list
-  //   'selected'  — a summary chip naming the chosen task, + remove
+  //   'selected'  — a summary chip naming the chosen parent, + remove
   // The mode itself isn't stored in `state` (it's pure UI, discarded
   // on re-render) — only the actual selection (state.parentTaskId /
-  // state.parentTaskName / state.parentTaskUrl) persists, since that's
-  // what submitCapture() needs.
+  // state.parentTaskName) persists, since that's what submitCapture()
+  // needs.
 
   /**
    * renderSubtaskBlock
    * (Re)renders the #subtask-block container based on current
    * selection state and the given UI mode.
-   * @param {string[]} listIds - lists to search across (1 for the
-   *   subtask feature, possibly several for Follow-up)
+   * @param {string} listId - destination list, scopes the search
    * @param {'idle'|'searching'|'selected'} [mode] - defaults to
-   *   'selected' if a task is already chosen, else 'searching' when
-   *   `required` else 'idle'
-   * @param {boolean} [required] - Follow-up passes true: no toggle-off
-   *   state, a task must be chosen before Send will work
-   * @param {boolean} [excludeSubtasks] - the subtask feature passes
-   *   true (ClickUp rejects a parent that's itself a subtask);
-   *   Follow-up passes false (commenting on a subtask is fine)
-   * @param {string} [label] - customizes the toggle/chip wording
-   *   ("subtask" vs "task to follow up on")
+   *   'selected' if a parent is already chosen, else 'idle'
    */
-  function renderSubtaskBlock(listIds, mode, required, excludeSubtasks, label) {
+  function renderSubtaskBlock(listId, mode) {
     const container = root.querySelector('#subtask-block');
     if (!container) return;
-    const noun = label || 'subtask';
-    const effectiveMode = mode || (state.parentTaskId ? 'selected' : (required ? 'searching' : 'idle'));
+    const effectiveMode = mode || (state.parentTaskId ? 'selected' : 'idle');
 
     if (effectiveMode === 'idle') {
       container.innerHTML = `<button type="button" class="pill-btn" id="subtask-toggle">${icon('nest')} Make this a subtask</button>`;
-      container.querySelector('#subtask-toggle').onclick = () => renderSubtaskBlock(listIds, 'searching', required, excludeSubtasks, label);
+      container.querySelector('#subtask-toggle').onclick = () => renderSubtaskBlock(listId, 'searching');
       return;
     }
 
     if (effectiveMode === 'selected') {
       container.innerHTML = `
         <div class="subtask-chip">
-          <span>${icon('nest')} ${required ? 'Following up on' : 'Subtask of'}: <strong>${escapeHtml(state.parentTaskName)}</strong></span>
-          <button type="button" id="subtask-remove">${required ? 'Change' : 'Remove'}</button>
+          <span>${icon('nest')} Subtask of: <strong>${escapeHtml(state.parentTaskName)}</strong></span>
+          <button type="button" id="subtask-remove">Remove</button>
         </div>`;
       container.querySelector('#subtask-remove').onclick = () => {
         state.parentTaskId = null;
         state.parentTaskName = null;
-        state.parentTaskUrl = null;
-        renderSubtaskBlock(listIds, required ? 'searching' : 'idle', required, excludeSubtasks, label);
+        renderSubtaskBlock(listId, 'idle');
       };
       return;
     }
@@ -625,28 +536,26 @@ const App = (() => {
     // 'searching'
     container.innerHTML = `
       <div class="subtask-panel">
-        ${required ? `<p class="hint">Search for the ${escapeHtml(noun)} \u2014 required.</p>` : ''}
-        <input type="text" id="subtask-search" class="subtask-search" placeholder="Search by name or ID…" autocomplete="off">
+        <input type="text" id="subtask-search" class="subtask-search" placeholder="Search tasks in this list by name or ID…" autocomplete="off">
         <div id="subtask-results" class="subtask-results">
           <p class="hint">Type at least 2 characters to search.</p>
         </div>
-        ${required ? '' : '<button type="button" class="link-btn" id="subtask-cancel">Cancel</button>'}
+        <button type="button" class="link-btn" id="subtask-cancel">Cancel</button>
       </div>`;
 
     const searchInput = container.querySelector('#subtask-search');
     const resultsEl = container.querySelector('#subtask-results');
     searchInput.focus();
 
-    const cancelBtn = container.querySelector('#subtask-cancel');
-    if (cancelBtn) cancelBtn.onclick = () => renderSubtaskBlock(listIds, 'idle', required, excludeSubtasks, label);
+    container.querySelector('#subtask-cancel').onclick = () => renderSubtaskBlock(listId, 'idle');
 
-    searchInput.oninput = () => filterAndRenderSubtaskResults(listIds, searchInput.value.trim(), resultsEl, required, excludeSubtasks, label);
+    searchInput.oninput = () => filterAndRenderSubtaskResults(listId, searchInput.value.trim(), resultsEl);
 
-    // Kick off the (cached) fetch(es) immediately on opening the
-    // panel, so results appear the instant 2+ characters are typed
-    // rather than waiting on a fetch that starts only once typed.
-    Promise.all(listIds.map(loadParentTaskOptions)).catch(() => {
-      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks. ${required ? 'You can still paste an exact task ID above.' : 'You can still send without one.'}</p>`;
+    // Kick off the (cached) fetch immediately on opening the panel,
+    // so results appear the instant 2+ characters are typed rather
+    // than waiting on a fetch that starts only once the user types.
+    loadParentTaskOptions(listId).catch(() => {
+      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks for this list. You can still send without a parent.</p>`;
     });
   }
 
@@ -669,33 +578,28 @@ const App = (() => {
 
   /**
    * filterAndRenderSubtaskResults
-   * Filters the cached task list(s) by substring match
-   * (case-insensitive) against name/id/custom_id, renders up to 8
-   * matches as clickable results. Falls back to a direct-by-ID lookup
-   * button when nothing local matches and the query looks like it
-   * could be a task ID — covers lists with more tasks than the single
-   * cached page holds (see getListTasks()'s doc comment).
-   * @param {string[]} listIds
+   * Filters the cached task list by substring match (case-insensitive)
+   * against name/id/custom_id, renders up to 8 matches as clickable
+   * results. Falls back to a direct-by-ID lookup button when nothing
+   * local matches and the query looks like it could be a task ID —
+   * covers lists with more tasks than the single cached page holds
+   * (see getListTasks()'s doc comment).
+   * @param {string} listId
    * @param {string} query
    * @param {HTMLElement} resultsEl
-   * @param {boolean} required
-   * @param {boolean} excludeSubtasks - see renderSubtaskBlock's doc
-   * @param {string} label
    */
-  async function filterAndRenderSubtaskResults(listIds, query, resultsEl, required, excludeSubtasks, label) {
+  async function filterAndRenderSubtaskResults(listId, query, resultsEl) {
     if (query.length < 2) {
       resultsEl.innerHTML = `<p class="hint">Type at least 2 characters to search.</p>`;
       return;
     }
-    let taskLists;
+    let tasks;
     try {
-      taskLists = await Promise.all(listIds.map(loadParentTaskOptions));
+      tasks = await loadParentTaskOptions(listId);
     } catch (err) {
-      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks.</p>`;
+      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks for this list.</p>`;
       return;
     }
-    let tasks = taskLists.flat();
-    if (excludeSubtasks) tasks = tasks.filter(t => !t.parent);
 
     const q = query.toLowerCase();
     const matches = tasks.filter(t =>
@@ -705,7 +609,7 @@ const App = (() => {
     ).slice(0, 8);
 
     let html = matches.map(t => `
-      <button type="button" class="subtask-result" data-task-id="${t.id}" data-task-name="${escapeHtml(t.name)}" data-task-url="${escapeHtml(t.url || '')}">
+      <button type="button" class="subtask-result" data-task-id="${t.id}" data-task-name="${escapeHtml(t.name)}">
         <span class="subtask-result-name">${escapeHtml(t.name)}</span>
         <span class="subtask-result-meta">${escapeHtml(t.status && t.status.status || '')}</span>
       </button>
@@ -719,10 +623,10 @@ const App = (() => {
       html += `<button type="button" class="subtask-result subtask-result--lookup" id="subtask-direct-lookup">Look up task "${escapeHtml(query)}" directly</button>`;
     }
 
-    resultsEl.innerHTML = html || `<p class="hint">No matching tasks found.</p>`;
+    resultsEl.innerHTML = html || `<p class="hint">No matching tasks found in this list.</p>`;
 
     resultsEl.querySelectorAll('.subtask-result[data-task-id]').forEach(btn => {
-      btn.onclick = () => selectParentTask(listIds, btn.dataset.taskId, btn.dataset.taskName, btn.dataset.taskUrl, required, excludeSubtasks, label);
+      btn.onclick = () => selectParentTask(listId, btn.dataset.taskId, btn.dataset.taskName);
     });
 
     const lookupBtn = resultsEl.querySelector('#subtask-direct-lookup');
@@ -732,10 +636,10 @@ const App = (() => {
         lookupBtn.textContent = 'Looking up…';
         try {
           const task = await ClickUp.getTaskById(query);
-          if (task && excludeSubtasks && task.parent) {
+          if (task && !task.parent) {
+            selectParentTask(listId, task.id, task.name);
+          } else if (task && task.parent) {
             resultsEl.innerHTML = `<p class="hint hint--bad">That task is itself a subtask, so it can\u2019t be used as a parent.</p>`;
-          } else if (task) {
-            selectParentTask(listIds, task.id, task.name, task.url, required, excludeSubtasks, label);
           } else {
             resultsEl.innerHTML = `<p class="hint hint--bad">No task found with that ID.</p>`;
           }
@@ -748,14 +652,13 @@ const App = (() => {
 
   /**
    * selectParentTask
-   * Records the chosen task on `state` and switches the subtask block
-   * into its 'selected' summary view.
+   * Records the chosen parent on `state` and switches the subtask
+   * block into its 'selected' summary view.
    */
-  function selectParentTask(listIds, taskId, taskName, taskUrl, required, excludeSubtasks, label) {
+  function selectParentTask(listId, taskId, taskName) {
     state.parentTaskId = taskId;
     state.parentTaskName = taskName;
-    state.parentTaskUrl = taskUrl || `https://app.clickup.com/t/${taskId}`;
-    renderSubtaskBlock(listIds, 'selected', required, excludeSubtasks, label);
+    renderSubtaskBlock(listId, 'selected');
   }
 
   function renderAttachmentList() {
@@ -987,19 +890,10 @@ const App = (() => {
     stopRecognizer();
     if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
 
-    const action = type.action || 'task';
     const fields = collectFields(schema);
     const requiredMissing = schema.find(f => f.required && !fields[f.key]);
     if (requiredMissing) {
       alert(`${requiredMissing.label} is required.`);
-      return;
-    }
-    // Follow-up/Reminder (action:'comment') needs a target task chosen
-    // via the required search UI (see renderForm) — this isn't a
-    // schema field, so the check above wouldn't have caught a missing
-    // one on its own.
-    if (action === 'comment' && !state.parentTaskId) {
-      alert('Search for and select the task you\u2019re following up on.');
       return;
     }
 
@@ -1009,36 +903,40 @@ const App = (() => {
 
     const entry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      action,
       entityId: entity.id,
       entityName: entity.name,
       color: entity.color,
       typeId: type.id,
       typeLabel: type.label,
       listId: type.listId,
-      channelId: type.channelId || null,
       fields,
-      title: fields.title || fields.name || (action === 'comment' ? 'Follow-up' : '(untitled)'),
+      title: fields.title || fields.name || '(untitled)',
       createdAt: Date.now(),
-      // For action:'task' + "Make this a subtask": the chosen parent.
-      // For action:'comment' (Follow-up): the task being followed up
-      // on — same fields, different meaning; see clickup.js
-      // logCapture()'s action-aware message building.
+      // Set via the "Make this a subtask" flow (renderSubtaskBlock /
+      // selectParentTask) — null for a normal top-level task.
       parentTaskId: state.parentTaskId || null,
-      parentTaskName: state.parentTaskName || null,
-      parentTaskUrl: state.parentTaskUrl || null
+      parentTaskName: state.parentTaskName || null
     };
 
     try {
       if (!navigator.onLine) throw new Error('OFFLINE');
-      await performSend(entry, state.attachments);
-      // "Add to Accounts" carries a password field — never let it
-      // persist into the local Recent-captures log, even after a
-      // successful send. (The offline queue is a separate, shorter-
-      // lived store and does still need the real value to actually
-      // send on retry — see queueForRetry()'s comment on that
-      // trade-off.)
-      Storage.addRecent(sanitizeForRecent(entry));
+      const result = await ClickUp.createTask(type.listId, entry);
+      // ClickUp's create-task response includes a direct URL to the
+      // task — stashed on the entry so Home's Recent list can offer
+      // "View in ClickUp" without reconstructing or guessing the URL.
+      entry.clickupUrl = result.url || (result.id ? `https://app.clickup.com/t/${result.id}` : null);
+      if (state.attachments.length && result.id) {
+        for (const file of state.attachments) {
+          await ClickUp.uploadAttachment(result.id, file).catch(() => {});
+        }
+      }
+      // Best-effort activity log to Chat — never lets a logging hiccup
+      // undo or block a capture that already succeeded (same pattern
+      // as attachment uploads above). See clickup.js logCapture().
+      if (entry.clickupUrl) {
+        ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
+      }
+      Storage.addRecent(entry);
       showSuccess();
     } catch (err) {
       await queueForRetry(entry);
@@ -1046,112 +944,6 @@ const App = (() => {
     }
   }
 
-  /**
-   * performSend
-   * The one place that actually talks to ClickUp for a capture,
-   * branching on entry.action. Shared by submitCapture() (live path)
-   * and processQueue() (offline-retry path) so the branching logic
-   * exists exactly once. Mutates entry.clickupUrl as a side effect —
-   * both callers rely on this being set afterward for Storage/Recent.
-   * @param {object} entry
-   * @param {File[]} attachments - passed explicitly (not read from
-   *   the shared `state` object) so a background retry (processQueue,
-   *   possibly firing from an 'online' event while a *different*
-   *   capture form is open) can never clobber whatever the user is
-   *   currently mid-typing on screen.
-   * @throws whatever the underlying ClickUp.* call throws — callers
-   *   are responsible for queuing/retry on failure, this function
-   *   itself doesn't catch its own primary action's errors (though it
-   *   does swallow best-effort follow-on steps like attachments and
-   *   activity logging, same as before).
-   */
-  async function performSend(entry, attachments) {
-    if (entry.action === 'comment') {
-      await ClickUp.addComment(entry.parentTaskId, entry.fields.note);
-      entry.clickupUrl = entry.parentTaskUrl;
-      if (entry.clickupUrl) ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
-      return;
-    }
-
-    if (entry.action === 'chat') {
-      const content = formatAccountMessage(entry.fields);
-      await ClickUp.postToChannel(entry.channelId, content);
-      // Reference link back to the Chat channel itself — there's no
-      // individual "message URL" the way a task has a task URL.
-      entry.clickupUrl = `https://app.clickup.com/${WORKSPACE_ID}/chat/r/${entry.channelId}`;
-      return; // deliberately no logCapture() call — the chat post IS the log, to the accounts channel specifically, not the general one
-    }
-
-    // action === 'task' (default, covers everything predating this
-    // branch: To-Dos, Light Bulbs, Contacts, Requests, etc.)
-    const result = await ClickUp.createTask(entry.listId, entry);
-    // ClickUp's create-task response includes a direct URL to the
-    // task — stashed on the entry so Home's Recent list can offer
-    // "View in ClickUp" without reconstructing or guessing the URL.
-    entry.clickupUrl = result.url || (result.id ? `https://app.clickup.com/t/${result.id}` : null);
-    if (attachments && attachments.length && result.id) {
-      for (const file of attachments) {
-        await ClickUp.uploadAttachment(result.id, file).catch(() => {});
-      }
-    }
-    // Best-effort activity log to Chat — never lets a logging hiccup
-    // undo or block a capture that already succeeded.
-    if (entry.clickupUrl) {
-      ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
-    }
-  }
-
-  /**
-   * formatAccountMessage
-   * Builds the Markdown message posted for "Add to Accounts" — every
-   * field labeled plainly. Password included as plain text, same as
-   * how ClickUp Chat already works for anything typed directly into
-   * it; see the security note in this file's version history.
-   * @param {object} fields - from FIELD_SCHEMAS.account
-   * @returns {string}
-   */
-  function formatAccountMessage(fields) {
-    const lines = [
-      `🔑 **New Account** \u2014 ${fields.accountType || ''}`,
-      fields.title || ''
-    ];
-    if (fields.adminUsername) lines.push(`Username: ${fields.adminUsername}`);
-    if (fields.adminEmail) lines.push(`Email: ${fields.adminEmail}`);
-    if (fields.password) lines.push(`Password: ${fields.password}`);
-    if (fields.notes) lines.push(`Notes: ${fields.notes}`);
-    return lines.join('\n');
-  }
-
-  /**
-   * sanitizeForRecent
-   * Returns a shallow copy of an entry safe to keep in the local
-   * Recent-captures log — currently only strips fields.password
-   * (Add to Accounts). Everything else about the entry is unchanged.
-   * @param {object} entry
-   * @returns {object}
-   */
-  function sanitizeForRecent(entry) {
-    if (!entry.fields || !entry.fields.password) return entry;
-    const clone = { ...entry, fields: { ...entry.fields } };
-    delete clone.fields.password;
-    return clone;
-  }
-
-  /**
-   * queueForRetry
-   * Saves a capture locally (attachments as base64) for automatic
-   * resend once back online — see processQueue().
-   * @param {object} entry
-   * SECURITY NOTE: for "Add to Accounts" captures, entry.fields still
-   * contains the real password at this point (unlike Storage.addRecent,
-   * which gets a sanitized copy — see sanitizeForRecent()). This is a
-   * deliberate, unavoidable trade-off: a queued entry has to keep the
-   * real value to actually be able to send it once connectivity
-   * returns. Practically this means an offline "Add to Accounts"
-   * capture sits in this device's localStorage in plain text until it
-   * sends — same general caveat as any offline-first tool handling
-   * sensitive data, worth knowing rather than assuming away.
-   */
   async function queueForRetry(entry) {
     const attachments = await Promise.all(state.attachments.map(fileToDataUrl));
     entry.pendingAttachments = attachments;
@@ -1182,10 +974,18 @@ const App = (() => {
 
     for (const entry of queue) {
       try {
-        const attachments = (entry.pendingAttachments || []).map(dataUrlToFile);
-        await performSend(entry, attachments);
+        const result = await ClickUp.createTask(entry.listId, entry);
+        entry.clickupUrl = result.url || (result.id ? `https://app.clickup.com/t/${result.id}` : null);
+        if (entry.pendingAttachments && result.id) {
+          for (const a of entry.pendingAttachments) {
+            await ClickUp.uploadAttachment(result.id, dataUrlToFile(a)).catch(() => {});
+          }
+        }
+        if (entry.clickupUrl) {
+          ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
+        }
         Storage.removeFromQueue(entry.id);
-        Storage.addRecent(sanitizeForRecent(entry));
+        Storage.addRecent(entry);
       } catch (e) {
         if (manual) alert('Still can\u2019t reach ClickUp. Will keep retrying automatically.');
         break;
@@ -1235,9 +1035,7 @@ const App = (() => {
     link: '<path d="M10 13a5 5 0 007.07 0l1.5-1.5a5 5 0 00-7.07-7.07L10 6"/><path d="M14 11a5 5 0 00-7.07 0l-1.5 1.5a5 5 0 007.07 7.07L14 18"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>',
     nest: '<path d="M7 3v10a4 4 0 004 4h6"/><path d="M13 13l4 4-4 4"/>',
-    refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>',
-    bell: '<path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
-    key: '<circle cx="8" cy="15" r="4"/><path d="M10.5 12.5L20 3"/><path d="M17 6l3 3"/><path d="M14 9l3 3"/>'
+    refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>'
   };
   function icon(name) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;

@@ -95,27 +95,6 @@
  *                    will need a config.js edit + redeploy whenever
  *                    their lists are created (no auto-sync — see the
  *                    static-snapshot note in v6 above).
- *   v9  2026-07-26  Three additions:
- *                    (1) Renamed MKP's "Contact Follow-up" to "New
- *                        Contact Activity" (cosmetic, per user request).
- *                    (2) Added a "Follow-up / Reminder" capture type to
- *                        every entity (schema: followup, action:
- *                        comment, no listId — see app.js for why: it
- *                        searches across all of that entity's `task`-
- *                        schema lists at once rather than one fixed
- *                        list). Exists because ClickUp's native
- *                        Reminders feature has no public API (confirmed
- *                        via their own feedback board); this instead
- *                        posts a comment on an existing task, adding
- *                        zero duplicate tasks.
- *                    (3) Added "Add to Accounts" to Super Admin
- *                        (schema: account, action: chat, channelId:
- *                        ADD_TO_ACCOUNTS_CHANNEL_ID) — posts a
- *                        formatted message to the confirmed Chat
- *                        channel instead of creating a ClickUp task.
- *                        Carries account credentials (including a
- *                        password field) — see clickup.js/app.js
- *                        version history for how that's handled.
  * =========================================================================
  */
 
@@ -138,12 +117,6 @@ const DEFAULT_PROXY_URL = 'https://dispatch-clickup-proxy.c1-jumpw.workers.dev';
 //   ClickUp's API), but kept here for reference / future use, e.g. if we
 //   ever need to build a "open in ClickUp" deep link.
 // -----------------------------------------------------------------------
-// Destination Chat channel for "Add to Accounts" submissions —
-// confirmed via GET /chat/channels lookup on 2026-07-25 (name:
-// "mkc-sa-add-to-accounts-admin"), matches the URL the user provided:
-// app.clickup.com/25724879/chat/r/rh1yf-12097
-const ADD_TO_ACCOUNTS_CHANNEL_ID = 'rh1yf-12097';
-
 const WORKSPACE_ID = '25724879';
 
 // -----------------------------------------------------------------------
@@ -202,23 +175,6 @@ const FIELD_SCHEMAS = {
   request: [
     { key: 'title', label: 'What do you need?', type: 'text', required: true },
     { key: 'description', label: 'Details', type: 'textarea', placeholder: 'Anything the fulfiller needs to know…' }
-  ],
-  // Used by "Follow-up / Reminder" capture types (action: 'comment').
-  // Deliberately just one field — the target task is chosen via the
-  // required task-search UI (see app.js), not a form field here.
-  followup: [
-    { key: 'note', label: 'Follow-up note', type: 'textarea', required: true, placeholder: 'What do you need to follow up on?', primary: true }
-  ],
-  // Used by "Add to Accounts" (action: 'chat' — posts to a Chat
-  // channel, never creates a ClickUp task). `password` uses a
-  // dedicated masked input type — see renderField() in app.js.
-  account: [
-    { key: 'accountType', label: 'Account Type', type: 'select', options: ['MKC', 'MKC Client', 'MKP'], required: true },
-    { key: 'title', label: 'Account / Tool Name & Purpose', type: 'text', required: true, placeholder: 'e.g. Canva \u2014 design tool for MCO content' },
-    { key: 'adminUsername', label: 'Admin Username', type: 'text' },
-    { key: 'adminEmail', label: 'Admin Email', type: 'text' },
-    { key: 'password', label: 'Password', type: 'password' },
-    { key: 'notes', label: 'Additional Notes', type: 'textarea', placeholder: 'Secret question & answer, recovery codes, etc.' }
   ]
 };
 
@@ -247,11 +203,10 @@ const ENTITIES = [
     captureTypes: [
       { id: 'task', label: 'To-Do', icon: 'check', schema: 'task', listId: '901702176129' },
       { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710575809' },
-      { id: 'contact', label: 'New Contact Activity', icon: 'user', schema: 'contact', listId: '205582666' },
+      { id: 'contact', label: 'Contact Follow-up', icon: 'user', schema: 'contact', listId: '205582666' },
       { id: 'meeting', label: 'Meeting Note', icon: 'calendar', schema: 'note', listId: '205582656' },
       { id: 'accounting', label: 'Accounting Item', icon: 'dollar', schema: 'task', listId: '901702176148' },
-      { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711351925' },
-      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+      { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711351925' }
     ]
   },
   {
@@ -268,9 +223,7 @@ const ENTITIES = [
       { id: 'payable', label: 'Payable', icon: 'dollar', schema: 'task', listId: '901702161436' },
       { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711350683' },
       { id: 'team-note', label: 'Team Directory Update', icon: 'user', schema: 'log', listId: '901711759484' },
-      { id: 'automation', label: 'Automation Idea', icon: 'bulb', schema: 'lightbulb', listId: '901711237466' },
-      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' },
-      { id: 'add-account', label: 'Add to Accounts', icon: 'key', schema: 'account', action: 'chat', channelId: ADD_TO_ACCOUNTS_CHANNEL_ID }
+      { id: 'automation', label: 'Automation Idea', icon: 'bulb', schema: 'lightbulb', listId: '901711237466' }
     ]
   },
   {
@@ -287,8 +240,7 @@ const ENTITIES = [
       { id: 'activity', label: 'Activity Log', icon: 'note', schema: 'log', listId: '901715117797' },
       { id: 'email', label: 'Email Follow-up', icon: 'note', schema: 'note', listId: '901715226645' },
       { id: 'lead-magnet', label: 'Lead Magnet Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715467342' },
-      { id: 'plan-product', label: 'Plan/Product Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715517147' },
-      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+      { id: 'plan-product', label: 'Plan/Product Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715517147' }
     ]
   },
   {
@@ -301,8 +253,7 @@ const ENTITIES = [
       { id: 'task-bms', label: 'BMS Task', icon: 'check', schema: 'task', listId: '901702183494' },
       { id: 'task-f5', label: 'F5 Task', icon: 'check', schema: 'task', listId: '901702200453' },
       { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710065006' },
-      { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901710065625' },
-      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+      { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901710065625' }
     ]
   },
   {
@@ -313,8 +264,7 @@ const ENTITIES = [
     captureTypes: [
       { id: 'task', label: 'Task', icon: 'check', schema: 'task', listId: '901702165849' },
       { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710123795' },
-      { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901710123796' },
-      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+      { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901710123796' }
     ]
   },
   {
@@ -328,8 +278,7 @@ const ENTITIES = [
       { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901711428018' },
       { id: 'req-hosting', label: 'New Hosting Account Request', icon: 'gear', schema: 'request', listId: '182168594' },
       { id: 'req-systemsio', label: 'New Systems.io Account Request', icon: 'gear', schema: 'request', listId: '188376548' },
-      { id: 'req-zoho', label: 'New Zoho Email Request', icon: 'gear', schema: 'request', listId: '901701551198' },
-      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+      { id: 'req-zoho', label: 'New Zoho Email Request', icon: 'gear', schema: 'request', listId: '901701551198' }
     ]
   }
 ];
