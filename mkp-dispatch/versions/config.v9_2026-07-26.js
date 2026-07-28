@@ -116,16 +116,6 @@
  *                        Carries account credentials (including a
  *                        password field) — see clickup.js/app.js
  *                        version history for how that's handled.
- *   v10 2026-07-26  Two cosmetic/scope fixes:
- *                    (1) Renamed MKP's "Meeting Note" to "New
- *                        Meeting/Apt/Event" (per user request).
- *                    (2) Removed Super Admin's "Client Account Note"
- *                        (schema: log, direct-to-list) — redundant
- *                        with "Add to Accounts" (v9), which already
- *                        covers this workflow properly: capture →
- *                        review in Chat → manually exported to the
- *                        right destination. User confirmed keeping
- *                        only the Chat-based version.
  * =========================================================================
  */
 
@@ -258,7 +248,7 @@ const ENTITIES = [
       { id: 'task', label: 'To-Do', icon: 'check', schema: 'task', listId: '901702176129' },
       { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710575809' },
       { id: 'contact', label: 'New Contact Activity', icon: 'user', schema: 'contact', listId: '205582666' },
-      { id: 'meeting', label: 'New Meeting/Apt/Event', icon: 'calendar', schema: 'note', listId: '205582656' },
+      { id: 'meeting', label: 'Meeting Note', icon: 'calendar', schema: 'note', listId: '205582656' },
       { id: 'accounting', label: 'Accounting Item', icon: 'dollar', schema: 'task', listId: '901702176148' },
       { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711351925' },
       { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
@@ -273,6 +263,7 @@ const ENTITIES = [
       { id: 'task', label: 'Task', icon: 'check', schema: 'task', listId: '901702161386' },
       { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710064693' },
       { id: 'process', label: 'Process / System Idea', icon: 'gear', schema: 'note', listId: '901711745105' },
+      { id: 'client-note', label: 'Client Account Note', icon: 'building', schema: 'log', listId: '901711853904' },
       { id: 'receivable', label: 'Receivable', icon: 'dollar', schema: 'task', listId: '901703199842' },
       { id: 'payable', label: 'Payable', icon: 'dollar', schema: 'task', listId: '901702161436' },
       { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711350683' },
