@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Task Clutter Auditor</title>
+<title>MKP Task Auditor</title>
 <style>
   :root{
     --ink:#12161d;
@@ -432,6 +432,7 @@
     letter-spacing:.02em;
   }
   .flag-badge.dup{ background:#f4e6cb; color:#a5691f; }
+  .flag-badge.similar{ background:#e3ddf4; color:#5e4ea3; }
   .flag-badge.incomplete{ background:#f6ded9; color:#a4362f; }
 
   .card-text{
@@ -640,6 +641,54 @@
     font-size:12.5px;
   }
 
+  /* ---------- Paste Log view ---------- */
+  #log-view{
+    flex:1;
+    overflow:auto;
+    padding:16px 20px;
+    background:var(--board);
+    display:none;
+  }
+  #log-view.active{ display:block; }
+  #log-empty{
+    text-align:center;
+    padding:30px;
+    color:var(--text-light-dim);
+    font-size:12.5px;
+  }
+  .log-entry{
+    background:var(--col-bg);
+    border:1px solid var(--col-border);
+    border-radius:7px;
+    margin-bottom:12px;
+    overflow:hidden;
+  }
+  .log-entry-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:8px 12px;
+    background:var(--col-header);
+    border-bottom:1px solid var(--col-border);
+  }
+  .log-entry-time{
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--text-light-dim);
+  }
+  .log-entry-actions{ display:flex; gap:6px; }
+  .log-entry-body{
+    font-family:var(--mono);
+    font-size:11.5px;
+    line-height:1.5;
+    color:var(--text-light);
+    padding:10px 12px;
+    white-space:pre-wrap;
+    word-break:break-word;
+    max-height:180px;
+    overflow-y:auto;
+  }
+
   /* ---------- Toast ---------- */
   #toast{
     position:fixed;
@@ -659,6 +708,64 @@
   }
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
+  /* ---------- PIN lock overlay ----------
+     NOTE (security): this is a soft lock only. The PIN is checked in
+     client-side JavaScript, which means anyone who views this file's
+     source can read it. It keeps out a casual glance at your screen;
+     it is NOT equivalent to a real login. True auth requires a server
+     to check the PIN — see the setup guide for migrating this to
+     Supabase Auth. */
+  #lock-overlay{
+    position:fixed;
+    inset:0;
+    background:var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:100;
+  }
+  #lock-overlay.hidden{ display:none; }
+  .lock-card{
+    background:var(--col-bg);
+    border:1px solid var(--col-border);
+    border-radius:10px;
+    padding:28px 30px;
+    width:280px;
+    text-align:center;
+  }
+  .lock-card .mark{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.12em;
+    color:var(--accent);
+    background:rgba(79,179,168,.12);
+    border:1px solid var(--accent-dim);
+    padding:3px 7px;
+    border-radius:3px;
+  }
+  .lock-card h2{ font-size:15px; margin:14px 0 4px; }
+  .lock-card p{ font-size:11.5px; color:var(--text-light-dim); margin:0 0 16px; }
+  #pin-input{
+    width:100%;
+    text-align:center;
+    letter-spacing:.5em;
+    font-family:var(--mono);
+    font-size:18px;
+    background:#0f141b;
+    border:1px solid var(--col-border);
+    border-radius:5px;
+    color:var(--text-light);
+    padding:10px;
+    margin-bottom:10px;
+  }
+  #pin-input:focus{ outline:none; border-color:var(--accent-dim); }
+  #pin-error{
+    font-size:11px;
+    color:var(--p-urgent);
+    min-height:14px;
+    margin-bottom:8px;
+  }
+
   @media (max-width: 720px){
     .input-row{ flex-direction:column; }
     .input-actions{ flex-direction:row; min-width:0; width:100%; }
@@ -669,12 +776,31 @@
 </head>
 <body>
 
+<!-- ============================================================
+     PIN LOCK OVERLAY
+     Soft-lock only (see CSS comment above) — blocks casual access,
+     not a substitute for real server-side auth. This div fully
+     covers the viewport (z-index above everything else) so the
+     board underneath cannot be clicked or read until the correct
+     PIN is submitted and the overlay is hidden.
+     ============================================================ -->
+<div id="lock-overlay">
+  <div class="lock-card">
+    <span class="mark">MKP-TA</span>
+    <h2>Enter PIN</h2>
+    <p>This board is locked. Enter your PIN to continue.</p>
+    <input type="password" id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off">
+    <div id="pin-error"></div>
+    <button class="btn btn-primary" id="pin-submit" style="width:100%;">Unlock</button>
+  </div>
+</div>
+
 <header>
   <div class="header-top">
     <div class="brand">
-      <span class="mark">TCA</span>
+      <span class="mark">MKP-TA v7</span>
       <div>
-        <h1>Task Clutter Auditor</h1>
+        <h1>MKP Task Auditor</h1>
         <p>Paste your notes → parse → triage into branches → export to your workspace</p>
       </div>
     </div>
@@ -685,7 +811,7 @@
   </div>
 
   <div class="input-row">
-    <textarea id="raw-input" placeholder="Paste raw notes here. Start tasks with -, details with *, separate distinct thoughts with ---), flag urgent with ! before the dash. Plain lines (no symbol) are treated as labels and skipped."></textarea>
+    <textarea id="raw-input" spellcheck="true" placeholder="Paste raw notes here. Start tasks with -, details with *, separate distinct thoughts with ---), flag urgent with ! before the dash. Plain lines (no symbol) are treated as labels and skipped."></textarea>
     <div class="input-actions">
       <button class="btn btn-primary" id="parse-btn">Parse notes</button>
       <div class="autosave-note" id="autosave-note"></div>
@@ -714,7 +840,8 @@
     <label for="filter-flag">Flags</label>
     <select id="filter-flag">
       <option value="all">All cards</option>
-      <option value="duplicate">Duplicates</option>
+      <option value="duplicate">Duplicates (exact)</option>
+      <option value="similar">Similar (fuzzy)</option>
       <option value="incomplete">Incomplete</option>
       <option value="needsDetail">Needs Detail</option>
       <option value="any">Any flag</option>
@@ -726,6 +853,7 @@
       <option value="priority">Priority</option>
       <option value="type">Type</option>
       <option value="subbranch">Sub-branch</option>
+      <option value="text">Text (for duplicate audit)</option>
       <option value="newest">Newest</option>
     </select>
   </div>
@@ -736,7 +864,9 @@
   <div class="view-toggle">
     <button id="view-board-btn" class="active">Board</button>
     <button id="view-list-btn">List</button>
+    <button id="view-log-btn">Paste Log</button>
   </div>
+  <button class="btn btn-ghost" id="ai-sort-btn" disabled title="Requires backend setup — see the setup guide to enable this">✨ AI Sort</button>
   <button class="btn btn-primary" id="export-btn">Export CSV</button>
 </div>
 
@@ -761,11 +891,177 @@
   <div id="list-empty" style="display:none;">No cards match the current filters.</div>
 </div>
 
+<!-- ============================================================
+     MASTER PASTE LOG
+     Read-only history of every raw paste ever run through the
+     parser, newest first. Exists so a bad parse (or an accidental
+     card deletion) never loses your original notes — you can always
+     come back here, find the original text, and re-parse it.
+     ============================================================ -->
+<div id="log-view">
+  <div id="log-empty" style="display:none;">Nothing pasted yet. Paste notes above and hit "Parse notes" — every paste is kept here automatically.</div>
+  <div id="log-list"></div>
+</div>
+
 <div id="toast"></div>
 
+<!-- ============================================================
+     Supabase client library (loaded from jsDelivr's CDN).
+     Provides window.supabase.createClient(...) used below.
+     This is a static, versioned library file — not a secret — safe
+     to load from a public CDN. Requires an internet connection when
+     the app is opened; falls back to the last-known local backup
+     (see loadStateFromSupabase()) if the network or Supabase itself
+     is unreachable.
+     ============================================================ -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
+/* ================================================================
+   MKP TASK AUDITOR
+   ----------------------------------------------------------------
+   PURPOSE
+   A single-page triage tool: paste unstructured notes, parse them
+   into structured task "cards," sort those cards into columns that
+   mirror your real organizational branches, tag priority/type, and
+   export the result (as CSV today, and eventually direct to a real
+   workspace) for filing elsewhere. This file is the *entire* app —
+   HTML, CSS, and JS in one document — no build step, no server, to
+   run it: open the file in a browser.
+
+   KEY RESPONSIBILITIES / DATA FLOW
+     1. PARSE   — raw pasted text -> parseRawText() -> card objects.
+     2. STORE   — card objects live in `state.cards` (an id-keyed
+                  map) and are persisted via scheduleSave() / loadStateFromSupabase().
+     3. RENDER  — renderAll() re-draws the Board view, List view,
+                  and Paste Log view from `state` + the active
+                  `filters` on every change (full re-render, not
+                  incremental — acceptable at the "dozens to low
+                  hundreds of cards" scale this tool targets).
+     4. EXPORT  — exportCSV() writes the currently *filtered* set of
+                  cards to a downloadable .csv file.
+     5. AUDIT   — refreshDuplicateIds()/refreshSimilarIds() scan all
+                  cards on every render to flag exact and near-
+                  duplicate task text, surfaced as badges + a filter.
+
+   ASSUMPTIONS / EXTERNAL DEPENDENCIES
+     - No external libraries. Pure vanilla JS (ES5-leaning syntax
+       intentionally, for maximum browser compatibility).
+     - Persistence is Supabase (Postgres) as of v7, with localStorage
+       kept as an automatic offline fallback/backup — see the
+       PERSISTENCE section. Board data now lives in the cloud and is
+       shared across any browser/device that opens this file with
+       the same SUPABASE_URL/SUPABASE_ANON_KEY configured below.
+     - The PIN lock (see LOCK GATE section) is a soft, client-side-
+       only deterrent. It is NOT secure — the correct PIN is visible
+       to anyone who views this file's source. Do not rely on it to
+       protect sensitive data. Real auth requires a server; see the
+       migration notes inline near PIN_CODE below.
+     - The "AI Sort" feature is a stub (see AI SORT (STUB) section).
+       It is intentionally disabled until a backend exists to hold
+       the LLM API key securely — an API key can never be safely
+       embedded in a static client-side file like this one.
+
+   VERSION HISTORY (functional changes only)
+     v1 — Initial build: parser, board, drag/drop, priority cycling,
+          Unsorted/Inbox columns, localStorage autosave.
+     v2 — Priority/type became dropdowns; removed "done" state;
+          added Project Notes/Logs column; added filter bar
+          (branch/priority/type), Board vs. List view, CSV export.
+     v3 — Collapsible cards (2-line preview), per-column accent
+          colors, per-type auto-generated colors, larger drop
+          targets at the end of each column, free-text search,
+          collapse/expand-all controls.
+     v4 — Added "Needs Clarification" column; automatic Duplicate
+          and Incomplete badges/flags + Flags filter; Flags column
+          added to List view and CSV export.
+     v5 — Renamed to "MKP Task Auditor." Added: fuzzy
+          "Similar" duplicate spotter (Dice-coefficient text
+          similarity, distinct from exact-match Duplicate); a Paste
+          Log view retaining every raw paste pre-parse, with re-parse
+          recovery; native browser spellcheck enabled on editable
+          fields; a soft PIN lock overlay; a disabled AI Sort stub
+          awaiting backend wiring. Full inline documentation added
+          per project comment standard.
+     v6 — Board columns now auto-sort "needs attention" cards
+          (Incomplete or manually flagged Needs Detail) to the
+          top of each column, ahead of manually-ordered "ready"
+          cards, so triage-worthy entries are always visible first
+          without hunting or manual dragging. See cardsForColumn().
+     v7 (this file) — Wired to Supabase: board data now persists to
+          a real Postgres database (see PERSISTENCE section) instead
+          of only localStorage, which becomes an automatic offline
+          fallback/backup rather than the primary store. Loading is
+          now async — see loadStateFromSupabase() and the updated
+          init sequence at the bottom of this file. AI Sort remains
+          a stub (see that section) — Supabase gets you off
+          localStorage, but the LLM key still needs its own secure
+          home (an Edge Function) before that feature can go live.
+   ================================================================ */
+
 (function(){
   'use strict';
+
+  /* ================================================================
+     LOCK GATE (soft PIN lock — see file header for security caveat)
+     ================================================================ */
+
+  // The unlock PIN. SECURITY NOTE: anyone can read this by viewing
+  // the page source — this only blocks casual/accidental access.
+  // TODO (backend migration): once Supabase is wired up, replace
+  // this whole block with a real server-checked login and delete
+  // PIN_CODE from client code entirely.
+  var PIN_CODE = '0147';
+
+  /**
+   * Wires up the PIN overlay: listens for Enter key or button click,
+   * compares input to PIN_CODE, and hides the overlay on success.
+   * Focuses the input on load so the user can type immediately.
+   * Edge cases: empty submission just re-shows the error, no crash.
+   */
+  function initLockGate(){
+    var overlay = document.getElementById('lock-overlay');
+    var input = document.getElementById('pin-input');
+    var errorEl = document.getElementById('pin-error');
+    var submitBtn = document.getElementById('pin-submit');
+
+    function tryUnlock(){
+      if(input.value === PIN_CODE){
+        overlay.classList.add('hidden');
+      } else {
+        errorEl.textContent = 'Incorrect PIN. Try again.';
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    submitBtn.addEventListener('click', tryUnlock);
+    input.addEventListener('keydown', function(e){
+      if(e.key === 'Enter') tryUnlock();
+    });
+    input.focus();
+  }
+
+  /* ================================================================
+     SUPABASE CONFIG (cloud persistence — replaces localStorage as
+     the primary store as of v7)
+     ----------------------------------------------------------------
+     SECURITY NOTE: unlike the Anthropic/LLM key (which must never be
+     client-side — see the AI SORT section further down), this URL
+     and anon key are DESIGNED to be public. Supabase's security
+     model puts protection in Row Level Security (RLS) policies on
+     the database tables, not in hiding this key. The policies set
+     up in Step 2 of the setup guide currently allow full read/write
+     to anyone with this key — appropriate for a private, unlisted,
+     single-user tool, but worth knowing if this URL is ever shared.
+     ================================================================ */
+  var SUPABASE_URL = 'https://btaetekqnrlkslphxzqk.supabase.co';
+  var SUPABASE_ANON_KEY = 'sb_publishable_ntySCwa-NbxBsWFo6KOWmw_0ZfWqyGU';
+
+  // `supabase` here is the global injected by the CDN script tag
+  // loaded above (window.supabase.createClient), NOT a naming
+  // collision with anything in this file.
+  var supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   /* ---------------- Config ----------------
      Column list + the entry-type vocabulary + accent color for each branch.
@@ -813,8 +1109,15 @@
   var STORAGE_KEY = 'tca-board-state-v2';
   var AUTOSAVE_DEBOUNCE = 400;
 
-  /* ---------------- State ---------------- */
-  var state = { cards: {} };
+  /* ---------------- State ----------------
+     state.cards    — id-keyed map of every task card on the board.
+     state.pasteLog — array of every raw paste ever run through the
+                      parser, oldest first. This is the "master log"
+                      safety net: if the parser mangles something or
+                      you delete a card by mistake, the original
+                      unparsed text is still here and can be
+                      re-parsed. Entries are never auto-deleted. */
+  var state = { cards: {}, pasteLog: [] };
   var filters = { column: 'all', priority: 'all', type: 'all', search: '', flag: 'all' };
   var viewMode = 'board'; // 'board' | 'list'
   var sortBy = 'priority';
@@ -825,6 +1128,15 @@
     return 'c' + Date.now().toString(36) + idCounter.toString(36);
   }
 
+  /**
+   * Constructs a fresh card object with default field values.
+   * `collapsed: true` by default keeps newly-parsed boards compact —
+   * see the file header's v5 note on why collapsed-by-default was
+   * chosen over expanded-by-default.
+   * @param {string} text - initial task text (may be '')
+   * @param {string} column - id of the column this card starts in
+   * @returns {object} new card
+   */
   function newCard(text, column){
     return {
       id: makeId(),
@@ -840,33 +1152,189 @@
     };
   }
 
-  /* ---------------- Persistence ---------------- */
+  /* ================================================================
+     PERSISTENCE (v7: Supabase primary, localStorage fallback/backup)
+     ----------------------------------------------------------------
+     Every successful load/save also mirrors to localStorage. This
+     means: if Supabase or the network is ever unreachable, the app
+     still opens with your last-known-good board (read-only in
+     spirit — edits made while offline will sync up next time a save
+     succeeds, but there's no conflict resolution between two
+     offline sessions; see the TODO in syncToSupabase()).
+     ================================================================ */
+
   var saveTimer = null;
+
+  /**
+   * Debounced autosave entry point — called on every state mutation.
+   * Delays the actual network write by AUTOSAVE_DEBOUNCE ms, resetting
+   * the timer on each call, so rapid edits collapse into one sync
+   * instead of one network round-trip per keystroke.
+   */
   function scheduleSave(){
     clearTimeout(saveTimer);
     var note = document.getElementById('autosave-note');
     note.textContent = 'saving…';
     saveTimer = setTimeout(function(){
-      try{
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        note.textContent = 'saved ' + new Date().toLocaleTimeString();
-      }catch(e){
-        note.textContent = 'autosave failed (storage unavailable)';
-      }
+      syncToSupabase();
     }, AUTOSAVE_DEBOUNCE);
   }
 
-  function loadState(){
+  /**
+   * Pushes the full current `state` to Supabase:
+   *   - upserts every card in state.cards into the `cards` table
+   *   - deletes any `cards` rows whose id is no longer in state
+   *     (covers card deletion, since upsert alone never removes rows)
+   *   - upserts every paste_log entry (append-only in practice, so
+   *     this is idempotent — re-upserting an unchanged entry is a
+   *     harmless no-op keyed on its primary key `id`)
+   * Always writes a localStorage backup FIRST, before attempting the
+   * network call, so a save is never "lost" even if Supabase is down.
+   * Failure mode: network/Supabase errors are caught and surfaced in
+   * the autosave indicator text rather than thrown, so a temporary
+   * outage doesn't break the UI — the local backup still has the data.
+   * TODO (multi-device use): this is last-write-wins with no merge
+   * logic. If you ever edit the same board from two devices while
+   * offline, whichever syncs last overwrites the other. Fine for a
+   * single-device personal tool; would need real conflict resolution
+   * (e.g. per-field timestamps) to safely support simultaneous use.
+   */
+  function syncToSupabase(){
+    var note = document.getElementById('autosave-note');
+
+    // Local backup happens unconditionally and synchronously, before
+    // any network call — this is the safety net the whole design
+    // leans on.
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }catch(e){ /* localStorage unavailable — network sync below is still attempted */ }
+
+    var cardIds = Object.keys(state.cards);
+    var cardRows = cardIds.map(function(id){
+      return { id: id, data: state.cards[id], updated_at: new Date().toISOString() };
+    });
+    var logRows = state.pasteLog.map(function(entry){
+      return { id: entry.id, raw_text: entry.rawText, created_at: new Date(entry.timestamp).toISOString() };
+    });
+
+    // Build the delete-stale-rows filter: remove any `cards` row
+    // whose id isn't in the current board. Supabase JS needs the
+    // "not in (...)" list as a literal PostgREST string; if there are
+    // zero current cards we delete everything instead (an empty
+    // "not in ()" list is invalid PostgREST syntax).
+    var deleteStaleCards;
+    if(cardIds.length > 0){
+      var idList = '(' + cardIds.map(function(id){ return '"' + id + '"'; }).join(',') + ')';
+      deleteStaleCards = supabaseClient.from('cards').delete().not('id', 'in', idList);
+    } else {
+      deleteStaleCards = supabaseClient.from('cards').delete().neq('id', '__none__');
+    }
+
+    var upsertCards = cardRows.length > 0
+      ? supabaseClient.from('cards').upsert(cardRows)
+      : Promise.resolve({ error: null });
+    var upsertLog = logRows.length > 0
+      ? supabaseClient.from('paste_log').upsert(logRows)
+      : Promise.resolve({ error: null });
+
+    Promise.all([upsertCards, deleteStaleCards, upsertLog]).then(function(results){
+      var firstError = results.map(function(r){ return r && r.error; }).filter(Boolean)[0];
+      if(firstError) throw firstError;
+      note.textContent = 'synced ' + new Date().toLocaleTimeString();
+    }).catch(function(err){
+      note.textContent = 'sync failed (saved locally only) — ' + (err && err.message ? err.message : 'check connection');
+    });
+  }
+
+  /**
+   * Loads board state on startup: tries Supabase first, falls back
+   * to the localStorage backup if the network/Supabase call fails
+   * (offline, misconfigured keys, RLS policy issue, etc.) so the app
+   * still opens with your last-known-good data either way.
+   * On a successful Supabase load, also refreshes the localStorage
+   * backup to match — keeping the offline copy current.
+   * @returns {Promise<void>} resolves once state is populated,
+   *   whichever source it came from — callers should render only
+   *   after this resolves.
+   */
+  function loadStateFromSupabase(){
+    var note = document.getElementById('autosave-note');
+    note.textContent = 'loading board…';
+
+    var cardsQuery = supabaseClient.from('cards').select('*');
+    var logQuery = supabaseClient.from('paste_log').select('*').order('created_at', { ascending: true });
+
+    return Promise.all([cardsQuery, logQuery]).then(function(results){
+      var cardsRes = results[0];
+      var logRes = results[1];
+      if(cardsRes.error) throw cardsRes.error;
+      if(logRes.error) throw logRes.error;
+
+      var cardsMap = {};
+      (cardsRes.data || []).forEach(function(row){
+        // `data` is a jsonb column — supabase-js already returns it
+        // as a parsed JS object, no JSON.parse needed.
+        cardsMap[row.id] = row.data;
+      });
+
+      var pasteLog = (logRes.data || []).map(function(row){
+        return {
+          id: row.id,
+          rawText: row.raw_text,
+          timestamp: new Date(row.created_at).getTime()
+        };
+      });
+
+      state = { cards: cardsMap, pasteLog: pasteLog };
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* non-fatal */ }
+      note.textContent = 'loaded from Supabase';
+    }).catch(function(err){
+      note.textContent = 'offline — using local backup (' + (err && err.message ? err.message : 'connection failed') + ')';
+      loadStateFromLocalBackup();
+    });
+  }
+
+  /**
+   * Fallback loader: reads the last-synced copy from localStorage.
+   * Used when loadStateFromSupabase() can't reach the network.
+   * Backward-compatible with save files predating `pasteLog` — if
+   * it's missing from an old backup, defaults to an empty array
+   * rather than leaving it undefined.
+   */
+  function loadStateFromLocalBackup(){
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
       if(raw){
         var parsed = JSON.parse(raw);
-        if(parsed && parsed.cards) state = parsed;
+        if(parsed && parsed.cards){
+          state = parsed;
+          if(!state.pasteLog) state.pasteLog = [];
+        }
       }
-    }catch(e){ /* ignore corrupt storage */ }
+    }catch(e){ /* ignore corrupt storage — app just starts empty */ }
   }
 
   /* ---------------- Parser ---------------- */
+  /**
+   * Converts raw pasted text into an array of new card objects,
+   * per the paste-syntax rules (see the textarea placeholder for a
+   * quick reference, or the product spec for full detail):
+   *   ---)   hard separator — resets "current card" context
+   *   -      start of line: new task card (lands in Inbox)
+   *   *      start of line: detail note on the preceding card, or a
+   *          standalone card routed to Unsorted if there's no
+   *          preceding card in the current chunk
+   *   !      immediately before a `-`: marks that card Urgent/HP
+   *          and is stripped from the visible text
+   *   (anything else) — treated as a plain label/section line and
+   *          skipped; it does not become a card.
+   * Does NOT mutate `state` — the caller is responsible for merging
+   * the returned cards in (see handleParseClick / the Paste Log's
+   * re-parse action), which keeps this function easily testable in
+   * isolation and reusable for re-parsing historical log entries.
+   * @param {string} raw - unparsed pasted text
+   * @returns {object[]} new card objects (empty array if nothing parsed)
+   */
   function parseRawText(raw){
     var newCards = [];
     var chunks = raw.split('---)');
@@ -948,34 +1416,143 @@
      Incomplete: cards whose task text is blank (a parsing artifact,
      e.g. a bare "-" or "*" line) — distinct from the manual "needs
      detail" flag, which is the user's own judgement call. */
+  // id -> true for cards whose text EXACTLY matches another card's text
+  // (after trim/lowercase/whitespace-collapse). Rebuilt every render.
   var duplicateIds = {};
+  // id -> true for cards whose text is a NEAR match (see
+  // SIMILARITY_THRESHOLD below) to another card's, but not an exact
+  // duplicate. Rebuilt every render, independent of duplicateIds.
+  var similarIds = {};
 
+  // How similar two task texts must be (Dice coefficient, 0-1) to be
+  // flagged as "≈ Similar" rather than treated as unrelated. Tuned by
+  // feel: 0.72 catches things like "call John re contract" vs "call
+  // john about the contract" while mostly ignoring short unrelated
+  // tasks that happen to share a few common words. Raise this if you
+  // get too many false positives; lower it to catch more near-misses.
+  var SIMILARITY_THRESHOLD = 0.72;
+
+  /**
+   * Normalizes task text for comparison: trims, lowercases, and
+   * collapses internal whitespace runs to single spaces. Used for
+   * both exact-duplicate matching and as the basis for fuzzy
+   * similarity comparison.
+   * @param {string} t - raw card.text
+   * @returns {string} normalized text, or '' if input was blank
+   */
   function normalizeText(t){
     return (t || '').trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
-  function refreshDuplicateIds(){
-    var map = {};
-    allCardsArray().forEach(function(c){
-      var norm = normalizeText(c.text);
-      if(!norm) return;
-      if(!map[norm]) map[norm] = [];
-      map[norm].push(c.id);
-    });
-    var ids = {};
-    Object.keys(map).forEach(function(norm){
-      if(map[norm].length > 1){
-        map[norm].forEach(function(id){ ids[id] = true; });
-      }
-    });
-    duplicateIds = ids;
+  /**
+   * Builds the set of character bigrams (overlapping 2-letter
+   * windows) for a string — the basis of the Dice coefficient
+   * similarity check below. E.g. "cat" -> ["ca","at"].
+   * Edge case: strings shorter than 2 chars produce an empty set,
+   * which correctly yields 0 similarity against anything.
+   * @param {string} str
+   * @returns {string[]}
+   */
+  function bigrams(str){
+    var out = [];
+    for(var i = 0; i < str.length - 1; i++){
+      out.push(str.substring(i, i + 2));
+    }
+    return out;
   }
 
+  /**
+   * Dice coefficient text similarity: 2 * (shared bigrams) /
+   * (total bigrams in both strings). Cheap, dependency-free, and
+   * reasonably good at catching reworded/typo'd near-duplicates
+   * without needing a real NLP library. Returns a value 0-1, where
+   * 1 = identical bigram sets.
+   * @param {string} a - already-normalized text
+   * @param {string} b - already-normalized text
+   * @returns {number} similarity score, 0-1
+   */
+  function diceSimilarity(a, b){
+    if(a === b) return 1;
+    var bgA = bigrams(a);
+    var bgB = bigrams(b);
+    if(bgA.length === 0 || bgB.length === 0) return 0;
+    // Tally bigram counts from A, then "spend" them as we find
+    // matches in B — this correctly handles repeated bigrams
+    // instead of just doing a naive Set intersection.
+    var counts = {};
+    bgA.forEach(function(g){ counts[g] = (counts[g] || 0) + 1; });
+    var matches = 0;
+    bgB.forEach(function(g){
+      if(counts[g] > 0){ matches++; counts[g]--; }
+    });
+    return (2 * matches) / (bgA.length + bgB.length);
+  }
+
+  /**
+   * Rebuilds duplicateIds (exact match) and similarIds (fuzzy
+   * match) from the current board state. O(n^2) on card count for
+   * the fuzzy pass — fine at the "dozens to low hundreds" scale this
+   * tool targets; would need a smarter index (e.g. LSH/minhash) if
+   * the board ever grew into the thousands.
+   * Called at the top of every renderAll() and before CSV export so
+   * both are always working from fresh data.
+   */
+  function refreshDuplicateIds(){
+    var cards = allCardsArray();
+    var normMap = {}; // normalized text -> [ids] for exact matching
+
+    cards.forEach(function(c){
+      var norm = normalizeText(c.text);
+      c._norm = norm; // stash on the card object for reuse below (not persisted)
+      if(!norm) return;
+      if(!normMap[norm]) normMap[norm] = [];
+      normMap[norm].push(c.id);
+    });
+
+    var exactIds = {};
+    Object.keys(normMap).forEach(function(norm){
+      if(normMap[norm].length > 1){
+        normMap[norm].forEach(function(id){ exactIds[id] = true; });
+      }
+    });
+    duplicateIds = exactIds;
+
+    // Fuzzy pass: compare every pair of non-blank, non-exact-duplicate
+    // cards. Skipping exact duplicates here avoids double-flagging —
+    // a card that's already an exact match doesn't also need "similar."
+    var fuzzyIds = {};
+    var candidates = cards.filter(function(c){ return c._norm && !exactIds[c.id]; });
+    for(var i = 0; i < candidates.length; i++){
+      for(var j = i + 1; j < candidates.length; j++){
+        var sim = diceSimilarity(candidates[i]._norm, candidates[j]._norm);
+        if(sim >= SIMILARITY_THRESHOLD){
+          fuzzyIds[candidates[i].id] = true;
+          fuzzyIds[candidates[j].id] = true;
+        }
+      }
+    }
+    similarIds = fuzzyIds;
+  }
+
+  /** @param {object} card @returns {boolean} true if text exactly matches another card */
   function isDuplicate(card){ return !!duplicateIds[card.id]; }
+  /** @param {object} card @returns {boolean} true if text is a near-match (see SIMILARITY_THRESHOLD) to another card */
+  function isSimilar(card){ return !!similarIds[card.id]; }
+  /** @param {object} card @returns {boolean} true if the task text is blank (a likely parsing artifact) */
   function isIncomplete(card){ return normalizeText(card.text) === ''; }
+
+  /**
+   * Collects every automatic + manual flag label that applies to a
+   * card, for display (badges, List view, CSV export) and for the
+   * Flags filter. Order matters for display, so Duplicate (exact,
+   * most actionable) comes before Similar (fuzzy, needs judgement).
+   * @param {object} card
+   * @returns {string[]} human-readable flag labels
+   */
   function cardFlags(card){
     var out = [];
     if(isDuplicate(card)) out.push('Duplicate');
+    if(isSimilar(card)) out.push('Similar');
     if(isIncomplete(card)) out.push('Incomplete');
     if(card.needsDetail) out.push('Needs Detail');
     return out;
@@ -1000,6 +1577,7 @@
     }
     if(filters.flag && filters.flag !== 'all'){
       if(filters.flag === 'duplicate' && !isDuplicate(card)) return false;
+      if(filters.flag === 'similar' && !isSimilar(card)) return false;
       if(filters.flag === 'incomplete' && !isIncomplete(card)) return false;
       if(filters.flag === 'needsDetail' && !card.needsDetail) return false;
       if(filters.flag === 'any' && cardFlags(card).length === 0) return false;
@@ -1011,10 +1589,29 @@
     return allCardsArray().filter(cardMatchesFilters);
   }
 
+  /**
+   * Returns all cards in a given column, ordered for Board display.
+   * Primary sort: "needs attention" cards first — anything Incomplete
+   * (blank text) or manually flagged Needs Detail bubbles to the top
+   * of the column automatically, so the least-finished entries are
+   * the first thing you see and triage, without having to hunt for
+   * them or drag them up yourself.
+   * Secondary sort: manual drag order (`order`), applied within each
+   * of those two buckets — so you can still hand-arrange cards, it
+   * just happens inside "needs attention" and "ready" groups rather
+   * than across the whole column.
+   * @param {string} colId
+   * @returns {object[]}
+   */
   function cardsForColumn(colId){
     return allCardsArray()
       .filter(function(c){ return c.column === colId; })
-      .sort(function(a,b){ return a.order - b.order; });
+      .sort(function(a, b){
+        var aNeedsAttn = (isIncomplete(a) || a.needsDetail) ? 0 : 1;
+        var bNeedsAttn = (isIncomplete(b) || b.needsDetail) ? 0 : 1;
+        if(aNeedsAttn !== bNeedsAttn) return aNeedsAttn - bNeedsAttn;
+        return a.order - b.order;
+      });
   }
 
   /* ---------------- Filter bar rendering ---------------- */
@@ -1118,19 +1715,33 @@
   /* ---------------- View toggle ---------------- */
   var boardEl = document.getElementById('board');
   var listViewEl = document.getElementById('list-view');
+  var logViewEl = document.getElementById('log-view');
   var viewBoardBtn = document.getElementById('view-board-btn');
   var viewListBtn = document.getElementById('view-list-btn');
+  var viewLogBtn = document.getElementById('view-log-btn');
 
+  /**
+   * Switches between the three top-level views: Board (kanban),
+   * List (flat filtered/sortable table), and Paste Log (raw paste
+   * history). Only one is visible at a time; the filter/sort
+   * controls that don't apply to a given view (e.g. Sort, which is
+   * List-only) are hidden rather than left active-but-ignored, to
+   * avoid confusing the user about what's currently affecting them.
+   * @param {'board'|'list'|'log'} mode
+   */
   function setView(mode){
     viewMode = mode;
     boardEl.classList.toggle('hidden', mode !== 'board');
     listViewEl.classList.toggle('active', mode === 'list');
+    logViewEl.classList.toggle('active', mode === 'log');
     viewBoardBtn.classList.toggle('active', mode === 'board');
     viewListBtn.classList.toggle('active', mode === 'list');
+    viewLogBtn.classList.toggle('active', mode === 'log');
     sortGroup.style.display = mode === 'list' ? 'flex' : 'none';
   }
   viewBoardBtn.addEventListener('click', function(){ setView('board'); });
   viewListBtn.addEventListener('click', function(){ setView('list'); });
+  viewLogBtn.addEventListener('click', function(){ setView('log'); renderLog(); });
 
   /* ---------------- Rendering: Board ---------------- */
   function renderBoard(){
@@ -1266,6 +1877,13 @@
       dupBadge.title = 'Another card has identical task text';
       topRow.appendChild(dupBadge);
     }
+    if(isSimilar(card)){
+      var simBadge = document.createElement('span');
+      simBadge.className = 'flag-badge similar';
+      simBadge.textContent = '≈ Similar';
+      simBadge.title = 'Task text is a close (not exact) match to another card — switch to List view, filter Flags → Similar, sort by Text to audit side by side';
+      topRow.appendChild(simBadge);
+    }
     if(isIncomplete(card)){
       var incBadge = document.createElement('span');
       incBadge.className = 'flag-badge incomplete';
@@ -1285,6 +1903,11 @@
     var text = document.createElement('div');
     text.className = 'card-text' + (collapsed ? ' clamped' : '');
     text.contentEditable = collapsed ? 'false' : 'true';
+    // Native browser spellcheck (red squiggly underlines) — zero
+    // setup, no dictionary to ship. Not a custom checker, just makes
+    // sure the browser's built-in one is explicitly turned on rather
+    // than relying on default behavior, which varies by browser.
+    text.spellcheck = true;
     text.textContent = card.text;
     if(collapsed){
       text.title = 'Click to expand';
@@ -1437,6 +2060,7 @@
     var span = document.createElement('span');
     span.className = 'card-note-text';
     span.contentEditable = 'true';
+    span.spellcheck = true; // native browser spellcheck, see card-text comment above
     span.textContent = noteText;
     span.addEventListener('input', function(){
       card.notes[idx] = span.textContent;
@@ -1463,6 +2087,15 @@
   var listTbody = document.getElementById('list-tbody');
   var listEmpty = document.getElementById('list-empty');
 
+  /**
+   * Comparator for List view / CSV export ordering, driven by the
+   * `sortBy` dropdown. 'text' sorting is specifically useful for the
+   * duplicate/similar audit workflow: alphabetically-adjacent task
+   * text tends to cluster near-duplicates next to each other even
+   * when they weren't created back-to-back.
+   * @param {object} a @param {object} b
+   * @returns {number} standard comparator return (negative/0/positive)
+   */
   function sortComparator(a, b){
     if(sortBy === 'priority'){
       return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
@@ -1472,6 +2105,9 @@
     }
     if(sortBy === 'subbranch'){
       return (a.subBranch || '').localeCompare(b.subBranch || '');
+    }
+    if(sortBy === 'text'){
+      return normalizeText(a.text).localeCompare(normalizeText(b.text));
     }
     return b.order - a.order;
   }
@@ -1550,11 +2186,107 @@
     return el;
   }
 
+  /* ---------------- Rendering: Paste Log ---------------- */
+  var logListEl = document.getElementById('log-list');
+  var logEmptyEl = document.getElementById('log-empty');
+
+  /**
+   * Renders the Paste Log view: every raw paste ever submitted,
+   * newest first, each with a timestamp and two recovery actions —
+   * "Copy" (clipboard) and "Re-parse" (runs it through parseRawText()
+   * again and merges any resulting cards into the board, exactly as
+   * if you'd pasted it fresh). Nothing here is ever deleted
+   * automatically; there's no size cap because paste history is
+   * plain text and cheap to keep — TODO: consider adding a manual
+   * "clear log" action if this ever becomes unwieldy in practice.
+   */
+  function renderLog(){
+    logListEl.innerHTML = '';
+    var entries = state.pasteLog.slice().sort(function(a, b){ return b.timestamp - a.timestamp; });
+
+    if(entries.length === 0){
+      logEmptyEl.style.display = 'block';
+      return;
+    }
+    logEmptyEl.style.display = 'none';
+
+    entries.forEach(function(entry){
+      var wrap = document.createElement('div');
+      wrap.className = 'log-entry';
+
+      var header = document.createElement('div');
+      header.className = 'log-entry-header';
+
+      var time = document.createElement('div');
+      time.className = 'log-entry-time';
+      time.textContent = new Date(entry.timestamp).toLocaleString();
+      header.appendChild(time);
+
+      var actions = document.createElement('div');
+      actions.className = 'log-entry-actions';
+
+      var copyBtn = document.createElement('button');
+      copyBtn.className = 'btn btn-ghost btn-sm';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', function(){
+        // navigator.clipboard requires a secure context (https or
+        // localhost); falls back to a manual-select prompt if
+        // unavailable (e.g. opened directly as a file:// URL in some
+        // browsers).
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(entry.rawText).then(function(){
+            showToast('Copied to clipboard');
+          }).catch(function(){
+            showToast('Copy failed — select the text manually');
+          });
+        } else {
+          showToast('Clipboard unavailable — select the text manually');
+        }
+      });
+      actions.appendChild(copyBtn);
+
+      var reparseBtn = document.createElement('button');
+      reparseBtn.className = 'btn btn-ghost btn-sm';
+      reparseBtn.textContent = 'Re-parse';
+      reparseBtn.title = 'Run this paste through the parser again and add any resulting cards to the board';
+      reparseBtn.addEventListener('click', function(){
+        var parsed = parseRawText(entry.rawText);
+        if(parsed.length === 0){
+          showToast('No tasks found in this entry');
+          return;
+        }
+        parsed.forEach(function(c){ state.cards[c.id] = c; });
+        scheduleSave();
+        renderAll();
+        showToast('Re-parsed ' + parsed.length + ' card' + (parsed.length === 1 ? '' : 's'));
+      });
+      actions.appendChild(reparseBtn);
+
+      header.appendChild(actions);
+      wrap.appendChild(header);
+
+      var body = document.createElement('div');
+      body.className = 'log-entry-body';
+      body.textContent = entry.rawText;
+      wrap.appendChild(body);
+
+      logListEl.appendChild(wrap);
+    });
+  }
+
   /* ---------------- Render everything ---------------- */
+  /**
+   * Master render pass — recomputes duplicate/similar flags once,
+   * then redraws all three views (Board, List, Paste Log) so they
+   * never fall out of sync with `state`, regardless of which one is
+   * currently visible. Simple "re-render everything" approach;
+   * acceptable at this tool's target scale (see file header).
+   */
   function renderAll(){
     refreshDuplicateIds();
     renderBoard();
     renderList();
+    renderLog();
   }
 
   /* ---------------- Drag & Drop (board) ---------------- */
@@ -1704,6 +2436,53 @@
 
   document.getElementById('export-btn').addEventListener('click', exportCSV);
 
+  /* ================================================================
+     AI SORT (STUB — intentionally disabled)
+     ----------------------------------------------------------------
+     WHY THIS IS A STUB, NOT A REAL FEATURE YET:
+     Calling an LLM (e.g. the Anthropic API) requires an API key, and
+     an API key can never be safely embedded in a static client-side
+     file like this one — anyone who views the page source could
+     read it and rack up charges on your account. The only safe way
+     to do this is to hold the key on a server and have this app call
+     that server instead of the LLM directly.
+
+     TODO (backend migration — see setup guide):
+       1. Stand up a small serverless function (e.g. a Supabase Edge
+          Function) that holds the Anthropic API key as a protected
+          server-side secret (never sent to the browser).
+       2. That function accepts a batch of card texts, calls the
+          Anthropic API asking it to suggest {column, type, priority}
+          for each, and returns the suggestions as JSON.
+       3. Replace the body of requestAiSortSuggestions() below with a
+          fetch() to that function's URL — no key required in this
+          file, ever.
+       4. Enable the button: remove the `disabled` attribute on
+          #ai-sort-btn in the HTML above once step 3 is live.
+     ================================================================ */
+
+  /**
+   * PLACEHOLDER — not yet wired to any network call. Once the
+   * backend exists (see TODO block above), this will POST the text
+   * of unsorted/needs-clarification cards to a Supabase Edge
+   * Function, receive back suggested {column, type, priority} per
+   * card, and apply them as an editable suggestion (never silently
+   * overwriting the user's own choices).
+   * @param {object[]} cards - cards to request suggestions for
+   * @returns {Promise<void>}
+   */
+  function requestAiSortSuggestions(cards){
+    // Not implemented — see TODO block above. Left as a named,
+    // documented stub rather than deleted, so the intended shape of
+    // the feature is clear once backend wiring begins.
+    showToast('AI Sort needs backend setup first — see the setup guide');
+    return Promise.resolve();
+  }
+
+  document.getElementById('ai-sort-btn').addEventListener('click', function(){
+    requestAiSortSuggestions(getFilteredCards());
+  });
+
   /* ---------------- Toast ---------------- */
   var toastEl = document.getElementById('toast');
   var toastTimer = null;
@@ -1715,22 +2494,46 @@
   }
 
   /* ---------------- Header actions ---------------- */
-  document.getElementById('parse-btn').addEventListener('click', function(){
+  /**
+   * Handles the "Parse notes" button. Always logs the raw paste to
+   * state.pasteLog FIRST, before attempting to parse it — so even a
+   * completely garbled paste (0 cards produced) is still recoverable
+   * from the Paste Log. Then runs the parser and merges results into
+   * state.cards.
+   * Edge cases: empty/whitespace-only input is rejected with a toast
+   * and never logged (nothing to recover). A paste that logs but
+   * yields 0 cards still shows a toast explaining why, so the user
+   * isn't left wondering if the click registered.
+   */
+  function handleParseClick(){
     var raw = document.getElementById('raw-input').value;
     if(!raw.trim()){
       showToast('Nothing to parse');
       return;
     }
+
+    // Master log entry — captured before parsing so it reflects
+    // exactly what was pasted, independent of parse success.
+    state.pasteLog.push({
+      id: makeId(),
+      timestamp: Date.now(),
+      rawText: raw
+    });
+
     var parsed = parseRawText(raw);
     if(parsed.length === 0){
-      showToast('No tasks found (lines must start with -)');
+      scheduleSave(); // still save the log entry even if 0 cards resulted
+      renderAll();
+      showToast('No tasks found (lines must start with -) — saved to Paste Log anyway');
       return;
     }
     parsed.forEach(function(c){ state.cards[c.id] = c; });
     scheduleSave();
     renderAll();
     showToast('Parsed ' + parsed.length + ' card' + (parsed.length === 1 ? '' : 's'));
-  });
+  }
+
+  document.getElementById('parse-btn').addEventListener('click', handleParseClick);
 
   document.getElementById('reset-input-btn').addEventListener('click', function(){
     document.getElementById('raw-input').value = '';
@@ -1752,11 +2555,17 @@
     }
   });
 
-  /* ---------------- Init ---------------- */
-  loadState();
-  populateFilterBar();
-  setView('board');
-  renderAll();
+  /* ---------------- Init ----------------
+     Lock gate is shown immediately; board data loads from Supabase
+     in parallel behind it (so it's often ready by the time the PIN
+     is entered) and only renders once loaded, whichever source
+     (Supabase or local backup) it ends up coming from. */
+  initLockGate();
+  loadStateFromSupabase().then(function(){
+    populateFilterBar();
+    setView('board');
+    renderAll();
+  });
 })();
 </script>
 
