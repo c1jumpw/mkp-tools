@@ -381,6 +381,8 @@
     align-items:center;
     gap:6px;
     margin-bottom:4px;
+    flex-wrap:wrap;
+    row-gap:4px;
   }
   .collapse-toggle{
     background:none;
@@ -419,6 +421,18 @@
     flex:0 0 auto;
     opacity:.6;
   }
+
+  .flag-badge{
+    font-family:var(--mono);
+    font-size:9px;
+    font-weight:700;
+    border-radius:20px;
+    padding:1px 6px;
+    flex:0 0 auto;
+    letter-spacing:.02em;
+  }
+  .flag-badge.dup{ background:#f4e6cb; color:#a5691f; }
+  .flag-badge.incomplete{ background:#f6ded9; color:#a4362f; }
 
   .card-text{
     outline:none;
@@ -696,6 +710,16 @@
     <label for="filter-type">Type</label>
     <select id="filter-type"></select>
   </div>
+  <div class="fb-group">
+    <label for="filter-flag">Flags</label>
+    <select id="filter-flag">
+      <option value="all">All cards</option>
+      <option value="duplicate">Duplicates</option>
+      <option value="incomplete">Incomplete</option>
+      <option value="needsDetail">Needs Detail</option>
+      <option value="any">Any flag</option>
+    </select>
+  </div>
   <div class="fb-group" id="sort-group">
     <label for="sort-by">Sort</label>
     <select id="sort-by">
@@ -729,6 +753,7 @@
         <th>Task</th>
         <th>Notes / Log</th>
         <th>Needs Detail</th>
+        <th>Flags</th>
       </tr>
     </thead>
     <tbody id="list-tbody"></tbody>
@@ -751,6 +776,9 @@
     { id: 'inbox',        label: 'Inbox',                 sub: 'reviewed · ready to file',
       color: '#7d8fae',
       types: ['To Do', 'Note', 'Reminder'] },
+    { id: 'clarify',       label: 'Needs Clarification',  sub: 'ambiguous · missing info · unsure where it goes',
+      color: '#cf6659',
+      types: ['Ambiguous', 'Missing Info', 'Unclear Branch', 'Needs Owner Input'] },
     { id: 'mkp',           label: 'MKP',
       color: '#9370d8',
       types: ['To Do', 'Contact', 'Meeting/Event'] },
@@ -787,7 +815,7 @@
 
   /* ---------------- State ---------------- */
   var state = { cards: {} };
-  var filters = { column: 'all', priority: 'all', type: 'all', search: '' };
+  var filters = { column: 'all', priority: 'all', type: 'all', search: '', flag: 'all' };
   var viewMode = 'board'; // 'board' | 'list'
   var sortBy = 'priority';
 
@@ -914,6 +942,45 @@
     return Object.keys(state.cards).map(function(k){ return state.cards[k]; });
   }
 
+  /* ---------------- Duplicate / incomplete detection ----------------
+     Duplicates: cards whose task text is identical (case/whitespace
+     insensitive) to another card's text, anywhere on the board.
+     Incomplete: cards whose task text is blank (a parsing artifact,
+     e.g. a bare "-" or "*" line) — distinct from the manual "needs
+     detail" flag, which is the user's own judgement call. */
+  var duplicateIds = {};
+
+  function normalizeText(t){
+    return (t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function refreshDuplicateIds(){
+    var map = {};
+    allCardsArray().forEach(function(c){
+      var norm = normalizeText(c.text);
+      if(!norm) return;
+      if(!map[norm]) map[norm] = [];
+      map[norm].push(c.id);
+    });
+    var ids = {};
+    Object.keys(map).forEach(function(norm){
+      if(map[norm].length > 1){
+        map[norm].forEach(function(id){ ids[id] = true; });
+      }
+    });
+    duplicateIds = ids;
+  }
+
+  function isDuplicate(card){ return !!duplicateIds[card.id]; }
+  function isIncomplete(card){ return normalizeText(card.text) === ''; }
+  function cardFlags(card){
+    var out = [];
+    if(isDuplicate(card)) out.push('Duplicate');
+    if(isIncomplete(card)) out.push('Incomplete');
+    if(card.needsDetail) out.push('Needs Detail');
+    return out;
+  }
+
   function typesForColumnFilter(colId){
     if(colId === 'all'){
       var set = {};
@@ -930,6 +997,12 @@
     if(filters.search){
       var haystack = (card.text + ' ' + card.notes.join(' ') + ' ' + (card.subBranch || '')).toLowerCase();
       if(haystack.indexOf(filters.search.toLowerCase()) === -1) return false;
+    }
+    if(filters.flag && filters.flag !== 'all'){
+      if(filters.flag === 'duplicate' && !isDuplicate(card)) return false;
+      if(filters.flag === 'incomplete' && !isIncomplete(card)) return false;
+      if(filters.flag === 'needsDetail' && !card.needsDetail) return false;
+      if(filters.flag === 'any' && cardFlags(card).length === 0) return false;
     }
     return true;
   }
@@ -949,6 +1022,7 @@
   var filterPrioritySel = document.getElementById('filter-priority');
   var filterTypeSel = document.getElementById('filter-type');
   var filterSearchInput = document.getElementById('filter-search');
+  var filterFlagSel = document.getElementById('filter-flag');
   var sortBySel = document.getElementById('sort-by');
   var sortGroup = document.getElementById('sort-group');
 
@@ -1007,6 +1081,10 @@
     filters.type = filterTypeSel.value;
     renderAll();
   });
+  filterFlagSel.addEventListener('change', function(){
+    filters.flag = filterFlagSel.value;
+    renderAll();
+  });
   var searchDebounce = null;
   filterSearchInput.addEventListener('input', function(){
     clearTimeout(searchDebounce);
@@ -1020,8 +1098,9 @@
     renderAll();
   });
   document.getElementById('clear-filters-btn').addEventListener('click', function(){
-    filters = { column: 'all', priority: 'all', type: 'all', search: '' };
+    filters = { column: 'all', priority: 'all', type: 'all', search: '', flag: 'all' };
     filterSearchInput.value = '';
+    filterFlagSel.value = 'all';
     populateFilterBar();
     renderAll();
   });
@@ -1178,6 +1257,21 @@
       badge.className = 'details-badge';
       badge.textContent = card.notes.length + ' detail' + (card.notes.length === 1 ? '' : 's');
       topRow.appendChild(badge);
+    }
+
+    if(isDuplicate(card)){
+      var dupBadge = document.createElement('span');
+      dupBadge.className = 'flag-badge dup';
+      dupBadge.textContent = '⧉ Dup';
+      dupBadge.title = 'Another card has identical task text';
+      topRow.appendChild(dupBadge);
+    }
+    if(isIncomplete(card)){
+      var incBadge = document.createElement('span');
+      incBadge.className = 'flag-badge incomplete';
+      incBadge.textContent = '⚠ Incomplete';
+      incBadge.title = 'Task text is blank';
+      topRow.appendChild(incBadge);
     }
 
     var grip = document.createElement('span');
@@ -1443,6 +1537,9 @@
 
       tr.appendChild(td(card.needsDetail ? 'Yes' : ''));
 
+      var flags = cardFlags(card);
+      tr.appendChild(td(flags.length ? flags.join(', ') : '—'));
+
       listTbody.appendChild(tr);
     });
   }
@@ -1455,6 +1552,7 @@
 
   /* ---------------- Render everything ---------------- */
   function renderAll(){
+    refreshDuplicateIds();
     renderBoard();
     renderList();
   }
@@ -1568,12 +1666,13 @@
   }
 
   function exportCSV(){
+    refreshDuplicateIds();
     var cards = getFilteredCards().sort(sortComparator);
     if(cards.length === 0){
       showToast('No cards to export with current filters');
       return;
     }
-    var header = ['ID','Branch','Type','Priority','Sub-Branch','Task','Notes / Log','Needs Detail'];
+    var header = ['ID','Branch','Type','Priority','Sub-Branch','Task','Notes / Log','Needs Detail','Flags'];
     var rows = [header];
     cards.forEach(function(card){
       var col = COLUMN_MAP[card.column];
@@ -1585,7 +1684,8 @@
         card.subBranch || '',
         card.text || '',
         card.notes.join(' | '),
-        card.needsDetail ? 'Yes' : ''
+        card.needsDetail ? 'Yes' : '',
+        cardFlags(card).join(', ')
       ]);
     });
     var csv = rows.map(function(r){ return r.map(csvEscape).join(','); }).join('\r\n');
