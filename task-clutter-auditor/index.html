@@ -166,6 +166,63 @@
     min-height:14px;
   }
 
+  /* ---------- Filter / View bar ---------- */
+  #filter-bar{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    padding:9px 20px;
+    background:var(--col-header);
+    border-bottom:1px solid var(--col-border);
+  }
+  #filter-bar .fb-group{
+    display:flex;
+    align-items:center;
+    gap:5px;
+  }
+  #filter-bar label{
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--text-light-dim);
+  }
+  #filter-bar select{
+    font-family:var(--sans);
+    font-size:12px;
+    background:#0f141b;
+    color:var(--text-light);
+    border:1px solid var(--col-border);
+    border-radius:4px;
+    padding:5px 7px;
+  }
+  #filter-bar select:focus{ outline:none; border-color:var(--accent-dim); }
+
+  .view-toggle{
+    display:flex;
+    border:1px solid var(--col-border);
+    border-radius:5px;
+    overflow:hidden;
+    margin-left:auto;
+  }
+  .view-toggle button{
+    font-size:11.5px;
+    font-weight:600;
+    padding:6px 12px;
+    background:transparent;
+    color:var(--text-light-dim);
+  }
+  .view-toggle button.active{
+    background:var(--accent);
+    color:#0e1a18;
+  }
+  .view-toggle button:not(.active):hover{ background:#2a3546; color:var(--text-light); }
+
+  #export-btn{ margin-left:8px; }
+  #clear-filters-btn{ font-size:11px; padding:6px 9px; }
+
   /* ---------- Board ---------- */
   #board{
     flex:1;
@@ -189,10 +246,8 @@
     border-radius:7px;
     max-height:100%;
   }
-  .column.unsorted-col{
-    border-style:dashed;
-    opacity:.96;
-  }
+  .column.unsorted-col{ border-style:dashed; opacity:.96; }
+  .column.logs-col{ border-color:#3a4a44; }
   .column-header{
     flex:0 0 auto;
     display:flex;
@@ -228,6 +283,7 @@
     border-radius:20px;
     min-width:20px;
     text-align:center;
+    white-space:nowrap;
   }
 
   .column-drop{
@@ -254,7 +310,6 @@
     font-style:italic;
   }
 
-  /* insertion marker for reordering */
   .drop-marker{
     height:2px;
     background:var(--accent);
@@ -290,15 +345,20 @@
   .card[data-priority="lp"]::before{ background:var(--p-lp); }
 
   .card.dragging{ opacity:.35; }
-  .card.done{ opacity:.55; }
-  .card.done .card-text{ text-decoration:line-through; }
+  .card.filtered-out{ display:none; }
 
+  .card-top-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    margin-bottom:4px;
+  }
   .card-id{
     font-family:var(--mono);
     font-size:9px;
     color:var(--text-dim);
     letter-spacing:.03em;
-    margin-bottom:3px;
   }
 
   .card-text{
@@ -377,23 +437,29 @@
     flex-wrap:wrap;
   }
 
-  .priority-pill{
+  select.priority-select, select.type-select{
     font-family:var(--mono);
     font-size:9.5px;
     font-weight:700;
-    letter-spacing:.03em;
-    text-transform:uppercase;
-    padding:3px 7px;
+    letter-spacing:.02em;
+    padding:3px 5px;
     border-radius:20px;
+    border:1px solid transparent;
     background:var(--p-none-bg);
     color:var(--p-none);
-    border:1px solid transparent;
+    max-width:96px;
   }
-  .card[data-priority="urgent"] .priority-pill{ background:var(--p-urgent-bg); color:var(--p-urgent); }
-  .card[data-priority="recurring"] .priority-pill{ background:var(--p-recurring-bg); color:var(--p-recurring); }
-  .card[data-priority="quick"] .priority-pill{ background:var(--p-quick-bg); color:var(--p-quick); }
-  .card[data-priority="lp"] .priority-pill{ background:var(--p-lp-bg); color:var(--p-lp); }
-  .priority-pill:hover{ filter:brightness(0.95); }
+  select.priority-select:focus, select.type-select:focus{ outline:none; }
+
+  select.type-select{
+    background:#eee7d5;
+    color:var(--text-dim);
+    border-radius:4px;
+    text-transform:none;
+    font-weight:600;
+    font-family:var(--sans);
+    font-size:10.5px;
+  }
 
   .subbranch-input{
     font-family:var(--sans);
@@ -403,7 +469,7 @@
     border:none;
     border-bottom:1px dashed var(--paper-edge);
     padding:2px 1px;
-    width:78px;
+    width:74px;
     min-width:50px;
   }
   .subbranch-input::placeholder{ color:var(--text-dim); font-style:italic; }
@@ -420,7 +486,6 @@
   }
   .icon-btn:hover{ background:rgba(0,0,0,.06); }
   .icon-btn.active{ color:var(--amber); }
-  .icon-btn.done-toggle.active{ color:var(--accent-dim); }
   .icon-btn.delete-btn{ margin-left:auto; color:var(--text-dim); }
   .icon-btn.delete-btn.armed{
     color:#fff;
@@ -432,6 +497,62 @@
     letter-spacing:.03em;
   }
   .icon-btn.delete-btn.armed:hover{ background:#b34540; }
+
+  /* ---------- List view ---------- */
+  #list-view{
+    flex:1;
+    overflow:auto;
+    padding:16px 20px;
+    background:var(--board);
+    display:none;
+  }
+  #list-view.active{ display:block; }
+  #board.hidden{ display:none; }
+
+  table#list-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12.5px;
+    background:var(--col-bg);
+    border:1px solid var(--col-border);
+    border-radius:7px;
+    overflow:hidden;
+  }
+  table#list-table thead th{
+    text-align:left;
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--text-light-dim);
+    background:var(--col-header);
+    padding:8px 10px;
+    border-bottom:1px solid var(--col-border);
+    white-space:nowrap;
+  }
+  table#list-table tbody td{
+    padding:8px 10px;
+    border-bottom:1px solid var(--col-border);
+    color:var(--text-light);
+    vertical-align:top;
+  }
+  table#list-table tbody tr:hover{ background:rgba(255,255,255,.03); }
+  table#list-table tbody tr:last-child td{ border-bottom:none; }
+  .lv-priority{
+    font-family:var(--mono);
+    font-size:9.5px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:20px;
+    white-space:nowrap;
+  }
+  .lv-notes{ color:var(--text-light-dim); font-size:11.5px; max-width:260px; }
+  #list-empty{
+    text-align:center;
+    padding:30px;
+    color:var(--text-light-dim);
+    font-size:12.5px;
+  }
 
   /* ---------- Toast ---------- */
   #toast{
@@ -456,6 +577,7 @@
     .input-row{ flex-direction:column; }
     .input-actions{ flex-direction:row; min-width:0; width:100%; }
     .input-actions .btn{ flex:1; }
+    .view-toggle{ margin-left:0; }
   }
 </style>
 </head>
@@ -467,7 +589,7 @@
       <span class="mark">TCA</span>
       <div>
         <h1>Task Clutter Auditor</h1>
-        <p>Paste your notes → parse → triage into branches</p>
+        <p>Paste your notes → parse → triage into branches → export to your workspace</p>
       </div>
     </div>
     <div class="header-actions">
@@ -485,35 +607,104 @@
   </div>
 </header>
 
+<div id="filter-bar">
+  <div class="fb-group">
+    <label for="filter-column">Branch</label>
+    <select id="filter-column"></select>
+  </div>
+  <div class="fb-group">
+    <label for="filter-priority">Priority</label>
+    <select id="filter-priority"></select>
+  </div>
+  <div class="fb-group">
+    <label for="filter-type">Type</label>
+    <select id="filter-type"></select>
+  </div>
+  <div class="fb-group" id="sort-group">
+    <label for="sort-by">Sort</label>
+    <select id="sort-by">
+      <option value="priority">Priority</option>
+      <option value="type">Type</option>
+      <option value="subbranch">Sub-branch</option>
+      <option value="newest">Newest</option>
+    </select>
+  </div>
+  <button class="btn btn-ghost" id="clear-filters-btn">Clear filters</button>
+
+  <div class="view-toggle">
+    <button id="view-board-btn" class="active">Board</button>
+    <button id="view-list-btn">List</button>
+  </div>
+  <button class="btn btn-primary" id="export-btn">Export CSV</button>
+</div>
+
 <div id="board"></div>
+
+<div id="list-view">
+  <table id="list-table">
+    <thead>
+      <tr>
+        <th>Branch</th>
+        <th>Type</th>
+        <th>Priority</th>
+        <th>Sub-branch</th>
+        <th>Task</th>
+        <th>Notes / Log</th>
+        <th>Needs Detail</th>
+      </tr>
+    </thead>
+    <tbody id="list-tbody"></tbody>
+  </table>
+  <div id="list-empty" style="display:none;">No cards match the current filters.</div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 (function(){
   'use strict';
 
-  /* ---------------- Config ---------------- */
+  /* ---------------- Config ----------------
+     Column list + the entry-type vocabulary for each branch.
+     Super Admin / JTG Admin / Mambay Co / Unywebs use a generic
+     placeholder type list below — edit these arrays to match your
+     real ClickUp list names for each space whenever you're ready. */
   var COLUMNS = [
-    { id: 'inbox',       label: 'Inbox',              sub: 'reviewed · ready to file' },
-    { id: 'mkp',         label: 'MKP' },
-    { id: 'super-admin', label: 'Super Admin' },
-    { id: 'crm-ops',     label: 'CRM & Operations' },
-    { id: 'jtg-admin',   label: 'JTG Admin' },
-    { id: 'mambay-co',   label: 'Mambay Co' },
-    { id: 'unywebs',     label: 'Unywebs' },
-    { id: 'unsorted',    label: '? Unsorted',         sub: 'needs review / not ready to toss', extraClass: 'unsorted-col' }
+    { id: 'inbox',        label: 'Inbox',                 sub: 'reviewed · ready to file',
+      types: ['To Do', 'Note', 'Reminder'] },
+    { id: 'mkp',           label: 'MKP',
+      types: ['To Do', 'Contact', 'Meeting/Event'] },
+    { id: 'super-admin',   label: 'Super Admin',
+      types: ['To Do', 'Note', 'Reminder'] },
+    { id: 'crm-ops',       label: 'CRM & Operations',
+      types: ['Lead', 'Contact', 'Deal', 'Account'] },
+    { id: 'jtg-admin',     label: 'JTG Admin',
+      types: ['To Do', 'Note', 'Reminder'] },
+    { id: 'mambay-co',     label: 'Mambay Co',
+      types: ['To Do', 'Note', 'Reminder'] },
+    { id: 'unywebs',       label: 'Unywebs',
+      types: ['To Do', 'Note', 'Reminder'] },
+    { id: 'project-logs',  label: 'Project Notes / Logs',  sub: 'ideas · crm logs · conversation notes',
+      extraClass: 'logs-col',
+      types: ['Project Idea', 'CRM Entry Log', 'Conversation Note', 'General Note'] },
+    { id: 'unsorted',      label: '? Unsorted',            sub: 'needs review / not ready to toss',
+      extraClass: 'unsorted-col',
+      types: ['To Do', 'Note'] }
   ];
+  var COLUMN_MAP = {};
+  COLUMNS.forEach(function(c){ COLUMN_MAP[c.id] = c; });
 
   var PRIORITY_ORDER = ['none', 'urgent', 'recurring', 'quick', 'lp'];
   var PRIORITY_LABEL = { none: 'None', urgent: 'Urgent / HP', recurring: 'Recurring', quick: 'Quick', lp: 'LP' };
 
-  var STORAGE_KEY = 'tca-board-state-v1';
+  var STORAGE_KEY = 'tca-board-state-v2';
   var AUTOSAVE_DEBOUNCE = 400;
 
   /* ---------------- State ---------------- */
-  var state = {
-    cards: {}       // id -> card object (column stored on card)
-  };
+  var state = { cards: {} };
+  var filters = { column: 'all', priority: 'all', type: 'all' };
+  var viewMode = 'board'; // 'board' | 'list'
+  var sortBy = 'priority';
 
   var idCounter = 0;
   function makeId(){
@@ -528,8 +719,8 @@
       notes: [],
       priority: 'none',
       subBranch: '',
+      type: '',
       needsDetail: false,
-      done: false,
       column: column,
       order: Date.now() + Math.random()
     };
@@ -572,7 +763,7 @@
 
       lines.forEach(function(line){
         var trimmed = line.trim();
-        if(trimmed === '') return; // skip empty lines
+        if(trimmed === '') return;
 
         var isUrgent = false;
         var rest = trimmed;
@@ -593,13 +784,12 @@
           if(currentCard){
             currentCard.notes.push(noteText);
           } else {
-            // no preceding card in this chunk -> standalone card, routed to Unsorted
             var orphan = newCard(noteText, 'unsorted');
             newCards.push(orphan);
             currentCard = orphan;
           }
         } else {
-          // plain line: treated as a section/label only, not a card. skipped.
+          // plain line: label/section marker only — skipped, not a card.
         }
       });
     });
@@ -607,19 +797,132 @@
     return newCards;
   }
 
-  /* ---------------- Rendering ---------------- */
-  var boardEl = document.getElementById('board');
+  /* ---------------- Filter helpers ---------------- */
+  function allCardsArray(){
+    return Object.keys(state.cards).map(function(k){ return state.cards[k]; });
+  }
+
+  function typesForColumnFilter(colId){
+    if(colId === 'all'){
+      var set = {};
+      COLUMNS.forEach(function(c){ c.types.forEach(function(t){ set[t] = true; }); });
+      return Object.keys(set).sort();
+    }
+    return COLUMN_MAP[colId] ? COLUMN_MAP[colId].types.slice() : [];
+  }
+
+  function cardMatchesFilters(card){
+    if(filters.column !== 'all' && card.column !== filters.column) return false;
+    if(filters.priority !== 'all' && card.priority !== filters.priority) return false;
+    if(filters.type !== 'all' && card.type !== filters.type) return false;
+    return true;
+  }
+
+  function getFilteredCards(){
+    return allCardsArray().filter(cardMatchesFilters);
+  }
 
   function cardsForColumn(colId){
-    return Object.keys(state.cards)
-      .map(function(k){ return state.cards[k]; })
+    return allCardsArray()
       .filter(function(c){ return c.column === colId; })
       .sort(function(a,b){ return a.order - b.order; });
   }
 
+  /* ---------------- Filter bar rendering ---------------- */
+  var filterColumnSel = document.getElementById('filter-column');
+  var filterPrioritySel = document.getElementById('filter-priority');
+  var filterTypeSel = document.getElementById('filter-type');
+  var sortBySel = document.getElementById('sort-by');
+  var sortGroup = document.getElementById('sort-group');
+
+  function populateFilterBar(){
+    filterColumnSel.innerHTML = '';
+    var allOpt = document.createElement('option');
+    allOpt.value = 'all'; allOpt.textContent = 'All branches';
+    filterColumnSel.appendChild(allOpt);
+    COLUMNS.forEach(function(c){
+      var o = document.createElement('option');
+      o.value = c.id; o.textContent = c.label;
+      filterColumnSel.appendChild(o);
+    });
+    filterColumnSel.value = filters.column;
+
+    filterPrioritySel.innerHTML = '';
+    var allP = document.createElement('option');
+    allP.value = 'all'; allP.textContent = 'All priorities';
+    filterPrioritySel.appendChild(allP);
+    PRIORITY_ORDER.forEach(function(p){
+      var o = document.createElement('option');
+      o.value = p; o.textContent = PRIORITY_LABEL[p];
+      filterPrioritySel.appendChild(o);
+    });
+    filterPrioritySel.value = filters.priority;
+
+    populateTypeFilter();
+  }
+
+  function populateTypeFilter(){
+    var current = filters.type;
+    filterTypeSel.innerHTML = '';
+    var allT = document.createElement('option');
+    allT.value = 'all'; allT.textContent = 'All types';
+    filterTypeSel.appendChild(allT);
+    typesForColumnFilter(filters.column).forEach(function(t){
+      var o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      filterTypeSel.appendChild(o);
+    });
+    // keep current selection if still valid, else reset to all
+    var stillValid = Array.prototype.some.call(filterTypeSel.options, function(o){ return o.value === current; });
+    filters.type = stillValid ? current : 'all';
+    filterTypeSel.value = filters.type;
+  }
+
+  filterColumnSel.addEventListener('change', function(){
+    filters.column = filterColumnSel.value;
+    populateTypeFilter();
+    renderAll();
+  });
+  filterPrioritySel.addEventListener('change', function(){
+    filters.priority = filterPrioritySel.value;
+    renderAll();
+  });
+  filterTypeSel.addEventListener('change', function(){
+    filters.type = filterTypeSel.value;
+    renderAll();
+  });
+  sortBySel.addEventListener('change', function(){
+    sortBy = sortBySel.value;
+    renderAll();
+  });
+  document.getElementById('clear-filters-btn').addEventListener('click', function(){
+    filters = { column: 'all', priority: 'all', type: 'all' };
+    populateFilterBar();
+    renderAll();
+  });
+
+  /* ---------------- View toggle ---------------- */
+  var boardEl = document.getElementById('board');
+  var listViewEl = document.getElementById('list-view');
+  var viewBoardBtn = document.getElementById('view-board-btn');
+  var viewListBtn = document.getElementById('view-list-btn');
+
+  function setView(mode){
+    viewMode = mode;
+    boardEl.classList.toggle('hidden', mode !== 'board');
+    listViewEl.classList.toggle('active', mode === 'list');
+    viewBoardBtn.classList.toggle('active', mode === 'board');
+    viewListBtn.classList.toggle('active', mode === 'list');
+    sortGroup.style.display = mode === 'list' ? 'flex' : 'none';
+  }
+  viewBoardBtn.addEventListener('click', function(){ setView('board'); });
+  viewListBtn.addEventListener('click', function(){ setView('list'); });
+
+  /* ---------------- Rendering: Board ---------------- */
   function renderBoard(){
     boardEl.innerHTML = '';
     COLUMNS.forEach(function(col){
+      if(filters.column !== 'all' && filters.column !== col.id) return;
       boardEl.appendChild(renderColumn(col));
     });
   }
@@ -642,10 +945,15 @@
       sub.textContent = col.sub;
       titleWrap.appendChild(sub);
     }
+
+    var allInCol = cardsForColumn(col.id);
+    var visibleInCol = allInCol.filter(cardMatchesFilters);
+
     var count = document.createElement('div');
     count.className = 'count';
-    var cards = cardsForColumn(col.id);
-    count.textContent = cards.length;
+    count.textContent = (filters.priority !== 'all' || filters.type !== 'all')
+      ? (visibleInCol.length + ' / ' + allInCol.length)
+      : String(allInCol.length);
     header.appendChild(titleWrap);
     header.appendChild(count);
     wrap.appendChild(header);
@@ -654,14 +962,21 @@
     drop.className = 'column-drop';
     drop.dataset.column = col.id;
 
-    if(cards.length === 0){
+    if(allInCol.length === 0){
       var hint = document.createElement('div');
       hint.className = 'empty-hint';
       hint.textContent = col.id === 'unsorted' ? 'Nothing parked here.' : 'Drop cards here.';
       drop.appendChild(hint);
+    } else if(visibleInCol.length === 0){
+      var hint2 = document.createElement('div');
+      hint2.className = 'empty-hint';
+      hint2.textContent = 'No cards match the current filters.';
+      drop.appendChild(hint2);
     } else {
-      cards.forEach(function(card){
-        drop.appendChild(renderCard(card));
+      allInCol.forEach(function(card){
+        var cardEl = renderCard(card, col);
+        if(!cardMatchesFilters(card)) cardEl.classList.add('filtered-out');
+        drop.appendChild(cardEl);
       });
     }
 
@@ -670,17 +985,31 @@
     return wrap;
   }
 
-  function renderCard(card){
+  function priorityColors(p){
+    var map = {
+      none:      { bg: 'var(--p-none-bg)', fg: 'var(--p-none)' },
+      urgent:    { bg: 'var(--p-urgent-bg)', fg: 'var(--p-urgent)' },
+      recurring: { bg: 'var(--p-recurring-bg)', fg: 'var(--p-recurring)' },
+      quick:     { bg: 'var(--p-quick-bg)', fg: 'var(--p-quick)' },
+      lp:        { bg: 'var(--p-lp-bg)', fg: 'var(--p-lp)' }
+    };
+    return map[p] || map.none;
+  }
+
+  function renderCard(card, col){
     var el = document.createElement('div');
-    el.className = 'card' + (card.done ? ' done' : '');
+    el.className = 'card';
     el.dataset.priority = card.priority;
     el.dataset.id = card.id;
     el.draggable = true;
 
+    var topRow = document.createElement('div');
+    topRow.className = 'card-top-row';
     var idTag = document.createElement('div');
     idTag.className = 'card-id';
     idTag.textContent = '#' + card.id.slice(-5);
-    el.appendChild(idTag);
+    topRow.appendChild(idTag);
+    el.appendChild(topRow);
 
     var text = document.createElement('div');
     text.className = 'card-text';
@@ -708,7 +1037,7 @@
     addDetail.addEventListener('click', function(){
       card.notes.push('');
       scheduleSave();
-      renderBoard();
+      renderAll();
       var sel = document.querySelector('.card[data-id="'+card.id+'"] .card-notes li:last-child .card-note-text');
       if(sel){ sel.focus(); }
     });
@@ -717,17 +1046,47 @@
     var meta = document.createElement('div');
     meta.className = 'card-meta-row';
 
-    var pill = document.createElement('button');
-    pill.className = 'priority-pill';
-    pill.textContent = PRIORITY_LABEL[card.priority];
-    pill.title = 'Click to cycle priority';
-    pill.addEventListener('click', function(){
-      var idx = PRIORITY_ORDER.indexOf(card.priority);
-      card.priority = PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
-      scheduleSave();
-      renderBoard();
+    // priority dropdown
+    var prioritySelect = document.createElement('select');
+    prioritySelect.className = 'priority-select';
+    PRIORITY_ORDER.forEach(function(p){
+      var o = document.createElement('option');
+      o.value = p; o.textContent = PRIORITY_LABEL[p];
+      if(p === card.priority) o.selected = true;
+      prioritySelect.appendChild(o);
     });
-    meta.appendChild(pill);
+    applyPriorityColor(prioritySelect, card.priority);
+    prioritySelect.addEventListener('change', function(){
+      card.priority = prioritySelect.value;
+      applyPriorityColor(prioritySelect, card.priority);
+      el.dataset.priority = card.priority;
+      scheduleSave();
+      renderAll();
+    });
+    prioritySelect.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+    meta.appendChild(prioritySelect);
+
+    // type dropdown, scoped to this card's column
+    var typeSelect = document.createElement('select');
+    typeSelect.className = 'type-select';
+    var blankOpt = document.createElement('option');
+    blankOpt.value = ''; blankOpt.textContent = '— type —';
+    typeSelect.appendChild(blankOpt);
+    var typeList = (col && col.types) ? col.types.slice() : [];
+    if(card.type && typeList.indexOf(card.type) === -1) typeList.push(card.type);
+    typeList.forEach(function(t){
+      var o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      if(t === card.type) o.selected = true;
+      typeSelect.appendChild(o);
+    });
+    typeSelect.addEventListener('change', function(){
+      card.type = typeSelect.value;
+      scheduleSave();
+      renderAll();
+    });
+    typeSelect.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+    meta.appendChild(typeSelect);
 
     var subInput = document.createElement('input');
     subInput.className = 'subbranch-input';
@@ -748,20 +1107,9 @@
     needsDetailBtn.addEventListener('click', function(){
       card.needsDetail = !card.needsDetail;
       scheduleSave();
-      renderBoard();
+      renderAll();
     });
     meta.appendChild(needsDetailBtn);
-
-    var doneBtn = document.createElement('button');
-    doneBtn.className = 'icon-btn done-toggle' + (card.done ? ' active' : '');
-    doneBtn.textContent = card.done ? '✓' : '○';
-    doneBtn.title = card.done ? 'Mark not done' : 'Mark done';
-    doneBtn.addEventListener('click', function(){
-      card.done = !card.done;
-      scheduleSave();
-      renderBoard();
-    });
-    meta.appendChild(doneBtn);
 
     var delBtn = document.createElement('button');
     delBtn.className = 'icon-btn delete-btn';
@@ -784,7 +1132,7 @@
         clearTimeout(disarmTimer);
         delete state.cards[card.id];
         scheduleSave();
-        renderBoard();
+        renderAll();
         showToast('Card deleted');
       }
     });
@@ -795,6 +1143,12 @@
     attachCardDrag(el, card);
 
     return el;
+  }
+
+  function applyPriorityColor(selectEl, priority){
+    var c = priorityColors(priority);
+    selectEl.style.background = c.bg;
+    selectEl.style.color = c.fg;
   }
 
   function renderNoteLine(card, idx, noteText){
@@ -817,14 +1171,85 @@
     rm.addEventListener('click', function(){
       card.notes.splice(idx, 1);
       scheduleSave();
-      renderBoard();
+      renderAll();
     });
     li.appendChild(rm);
 
     return li;
   }
 
-  /* ---------------- Drag & Drop ---------------- */
+  /* ---------------- Rendering: List ---------------- */
+  var listTbody = document.getElementById('list-tbody');
+  var listEmpty = document.getElementById('list-empty');
+
+  function sortComparator(a, b){
+    if(sortBy === 'priority'){
+      return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
+    }
+    if(sortBy === 'type'){
+      return (a.type || '').localeCompare(b.type || '');
+    }
+    if(sortBy === 'subbranch'){
+      return (a.subBranch || '').localeCompare(b.subBranch || '');
+    }
+    // newest
+    return b.order - a.order;
+  }
+
+  function renderList(){
+    listTbody.innerHTML = '';
+    var cards = getFilteredCards().sort(sortComparator);
+
+    if(cards.length === 0){
+      listEmpty.style.display = 'block';
+      return;
+    }
+    listEmpty.style.display = 'none';
+
+    cards.forEach(function(card){
+      var col = COLUMN_MAP[card.column];
+      var tr = document.createElement('tr');
+
+      tr.appendChild(td(col ? col.label : card.column));
+      tr.appendChild(td(card.type || '—'));
+
+      var prTd = document.createElement('td');
+      var prSpan = document.createElement('span');
+      prSpan.className = 'lv-priority';
+      var c = priorityColors(card.priority);
+      prSpan.style.background = c.bg;
+      prSpan.style.color = c.fg;
+      prSpan.textContent = PRIORITY_LABEL[card.priority];
+      prTd.appendChild(prSpan);
+      tr.appendChild(prTd);
+
+      tr.appendChild(td(card.subBranch || '—'));
+      tr.appendChild(td(card.text || '(empty)'));
+
+      var notesTd = document.createElement('td');
+      notesTd.className = 'lv-notes';
+      notesTd.textContent = card.notes.length ? card.notes.join(' · ') : '—';
+      tr.appendChild(notesTd);
+
+      tr.appendChild(td(card.needsDetail ? 'Yes' : ''));
+
+      listTbody.appendChild(tr);
+    });
+  }
+
+  function td(text){
+    var el = document.createElement('td');
+    el.textContent = text;
+    return el;
+  }
+
+  /* ---------------- Render everything ---------------- */
+  function renderAll(){
+    renderBoard();
+    renderList();
+  }
+
+  /* ---------------- Drag & Drop (board) ---------------- */
   var draggedId = null;
 
   function attachCardDrag(el, card){
@@ -853,7 +1278,6 @@
       e.dataTransfer.dropEffect = 'move';
       dropEl.classList.add('drag-over');
 
-      // remove existing markers within this column
       Array.prototype.forEach.call(dropEl.querySelectorAll('.drop-marker'), function(m){ m.remove(); });
 
       var afterEl = getCardAfterY(dropEl, e.clientY);
@@ -884,7 +1308,6 @@
       var card = state.cards[id];
       card.column = targetCol;
 
-      // compute new order value based on position among current siblings (excluding dragged card itself if present)
       siblingCards = siblingCards.filter(function(c){ return c.dataset.id !== id; });
 
       if(siblingCards.length === 0){
@@ -905,12 +1328,12 @@
 
       clearMarkers();
       scheduleSave();
-      renderBoard();
+      renderAll();
     });
   }
 
   function getCardAfterY(dropEl, y){
-    var cards = Array.prototype.slice.call(dropEl.querySelectorAll('.card:not(.dragging)'));
+    var cards = Array.prototype.slice.call(dropEl.querySelectorAll('.card:not(.dragging):not(.filtered-out)'));
     var closest = null;
     var closestOffset = -Infinity;
     cards.forEach(function(c){
@@ -923,6 +1346,52 @@
     });
     return closest;
   }
+
+  /* ---------------- CSV export ---------------- */
+  function csvEscape(val){
+    var s = String(val === undefined || val === null ? '' : val);
+    if(/[",\n]/.test(s)){
+      s = '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function exportCSV(){
+    var cards = getFilteredCards().sort(sortComparator);
+    if(cards.length === 0){
+      showToast('No cards to export with current filters');
+      return;
+    }
+    var header = ['ID','Branch','Type','Priority','Sub-Branch','Task','Notes / Log','Needs Detail'];
+    var rows = [header];
+    cards.forEach(function(card){
+      var col = COLUMN_MAP[card.column];
+      rows.push([
+        card.id,
+        col ? col.label : card.column,
+        card.type || '',
+        PRIORITY_LABEL[card.priority] || card.priority,
+        card.subBranch || '',
+        card.text || '',
+        card.notes.join(' | '),
+        card.needsDetail ? 'Yes' : ''
+      ]);
+    });
+    var csv = rows.map(function(r){ return r.map(csvEscape).join(','); }).join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url;
+    a.download = 'task-clutter-auditor-export-' + stamp + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showToast('Exported ' + cards.length + ' card' + (cards.length === 1 ? '' : 's') + ' to CSV');
+  }
+
+  document.getElementById('export-btn').addEventListener('click', exportCSV);
 
   /* ---------------- Toast ---------------- */
   var toastEl = document.getElementById('toast');
@@ -948,7 +1417,7 @@
     }
     parsed.forEach(function(c){ state.cards[c.id] = c; });
     scheduleSave();
-    renderBoard();
+    renderAll();
     showToast('Parsed ' + parsed.length + ' card' + (parsed.length === 1 ? '' : 's'));
   });
 
@@ -967,14 +1436,16 @@
     if(ok){
       state.cards = {};
       scheduleSave();
-      renderBoard();
+      renderAll();
       showToast('Board reset');
     }
   });
 
   /* ---------------- Init ---------------- */
   loadState();
-  renderBoard();
+  populateFilterBar();
+  setView('board');
+  renderAll();
 })();
 </script>
 
