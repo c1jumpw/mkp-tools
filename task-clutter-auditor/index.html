@@ -565,6 +565,7 @@
   }
   .icon-btn:hover{ background:rgba(0,0,0,.06); }
   .icon-btn.active{ color:var(--amber); }
+  .icon-btn.ongoing-toggle.active{ color:var(--accent-dim); }
   .icon-btn.delete-btn{ margin-left:auto; color:var(--text-dim); }
   .icon-btn.delete-btn.armed{
     color:#fff;
@@ -965,7 +966,7 @@
 <header>
   <div class="header-top">
     <div class="brand">
-      <span class="mark">MKP-TA v9</span>
+      <span class="mark">MKP-TA v10</span>
       <div>
         <h1>MKP Task Auditor</h1>
         <p>Paste your notes → parse → triage into branches → export to your workspace</p>
@@ -1011,6 +1012,7 @@
       <option value="similar">Similar (fuzzy)</option>
       <option value="incomplete">Incomplete</option>
       <option value="needsDetail">Needs Detail</option>
+      <option value="ongoing">Ongoing</option>
       <option value="any">Any flag</option>
     </select>
   </div>
@@ -1244,6 +1246,16 @@
           Supabase table) and an AI Report view + CSV export for
           quality-control review of everything AI has changed. See
           WIZARD ENGINE section for the shared modal implementation.
+     v10 (this file) — Added a manual "🔁 Ongoing" toggle per card
+          (next to the existing ⚑ Needs Detail flag), for marking a
+          card as an open-ended responsibility rather than a one-off
+          task — see newCard()'s comment for why this is a flag
+          rather than a Type value (composes with any type instead
+          of competing with it). Included in cardFlags(), the Flags
+          filter, List view, and CSV export automatically, same as
+          the other flags. "Recurring" (Priority) and "Reminder"
+          (Type, most branches) were already covered pre-v10 and are
+          unchanged.
    ================================================================ */
 
 (function(){
@@ -1410,6 +1422,11 @@
    * `collapsed: true` by default keeps newly-parsed boards compact —
    * see the file header's v5 note on why collapsed-by-default was
    * chosen over expanded-by-default.
+   * `ongoing: false` — a manually-toggled flag (v10) marking a card
+   * as an open-ended responsibility rather than a one-off task.
+   * Deliberately separate from `type` so it composes with any type
+   * instead of competing with it — e.g. a card can be type "Deal"
+   * AND ongoing at the same time.
    * @param {string} text - initial task text (may be '')
    * @param {string} column - id of the column this card starts in
    * @returns {object} new card
@@ -1423,6 +1440,7 @@
       subBranch: '',
       type: '',
       needsDetail: false,
+      ongoing: false,
       collapsed: true,
       column: column,
       order: Date.now() + Math.random()
@@ -1862,6 +1880,7 @@
     if(isSimilar(card)) out.push('Similar');
     if(isIncomplete(card)) out.push('Incomplete');
     if(card.needsDetail) out.push('Needs Detail');
+    if(card.ongoing) out.push('Ongoing');
     return out;
   }
 
@@ -1887,6 +1906,7 @@
       if(filters.flag === 'similar' && !isSimilar(card)) return false;
       if(filters.flag === 'incomplete' && !isIncomplete(card)) return false;
       if(filters.flag === 'needsDetail' && !card.needsDetail) return false;
+      if(filters.flag === 'ongoing' && !card.ongoing) return false;
       if(filters.flag === 'any' && cardFlags(card).length === 0) return false;
     }
     return true;
@@ -2328,6 +2348,17 @@
       renderAll();
     });
     meta.appendChild(needsDetailBtn);
+
+    var ongoingBtn = document.createElement('button');
+    ongoingBtn.className = 'icon-btn ongoing-toggle' + (card.ongoing ? ' active' : '');
+    ongoingBtn.textContent = '🔁';
+    ongoingBtn.title = card.ongoing ? 'Marked: ongoing responsibility (not a one-off)' : 'Mark: ongoing responsibility (not a one-off)';
+    ongoingBtn.addEventListener('click', function(){
+      card.ongoing = !card.ongoing;
+      scheduleSave();
+      renderAll();
+    });
+    meta.appendChild(ongoingBtn);
 
     var delBtn = document.createElement('button');
     delBtn.className = 'icon-btn delete-btn';
