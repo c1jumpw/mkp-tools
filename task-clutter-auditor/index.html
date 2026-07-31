@@ -798,7 +798,7 @@
 <header>
   <div class="header-top">
     <div class="brand">
-      <span class="mark">MKP-TA v7</span>
+      <span class="mark">MKP-TA v8</span>
       <div>
         <h1>MKP Task Auditor</h1>
         <p>Paste your notes → parse → triage into branches → export to your workspace</p>
@@ -866,7 +866,7 @@
     <button id="view-list-btn">List</button>
     <button id="view-log-btn">Paste Log</button>
   </div>
-  <button class="btn btn-ghost" id="ai-sort-btn" disabled title="Requires backend setup — see the setup guide to enable this">✨ AI Sort</button>
+  <button class="btn btn-ghost" id="ai-sort-btn" title="Ask Gemini to suggest a branch, type, and priority for cards still in a triage column (Inbox / Needs Clarification / Unsorted) — only fills in blanks, never overwrites your own choices">✨ AI Sort</button>
   <button class="btn btn-primary" id="export-btn">Export CSV</button>
 </div>
 
@@ -957,10 +957,13 @@
        to anyone who views this file's source. Do not rely on it to
        protect sensitive data. Real auth requires a server; see the
        migration notes inline near PIN_CODE below.
-     - The "AI Sort" feature is a stub (see AI SORT (STUB) section).
-       It is intentionally disabled until a backend exists to hold
-       the LLM API key securely — an API key can never be safely
-       embedded in a static client-side file like this one.
+     - The "AI Sort" feature (v8+) calls a Supabase Edge Function
+       (slug "smooth-processor", shown as "ai-sort" in the dashboard)
+       which holds the Gemini API key as a protected server secret
+       and calls Gemini on this app's behalf. The key is never
+       present in this file or sent to the browser — see the AI SORT
+       section for the full request/response shape and the
+       "fill gaps, don't overwrite" behavior.
 
    VERSION HISTORY (functional changes only)
      v1 — Initial build: parser, board, drag/drop, priority cycling,
@@ -997,6 +1000,15 @@
           a stub (see that section) — Supabase gets you off
           localStorage, but the LLM key still needs its own secure
           home (an Edge Function) before that feature can go live.
+     v8 (this file) — AI Sort is live: wired to a Supabase Edge
+          Function ("ai-sort" in the dashboard, actual URL slug
+          "smooth-processor" — the display name couldn't be renamed
+          after creation, see requestAiSortSuggestions() comment)
+          that calls Gemini 3.6 Flash server-side. Suggestions only
+          fill in blank/triage-column fields — see TRIAGE_COLUMNS and
+          applySuggestion() — so it can never silently overwrite a
+          card you've already manually filed. Gemini key lives only
+          as a Supabase Edge Function secret, never in this file.
    ================================================================ */
 
 (function(){
@@ -2437,46 +2449,131 @@
   document.getElementById('export-btn').addEventListener('click', exportCSV);
 
   /* ================================================================
-     AI SORT (STUB — intentionally disabled)
+     AI SORT (live — wired to the Supabase Edge Function "smooth-processor",
+     which is deployed under the display name "ai-sort" in the
+     dashboard; the URL slug is what actually matters for invocation
+     and could not be renamed after creation — see v8 changelog note)
      ----------------------------------------------------------------
-     WHY THIS IS A STUB, NOT A REAL FEATURE YET:
-     Calling an LLM (e.g. the Anthropic API) requires an API key, and
-     an API key can never be safely embedded in a static client-side
-     file like this one — anyone who views the page source could
-     read it and rack up charges on your account. The only safe way
-     to do this is to hold the key on a server and have this app call
-     that server instead of the LLM directly.
+     WHAT IT DOES:
+     Sends the text of the currently *filtered* cards (so the user
+     can scope a request — e.g. filter to "Needs Clarification" only
+     — before clicking) to the ai-sort Edge Function, which asks
+     Gemini to suggest {column, type, priority} for each. The Edge
+     Function holds the Gemini API key as a protected server secret;
+     this file never sees it.
 
-     TODO (backend migration — see setup guide):
-       1. Stand up a small serverless function (e.g. a Supabase Edge
-          Function) that holds the Anthropic API key as a protected
-          server-side secret (never sent to the browser).
-       2. That function accepts a batch of card texts, calls the
-          Anthropic API asking it to suggest {column, type, priority}
-          for each, and returns the suggestions as JSON.
-       3. Replace the body of requestAiSortSuggestions() below with a
-          fetch() to that function's URL — no key required in this
-          file, ever.
-       4. Enable the button: remove the `disabled` attribute on
-          #ai-sort-btn in the HTML above once step 3 is live.
+     WHY SUGGESTIONS ONLY FILL GAPS, NEVER OVERWRITE:
+     A card only has its `column` changed if it's currently sitting
+     in one of the TRIAGE_COLUMNS (Inbox / Needs Clarification /
+     Unsorted) — i.e. it hasn't been manually filed into a real
+     branch yet. `type` and `priority` are only set if they're
+     currently blank/default. This means running AI Sort repeatedly,
+     or on a mixed batch of triaged and untriaged cards, can never
+     silently undo a decision you already made by hand.
      ================================================================ */
 
+  // Columns considered "not yet filed" — AI Sort is allowed to move
+  // a card OUT of one of these into a suggested real branch, but
+  // will never move a card that's already sitting in a real branch.
+  var TRIAGE_COLUMNS = ['inbox', 'clarify', 'unsorted'];
+
   /**
-   * PLACEHOLDER — not yet wired to any network call. Once the
-   * backend exists (see TODO block above), this will POST the text
-   * of unsorted/needs-clarification cards to a Supabase Edge
-   * Function, receive back suggested {column, type, priority} per
-   * card, and apply them as an editable suggestion (never silently
-   * overwriting the user's own choices).
+   * Applies one AI suggestion to one card, respecting the "fill gaps,
+   * don't overwrite" rule described above.
+   * @param {object} card - the live card object (mutated in place)
+   * @param {object} suggestion - { column, type, priority } from the Edge Function
+   * @returns {boolean} true if anything on the card actually changed
+   */
+  function applySuggestion(card, suggestion){
+    var changed = false;
+
+    if(TRIAGE_COLUMNS.indexOf(card.column) !== -1 && COLUMN_MAP[suggestion.column]){
+      if(card.column !== suggestion.column){
+        card.column = suggestion.column;
+        changed = true;
+      }
+    }
+
+    // Only accept the suggested type if it's actually valid for
+    // wherever the card ended up (its column may have just changed
+    // above) — guards against Gemini suggesting a type that belongs
+    // to a different branch's vocabulary.
+    var col = COLUMN_MAP[card.column];
+    if(!card.type && suggestion.type && col && col.types.indexOf(suggestion.type) !== -1){
+      card.type = suggestion.type;
+      changed = true;
+    }
+
+    if(card.priority === 'none' && PRIORITY_ORDER.indexOf(suggestion.priority) !== -1){
+      card.priority = suggestion.priority;
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  /**
+   * Calls the ai-sort Edge Function with the given cards' text plus
+   * the app's full column/type/priority config (so Gemini's
+   * suggestions are always constrained to values the app actually
+   * understands), then applies the returned suggestions via
+   * applySuggestion(). Disables the button and shows a "Sorting…"
+   * label for the duration of the request so it's clear something's
+   * happening — these calls typically take a few seconds.
+   * Failure modes (network error, Edge Function error, Gemini error,
+   * malformed response) are all caught and surfaced as a toast
+   * rather than thrown, so a bad request never leaves the button
+   * stuck disabled or the UI in an inconsistent state.
    * @param {object[]} cards - cards to request suggestions for
+   *   (typically getFilteredCards(), so filters double as scoping)
    * @returns {Promise<void>}
    */
-  function requestAiSortSuggestions(cards){
-    // Not implemented — see TODO block above. Left as a named,
-    // documented stub rather than deleted, so the intended shape of
-    // the feature is clear once backend wiring begins.
-    showToast('AI Sort needs backend setup first — see the setup guide');
-    return Promise.resolve();
+  async function requestAiSortSuggestions(cards){
+    if(cards.length === 0){
+      showToast('No cards match the current filters to sort');
+      return;
+    }
+
+    var btn = document.getElementById('ai-sort-btn');
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '✨ Sorting…';
+
+    var payload = {
+      cards: cards.map(function(c){ return { id: c.id, text: c.text }; }),
+      columns: COLUMNS.map(function(c){ return { id: c.id, label: c.label, types: c.types }; }),
+      priorities: PRIORITY_ORDER
+    };
+
+    try{
+      // supabaseClient.functions.invoke() targets the function by its
+      // URL slug — "smooth-processor" here, NOT the cosmetic display
+      // name "ai-sort" shown in the dashboard (the two diverged when
+      // the display name was changed after creation; the slug is
+      // permanent). If this function is ever deleted and recreated,
+      // update this string to match the new slug.
+      var res = await supabaseClient.functions.invoke('smooth-processor', { body: payload });
+      if(res.error) throw res.error;
+
+      var suggestions = (res.data && res.data.suggestions) || [];
+      var appliedCount = 0;
+      suggestions.forEach(function(sugg){
+        var card = state.cards[sugg.id];
+        if(!card) return; // card may have been deleted between request and response
+        if(applySuggestion(card, sugg)) appliedCount++;
+      });
+
+      scheduleSave();
+      renderAll();
+      showToast(appliedCount > 0
+        ? 'AI Sort updated ' + appliedCount + ' card' + (appliedCount === 1 ? '' : 's')
+        : 'AI Sort ran, but every card already had its column/type/priority set');
+    }catch(err){
+      showToast('AI Sort failed — ' + (err && err.message ? err.message : 'check your connection'));
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   }
 
   document.getElementById('ai-sort-btn').addEventListener('click', function(){
