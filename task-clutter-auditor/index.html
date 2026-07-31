@@ -588,7 +588,7 @@
   #list-view.active{ display:block; }
   #board.hidden{ display:none; }
 
-  table#list-table{
+  table#list-table, table#report-table{
     width:100%;
     border-collapse:collapse;
     font-size:12.5px;
@@ -597,7 +597,7 @@
     border-radius:7px;
     overflow:hidden;
   }
-  table#list-table thead th{
+  table#list-table thead th, table#report-table thead th{
     text-align:left;
     font-family:var(--mono);
     font-size:10px;
@@ -609,14 +609,14 @@
     border-bottom:1px solid var(--col-border);
     white-space:nowrap;
   }
-  table#list-table tbody td{
+  table#list-table tbody td, table#report-table tbody td{
     padding:8px 10px;
     border-bottom:1px solid var(--col-border);
     color:var(--text-light);
     vertical-align:top;
   }
-  table#list-table tbody tr:hover{ background:rgba(255,255,255,.03); }
-  table#list-table tbody tr:last-child td{ border-bottom:none; }
+  table#list-table tbody tr:hover, table#report-table tbody tr:hover{ background:rgba(255,255,255,.03); }
+  table#list-table tbody tr:last-child td, table#report-table tbody tr:last-child td{ border-bottom:none; }
   .lv-branch{
     display:inline-flex;
     align-items:center;
@@ -688,6 +688,173 @@
     max-height:180px;
     overflow-y:auto;
   }
+
+  /* ---------- Wizard modal (AI Sort Wizard + Spell Check) ---------- */
+  #wizard-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(10,13,18,.72);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:90;
+    padding:20px;
+  }
+  #wizard-overlay.active{ display:flex; }
+  .wizard-card{
+    background:var(--col-bg);
+    border:1px solid var(--col-border);
+    border-radius:10px;
+    width:100%;
+    max-width:520px;
+    max-height:90vh;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .wizard-header{
+    padding:14px 18px;
+    border-bottom:1px solid var(--col-border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .wizard-header h3{ margin:0; font-size:14px; }
+  .wizard-progress{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-light-dim);
+  }
+  .wizard-close{
+    background:none; border:none; color:var(--text-light-dim);
+    font-size:16px; padding:2px 6px;
+  }
+  .wizard-close:hover{ color:var(--text-light); }
+  .wizard-body{
+    padding:16px 18px;
+    overflow-y:auto;
+    flex:1;
+  }
+  .wizard-orig-label, .wizard-suggest-label{
+    font-family:var(--mono);
+    font-size:9.5px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--text-light-dim);
+    margin-bottom:4px;
+  }
+  .wizard-orig-text{
+    background:#0f141b;
+    border:1px solid var(--col-border);
+    border-radius:5px;
+    padding:9px 11px;
+    font-size:12.5px;
+    color:var(--text-light);
+    margin-bottom:14px;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .wizard-suggest-text{
+    background:var(--paper);
+    color:var(--text-dark);
+    border:1px solid var(--paper-edge);
+    border-radius:5px;
+    padding:9px 11px;
+    font-size:12.5px;
+    width:100%;
+    resize:vertical;
+    min-height:52px;
+    font-family:var(--sans);
+    margin-bottom:14px;
+  }
+  .wizard-reason{
+    font-size:11px;
+    color:var(--text-light-dim);
+    font-style:italic;
+    margin-bottom:14px;
+  }
+  .wizard-field-row{
+    display:flex;
+    gap:10px;
+    margin-bottom:6px;
+    flex-wrap:wrap;
+  }
+  .wizard-field{
+    flex:1;
+    min-width:130px;
+  }
+  .wizard-field label{
+    display:block;
+    font-family:var(--mono);
+    font-size:9.5px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--text-light-dim);
+    margin-bottom:3px;
+  }
+  .wizard-field select{
+    width:100%;
+    font-size:12px;
+    background:#0f141b;
+    color:var(--text-light);
+    border:1px solid var(--col-border);
+    border-radius:4px;
+    padding:6px 7px;
+  }
+  .wizard-footer{
+    padding:12px 18px;
+    border-top:1px solid var(--col-border);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+  }
+  .wizard-summary{
+    padding:30px 18px;
+    text-align:center;
+  }
+  .wizard-summary .big{
+    font-size:28px;
+    font-weight:700;
+    color:var(--accent);
+    margin-bottom:4px;
+  }
+  .wizard-summary p{
+    color:var(--text-light-dim);
+    font-size:12.5px;
+    margin:2px 0;
+  }
+
+  /* ---------- AI Report view ---------- */
+  #report-view{
+    flex:1;
+    overflow:auto;
+    padding:16px 20px;
+    background:var(--board);
+    display:none;
+  }
+  #report-view.active{ display:block; }
+  #report-empty{
+    text-align:center;
+    padding:30px;
+    color:var(--text-light-dim);
+    font-size:12.5px;
+  }
+  .report-source-badge{
+    font-family:var(--mono);
+    font-size:9px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:20px;
+    white-space:nowrap;
+    display:inline-block;
+  }
+  .report-source-badge.auto{ background:#dde7f6; color:#3f5f9e; }
+  .report-source-badge.wizard{ background:#e3ddf4; color:#5e4ea3; }
+  .report-source-badge.spell{ background:#d9f0e6; color:#2e7d5b; }
+  .report-diff{ font-size:11.5px; }
+  .report-diff .before{ color:#c8534d; text-decoration:line-through; opacity:.8; }
+  .report-diff .after{ color:#5cae4a; }
 
   /* ---------- Toast ---------- */
   #toast{
@@ -798,7 +965,7 @@
 <header>
   <div class="header-top">
     <div class="brand">
-      <span class="mark">MKP-TA v8</span>
+      <span class="mark">MKP-TA v9</span>
       <div>
         <h1>MKP Task Auditor</h1>
         <p>Paste your notes → parse → triage into branches → export to your workspace</p>
@@ -865,8 +1032,11 @@
     <button id="view-board-btn" class="active">Board</button>
     <button id="view-list-btn">List</button>
     <button id="view-log-btn">Paste Log</button>
+    <button id="view-report-btn">AI Report</button>
   </div>
   <button class="btn btn-ghost" id="ai-sort-btn" title="Ask Gemini to suggest a branch, type, and priority for cards still in a triage column (Inbox / Needs Clarification / Unsorted) — only fills in blanks, never overwrites your own choices">✨ AI Sort</button>
+  <button class="btn btn-ghost" id="ai-sort-wizard-btn" title="Same suggestions as AI Sort, but reviewed one card at a time — you confirm, adjust, or skip each before anything changes">🧭 AI Sort Wizard</button>
+  <button class="btn btn-ghost" id="spell-check-btn" title="Ask Gemini to proofread the currently filtered cards for spelling/grammar — you approve each correction before it's applied">🔤 Spell Check</button>
   <button class="btn btn-primary" id="export-btn">Export CSV</button>
 </div>
 
@@ -901,6 +1071,53 @@
 <div id="log-view">
   <div id="log-empty" style="display:none;">Nothing pasted yet. Paste notes above and hit "Parse notes" — every paste is kept here automatically.</div>
   <div id="log-list"></div>
+</div>
+
+<!-- ============================================================
+     AI REPORT
+     Read-only audit log of every change AI Sort (auto or wizard-
+     confirmed) and Spell Check have made — before/after value,
+     which field, which source, when — for quality control review.
+     ============================================================ -->
+<div id="report-view">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+    <div style="font-family:var(--mono); font-size:11px; color:var(--text-light-dim); letter-spacing:.03em;">
+      Every change AI Sort / AI Sort Wizard / Spell Check has made — for quality control review.
+    </div>
+    <button class="btn btn-ghost btn-sm" id="export-report-btn">Export Report CSV</button>
+  </div>
+  <div id="report-empty" style="display:none;">No AI changes logged yet. Run AI Sort, the AI Sort Wizard, or Spell Check to see a record here.</div>
+  <table id="report-table" style="display:none;">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Source</th>
+        <th>Card</th>
+        <th>Field</th>
+        <th>Change</th>
+      </tr>
+    </thead>
+    <tbody id="report-tbody"></tbody>
+  </table>
+</div>
+
+<!-- ============================================================
+     WIZARD MODAL — shared shell for AI Sort Wizard and Spell Check.
+     One step is shown at a time; content inside .wizard-body is
+     swapped by JS depending on which wizard is active.
+     ============================================================ -->
+<div id="wizard-overlay">
+  <div class="wizard-card">
+    <div class="wizard-header">
+      <h3 id="wizard-title">Wizard</h3>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="wizard-progress" id="wizard-progress"></span>
+        <button class="wizard-close" id="wizard-close-btn" title="Close">✕</button>
+      </div>
+    </div>
+    <div class="wizard-body" id="wizard-body"></div>
+    <div class="wizard-footer" id="wizard-footer"></div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -964,6 +1181,15 @@
        present in this file or sent to the browser — see the AI SORT
        section for the full request/response shape and the
        "fill gaps, don't overwrite" behavior.
+     - v9 adds two more ways to use that same Edge Function (no new
+       backend infra): a step-through AI SORT WIZARD that requires
+       explicit per-card confirmation before anything changes, and
+       SPELL CHECK, a similarly reviewed proofreading pass. Both
+       share one modal (see WIZARD ENGINE) and both log every applied
+       change to state.aiChangeLog for review in the AI REPORT view.
+       The Edge Function itself now branches on a `mode` field
+       ('sort' | 'spellcheck') in the request body — see the updated
+       index.ts given in the v9 setup guide.
 
    VERSION HISTORY (functional changes only)
      v1 — Initial build: parser, board, drag/drop, priority cycling,
@@ -1009,6 +1235,15 @@
           applySuggestion() — so it can never silently overwrite a
           card you've already manually filed. Gemini key lives only
           as a Supabase Edge Function secret, never in this file.
+     v9 (this file) — Added AI Sort Wizard (step-through, per-card
+          confirm/adjust/skip before anything changes) and Spell
+          Check (same review pattern, proofreads task text) — both
+          reuse the existing Edge Function via a new `mode` field,
+          no new backend setup required. Added a durable AI change
+          log (state.aiChangeLog, synced to a new `ai_change_log`
+          Supabase table) and an AI Report view + CSV export for
+          quality-control review of everything AI has changed. See
+          WIZARD ENGINE section for the shared modal implementation.
    ================================================================ */
 
 (function(){
@@ -1122,14 +1357,19 @@
   var AUTOSAVE_DEBOUNCE = 400;
 
   /* ---------------- State ----------------
-     state.cards    — id-keyed map of every task card on the board.
-     state.pasteLog — array of every raw paste ever run through the
-                      parser, oldest first. This is the "master log"
-                      safety net: if the parser mangles something or
-                      you delete a card by mistake, the original
-                      unparsed text is still here and can be
-                      re-parsed. Entries are never auto-deleted. */
-  var state = { cards: {}, pasteLog: [] };
+     state.cards       — id-keyed map of every task card on the board.
+     state.pasteLog     — array of every raw paste ever run through the
+                          parser, oldest first. This is the "master log"
+                          safety net: if the parser mangles something or
+                          you delete a card by mistake, the original
+                          unparsed text is still here and can be
+                          re-parsed. Entries are never auto-deleted.
+     state.aiChangeLog — array of every change AI Sort (auto or
+                          wizard-confirmed) and Spell Check have made,
+                          for quality-control review in the AI Report
+                          view. Entries are never auto-deleted either —
+                          this is meant to be a durable audit trail. */
+  var state = { cards: {}, pasteLog: [], aiChangeLog: [] };
   var filters = { column: 'all', priority: 'all', type: 'all', search: '', flag: 'all' };
   var viewMode = 'board'; // 'board' | 'list'
   var sortBy = 'priority';
@@ -1138,6 +1378,31 @@
   function makeId(){
     idCounter += 1;
     return 'c' + Date.now().toString(36) + idCounter.toString(36);
+  }
+
+  /**
+   * Records one field-level change to the AI change log, for the
+   * AI Report view / CSV export. Called by applySuggestion() (auto
+   * AI Sort and AI Sort Wizard confirmations) and by the Spell Check
+   * wizard's Accept action. Does nothing if before/after are
+   * identical (no-op changes aren't worth logging).
+   * @param {string} cardId
+   * @param {'column'|'type'|'priority'|'text'} field
+   * @param {string} before
+   * @param {string} after
+   * @param {'ai-sort-auto'|'ai-sort-wizard'|'spell-check'} source
+   */
+  function logAiChange(cardId, field, before, after, source){
+    if(before === after) return;
+    state.aiChangeLog.push({
+      id: makeId(),
+      cardId: cardId,
+      field: field,
+      beforeValue: before,
+      afterValue: after,
+      source: source,
+      timestamp: Date.now()
+    });
   }
 
   /**
@@ -1228,6 +1493,17 @@
     var logRows = state.pasteLog.map(function(entry){
       return { id: entry.id, raw_text: entry.rawText, created_at: new Date(entry.timestamp).toISOString() };
     });
+    var changeLogRows = state.aiChangeLog.map(function(entry){
+      return {
+        id: entry.id,
+        card_id: entry.cardId,
+        field: entry.field,
+        before_value: entry.beforeValue,
+        after_value: entry.afterValue,
+        source: entry.source,
+        created_at: new Date(entry.timestamp).toISOString()
+      };
+    });
 
     // Build the delete-stale-rows filter: remove any `cards` row
     // whose id isn't in the current board. Supabase JS needs the
@@ -1248,8 +1524,11 @@
     var upsertLog = logRows.length > 0
       ? supabaseClient.from('paste_log').upsert(logRows)
       : Promise.resolve({ error: null });
+    var upsertChangeLog = changeLogRows.length > 0
+      ? supabaseClient.from('ai_change_log').upsert(changeLogRows)
+      : Promise.resolve({ error: null });
 
-    Promise.all([upsertCards, deleteStaleCards, upsertLog]).then(function(results){
+    Promise.all([upsertCards, deleteStaleCards, upsertLog, upsertChangeLog]).then(function(results){
       var firstError = results.map(function(r){ return r && r.error; }).filter(Boolean)[0];
       if(firstError) throw firstError;
       note.textContent = 'synced ' + new Date().toLocaleTimeString();
@@ -1275,12 +1554,15 @@
 
     var cardsQuery = supabaseClient.from('cards').select('*');
     var logQuery = supabaseClient.from('paste_log').select('*').order('created_at', { ascending: true });
+    var changeLogQuery = supabaseClient.from('ai_change_log').select('*').order('created_at', { ascending: true });
 
-    return Promise.all([cardsQuery, logQuery]).then(function(results){
+    return Promise.all([cardsQuery, logQuery, changeLogQuery]).then(function(results){
       var cardsRes = results[0];
       var logRes = results[1];
+      var changeLogRes = results[2];
       if(cardsRes.error) throw cardsRes.error;
       if(logRes.error) throw logRes.error;
+      if(changeLogRes.error) throw changeLogRes.error;
 
       var cardsMap = {};
       (cardsRes.data || []).forEach(function(row){
@@ -1297,7 +1579,19 @@
         };
       });
 
-      state = { cards: cardsMap, pasteLog: pasteLog };
+      var aiChangeLog = (changeLogRes.data || []).map(function(row){
+        return {
+          id: row.id,
+          cardId: row.card_id,
+          field: row.field,
+          beforeValue: row.before_value,
+          afterValue: row.after_value,
+          source: row.source,
+          timestamp: new Date(row.created_at).getTime()
+        };
+      });
+
+      state = { cards: cardsMap, pasteLog: pasteLog, aiChangeLog: aiChangeLog };
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* non-fatal */ }
       note.textContent = 'loaded from Supabase';
     }).catch(function(err){
@@ -1321,6 +1615,7 @@
         if(parsed && parsed.cards){
           state = parsed;
           if(!state.pasteLog) state.pasteLog = [];
+          if(!state.aiChangeLog) state.aiChangeLog = [];
         }
       }
     }catch(e){ /* ignore corrupt storage — app just starts empty */ }
@@ -1728,32 +2023,38 @@
   var boardEl = document.getElementById('board');
   var listViewEl = document.getElementById('list-view');
   var logViewEl = document.getElementById('log-view');
+  var reportViewEl = document.getElementById('report-view');
   var viewBoardBtn = document.getElementById('view-board-btn');
   var viewListBtn = document.getElementById('view-list-btn');
   var viewLogBtn = document.getElementById('view-log-btn');
+  var viewReportBtn = document.getElementById('view-report-btn');
 
   /**
-   * Switches between the three top-level views: Board (kanban),
-   * List (flat filtered/sortable table), and Paste Log (raw paste
-   * history). Only one is visible at a time; the filter/sort
-   * controls that don't apply to a given view (e.g. Sort, which is
-   * List-only) are hidden rather than left active-but-ignored, to
-   * avoid confusing the user about what's currently affecting them.
-   * @param {'board'|'list'|'log'} mode
+   * Switches between the four top-level views: Board (kanban),
+   * List (flat filtered/sortable table), Paste Log (raw paste
+   * history), and AI Report (quality-control audit trail). Only one
+   * is visible at a time; the filter/sort controls that don't apply
+   * to a given view (e.g. Sort, which is List-only) are hidden
+   * rather than left active-but-ignored, to avoid confusing the user
+   * about what's currently affecting them.
+   * @param {'board'|'list'|'log'|'report'} mode
    */
   function setView(mode){
     viewMode = mode;
     boardEl.classList.toggle('hidden', mode !== 'board');
     listViewEl.classList.toggle('active', mode === 'list');
     logViewEl.classList.toggle('active', mode === 'log');
+    reportViewEl.classList.toggle('active', mode === 'report');
     viewBoardBtn.classList.toggle('active', mode === 'board');
     viewListBtn.classList.toggle('active', mode === 'list');
     viewLogBtn.classList.toggle('active', mode === 'log');
+    viewReportBtn.classList.toggle('active', mode === 'report');
     sortGroup.style.display = mode === 'list' ? 'flex' : 'none';
   }
   viewBoardBtn.addEventListener('click', function(){ setView('board'); });
   viewListBtn.addEventListener('click', function(){ setView('list'); });
   viewLogBtn.addEventListener('click', function(){ setView('log'); renderLog(); });
+  viewReportBtn.addEventListener('click', function(){ setView('report'); renderReport(); });
 
   /* ---------------- Rendering: Board ---------------- */
   function renderBoard(){
@@ -2286,6 +2587,121 @@
     });
   }
 
+  /* ---------------- Rendering: AI Report ---------------- */
+  var reportTbody = document.getElementById('report-tbody');
+  var reportTable = document.getElementById('report-table');
+  var reportEmptyEl = document.getElementById('report-empty');
+
+  /**
+   * Minimal HTML-escaping for text interpolated via innerHTML (used
+   * only for the before/after diff cells below, since those need the
+   * "→" separator styled with spans). Everything else in this file
+   * uses textContent instead, which doesn't need escaping.
+   * @param {*} str
+   * @returns {string}
+   */
+  function escapeHtml(str){
+    return String(str === undefined || str === null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  var SOURCE_LABELS = {
+    'ai-sort-auto': { label: 'AI Sort', cls: 'auto' },
+    'ai-sort-wizard': { label: 'Sort Wizard', cls: 'wizard' },
+    'spell-check': { label: 'Spell Check', cls: 'spell' }
+  };
+
+  /**
+   * Renders the AI Report view: every logged change, newest first,
+   * with a colored source badge and a before → after diff. Purely
+   * read-only — this is an audit trail, not an undo mechanism (see
+   * TODO below).
+   * TODO (possible enhancement): add a per-row "Undo" action that
+   * reverses beforeValue/afterValue on the live card. Not built yet
+   * — keeping this view strictly read-only for now avoids the
+   * complexity of handling undo when a card's since been further
+   * edited or deleted.
+   */
+  function renderReport(){
+    reportTbody.innerHTML = '';
+    var entries = state.aiChangeLog.slice().sort(function(a, b){ return b.timestamp - a.timestamp; });
+
+    if(entries.length === 0){
+      reportTable.style.display = 'none';
+      reportEmptyEl.style.display = 'block';
+      return;
+    }
+    reportTable.style.display = '';
+    reportEmptyEl.style.display = 'none';
+
+    entries.forEach(function(entry){
+      var tr = document.createElement('tr');
+      tr.appendChild(td(new Date(entry.timestamp).toLocaleString()));
+
+      var srcTd = document.createElement('td');
+      var srcInfo = SOURCE_LABELS[entry.source] || { label: entry.source, cls: 'auto' };
+      var badge = document.createElement('span');
+      badge.className = 'report-source-badge ' + srcInfo.cls;
+      badge.textContent = srcInfo.label;
+      srcTd.appendChild(badge);
+      tr.appendChild(srcTd);
+
+      var card = state.cards[entry.cardId];
+      var cardLabel = '#' + entry.cardId.slice(-5) + (card ? ' — ' + (card.text || '(blank)').slice(0, 40) : ' (card since deleted)');
+      tr.appendChild(td(cardLabel));
+
+      tr.appendChild(td(entry.field));
+
+      var diffTd = document.createElement('td');
+      diffTd.className = 'report-diff';
+      diffTd.innerHTML = '<span class="before">' + escapeHtml(entry.beforeValue) + '</span> → <span class="after">' + escapeHtml(entry.afterValue) + '</span>';
+      tr.appendChild(diffTd);
+
+      reportTbody.appendChild(tr);
+    });
+  }
+
+  /**
+   * Exports the full AI change log (not filtered — this is a QC
+   * audit trail, so the export intentionally ignores the board's
+   * branch/priority/type filters) to a downloadable CSV.
+   */
+  function exportReportCSV(){
+    var entries = state.aiChangeLog.slice().sort(function(a, b){ return b.timestamp - a.timestamp; });
+    if(entries.length === 0){
+      showToast('No AI changes to export yet');
+      return;
+    }
+    var header = ['Timestamp', 'Source', 'Card ID', 'Field', 'Before', 'After'];
+    var rows = [header];
+    entries.forEach(function(e){
+      rows.push([
+        new Date(e.timestamp).toISOString(),
+        SOURCE_LABELS[e.source] ? SOURCE_LABELS[e.source].label : e.source,
+        e.cardId,
+        e.field,
+        e.beforeValue,
+        e.afterValue
+      ]);
+    });
+    var csv = rows.map(function(r){ return r.map(csvEscape).join(','); }).join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.href = url;
+    a.download = 'mkp-task-auditor-ai-report-' + stamp + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showToast('Exported ' + entries.length + ' logged change' + (entries.length === 1 ? '' : 's'));
+  }
+
+  document.getElementById('export-report-btn').addEventListener('click', exportReportCSV);
+
   /* ---------------- Render everything ---------------- */
   /**
    * Master render pass — recomputes duplicate/similar flags once,
@@ -2299,6 +2715,7 @@
     renderBoard();
     renderList();
     renderLog();
+    renderReport();
   }
 
   /* ---------------- Drag & Drop (board) ---------------- */
@@ -2479,16 +2896,19 @@
 
   /**
    * Applies one AI suggestion to one card, respecting the "fill gaps,
-   * don't overwrite" rule described above.
+   * don't overwrite" rule described above, and logging each field it
+   * actually changes to the AI change log for later review.
    * @param {object} card - the live card object (mutated in place)
    * @param {object} suggestion - { column, type, priority } from the Edge Function
+   * @param {'ai-sort-auto'|'ai-sort-wizard'} source - who applied this, for the log
    * @returns {boolean} true if anything on the card actually changed
    */
-  function applySuggestion(card, suggestion){
+  function applySuggestion(card, suggestion, source){
     var changed = false;
 
     if(TRIAGE_COLUMNS.indexOf(card.column) !== -1 && COLUMN_MAP[suggestion.column]){
       if(card.column !== suggestion.column){
+        logAiChange(card.id, 'column', card.column, suggestion.column, source);
         card.column = suggestion.column;
         changed = true;
       }
@@ -2500,11 +2920,13 @@
     // to a different branch's vocabulary.
     var col = COLUMN_MAP[card.column];
     if(!card.type && suggestion.type && col && col.types.indexOf(suggestion.type) !== -1){
+      logAiChange(card.id, 'type', card.type || '(blank)', suggestion.type, source);
       card.type = suggestion.type;
       changed = true;
     }
 
-    if(card.priority === 'none' && PRIORITY_ORDER.indexOf(suggestion.priority) !== -1){
+    if(card.priority === 'none' && PRIORITY_ORDER.indexOf(suggestion.priority) !== -1 && suggestion.priority !== 'none'){
+      logAiChange(card.id, 'priority', card.priority, suggestion.priority, source);
       card.priority = suggestion.priority;
       changed = true;
     }
@@ -2540,6 +2962,7 @@
     btn.textContent = '✨ Sorting…';
 
     var payload = {
+      mode: 'sort',
       cards: cards.map(function(c){ return { id: c.id, text: c.text }; }),
       columns: COLUMNS.map(function(c){ return { id: c.id, label: c.label, types: c.types }; }),
       priorities: PRIORITY_ORDER
@@ -2560,7 +2983,7 @@
       suggestions.forEach(function(sugg){
         var card = state.cards[sugg.id];
         if(!card) return; // card may have been deleted between request and response
-        if(applySuggestion(card, sugg)) appliedCount++;
+        if(applySuggestion(card, sugg, 'ai-sort-auto')) appliedCount++;
       });
 
       scheduleSave();
@@ -2578,6 +3001,407 @@
 
   document.getElementById('ai-sort-btn').addEventListener('click', function(){
     requestAiSortSuggestions(getFilteredCards());
+  });
+
+  /* ================================================================
+     WIZARD ENGINE (shared by AI Sort Wizard and Spell Check)
+     ----------------------------------------------------------------
+     A single step-through modal, reused for two different review
+     flows. `wizardState.kind` ('sort' | 'spellcheck') determines how
+     renderWizardStep() builds each step's content. Both flows apply
+     their change to the live card object immediately on Confirm/
+     Accept (not batched), but the actual save (scheduleSave +
+     renderAll) only happens once, when the wizard closes — either by
+     finishing naturally or via the ✕ button — so closing early never
+     loses already-confirmed changes, and the board doesn't re-render
+     behind the modal on every single step.
+     ================================================================ */
+
+  var wizardState = { kind: null, items: [], index: 0, appliedCount: 0, skippedCount: 0 };
+
+  var wizardOverlayEl = document.getElementById('wizard-overlay');
+  var wizardTitleEl = document.getElementById('wizard-title');
+  var wizardProgressEl = document.getElementById('wizard-progress');
+  var wizardBodyEl = document.getElementById('wizard-body');
+  var wizardFooterEl = document.getElementById('wizard-footer');
+
+  /**
+   * Closes the wizard modal and persists whatever was confirmed
+   * during the session (see file section header for why saving is
+   * deferred to this single point rather than per-step).
+   */
+  function closeWizard(){
+    wizardOverlayEl.classList.remove('active');
+    scheduleSave();
+    renderAll();
+  }
+  document.getElementById('wizard-close-btn').addEventListener('click', closeWizard);
+
+  /**
+   * Renders the current wizard step (or the summary screen once
+   * every item has been reviewed). Called after every Confirm/Skip/
+   * Accept action to advance, and once to open the wizard initially.
+   * Auto-skips items whose card was deleted from the board mid-
+   * session (e.g. the user closed the wizard, deleted a card, then
+   * — not possible via UI today, but defensive against future
+   * concurrent-tab use once real-time sync exists) rather than
+   * erroring on a missing card.
+   */
+  function renderWizardStep(){
+    wizardBodyEl.innerHTML = '';
+    wizardFooterEl.innerHTML = '';
+
+    // Summary screen once every item has been stepped through.
+    if(wizardState.index >= wizardState.items.length){
+      wizardProgressEl.textContent = '';
+      wizardTitleEl.textContent = (wizardState.kind === 'sort' ? 'AI Sort Wizard' : 'Spell Check') + ' — done';
+
+      var summary = document.createElement('div');
+      summary.className = 'wizard-summary';
+      var big = document.createElement('div');
+      big.className = 'big';
+      big.textContent = wizardState.appliedCount;
+      summary.appendChild(big);
+      var p1 = document.createElement('p');
+      p1.textContent = 'change' + (wizardState.appliedCount === 1 ? '' : 's') + ' applied';
+      summary.appendChild(p1);
+      var p2 = document.createElement('p');
+      p2.textContent = wizardState.skippedCount + ' skipped';
+      summary.appendChild(p2);
+      wizardBodyEl.appendChild(summary);
+
+      var reportBtn = document.createElement('button');
+      reportBtn.className = 'btn btn-ghost';
+      reportBtn.textContent = 'View AI Report';
+      reportBtn.addEventListener('click', function(){
+        closeWizard();
+        setView('report');
+        renderReport();
+      });
+      wizardFooterEl.appendChild(reportBtn);
+
+      var doneBtn = document.createElement('button');
+      doneBtn.className = 'btn btn-primary';
+      doneBtn.textContent = 'Close';
+      doneBtn.addEventListener('click', closeWizard);
+      wizardFooterEl.appendChild(doneBtn);
+      return;
+    }
+
+    var item = wizardState.items[wizardState.index];
+    var card = state.cards[item.id];
+    if(!card){
+      // Card vanished mid-session — skip it silently rather than
+      // showing a broken step.
+      wizardState.index++;
+      renderWizardStep();
+      return;
+    }
+
+    wizardProgressEl.textContent = (wizardState.index + 1) + ' of ' + wizardState.items.length;
+
+    if(wizardState.kind === 'sort'){
+      renderSortWizardStep(item, card);
+    } else {
+      renderSpellCheckWizardStep(item, card);
+    }
+  }
+
+  /**
+   * Renders one AI Sort Wizard step: the card's text, Gemini's
+   * reasoning (if provided), and three dropdowns (branch/type/
+   * priority) pre-filled with the suggestion but fully editable —
+   * this is what makes it a "confirm or adjust" flow rather than a
+   * blind apply. The type dropdown repopulates whenever the branch
+   * dropdown changes, since valid types are branch-specific.
+   * @param {object} item - one suggestion from the Edge Function
+   * @param {object} card - the live card object
+   */
+  function renderSortWizardStep(item, card){
+    wizardTitleEl.textContent = 'AI Sort Wizard';
+
+    var origLabel = document.createElement('div');
+    origLabel.className = 'wizard-orig-label';
+    origLabel.textContent = 'Task';
+    wizardBodyEl.appendChild(origLabel);
+
+    var origText = document.createElement('div');
+    origText.className = 'wizard-orig-text';
+    origText.textContent = card.text || '(blank)';
+    wizardBodyEl.appendChild(origText);
+
+    if(item.reason){
+      var reasonEl = document.createElement('div');
+      reasonEl.className = 'wizard-reason';
+      reasonEl.textContent = '\u201C' + item.reason + '\u201D';
+      wizardBodyEl.appendChild(reasonEl);
+    }
+
+    var fieldRow = document.createElement('div');
+    fieldRow.className = 'wizard-field-row';
+
+    // Branch dropdown
+    var colField = document.createElement('div');
+    colField.className = 'wizard-field';
+    var colLabel = document.createElement('label');
+    colLabel.textContent = 'Branch';
+    colField.appendChild(colLabel);
+    var colSelect = document.createElement('select');
+    COLUMNS.forEach(function(c){
+      var o = document.createElement('option');
+      o.value = c.id; o.textContent = c.label;
+      colSelect.appendChild(o);
+    });
+    colSelect.value = COLUMN_MAP[item.column] ? item.column : card.column;
+    colField.appendChild(colSelect);
+    fieldRow.appendChild(colField);
+
+    // Type dropdown — options depend on the currently-selected branch
+    var typeField = document.createElement('div');
+    typeField.className = 'wizard-field';
+    var typeLabel = document.createElement('label');
+    typeLabel.textContent = 'Type';
+    typeField.appendChild(typeLabel);
+    var typeSelect = document.createElement('select');
+    typeField.appendChild(typeSelect);
+    fieldRow.appendChild(typeField);
+
+    function populateWizardTypes(){
+      typeSelect.innerHTML = '';
+      var blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '\u2014 type \u2014';
+      typeSelect.appendChild(blank);
+      var col = COLUMN_MAP[colSelect.value];
+      var list = col ? col.types.slice() : [];
+      list.forEach(function(t){
+        var o = document.createElement('option');
+        o.value = t; o.textContent = t;
+        typeSelect.appendChild(o);
+      });
+      var preferred = item.type || card.type;
+      typeSelect.value = (preferred && list.indexOf(preferred) !== -1) ? preferred : '';
+    }
+    colSelect.addEventListener('change', populateWizardTypes);
+    populateWizardTypes();
+
+    // Priority dropdown
+    var prField = document.createElement('div');
+    prField.className = 'wizard-field';
+    var prLabel = document.createElement('label');
+    prLabel.textContent = 'Priority';
+    prField.appendChild(prLabel);
+    var prSelect = document.createElement('select');
+    PRIORITY_ORDER.forEach(function(p){
+      var o = document.createElement('option');
+      o.value = p; o.textContent = PRIORITY_LABEL[p];
+      prSelect.appendChild(o);
+    });
+    prSelect.value = PRIORITY_ORDER.indexOf(item.priority) !== -1 ? item.priority : card.priority;
+    prField.appendChild(prSelect);
+    fieldRow.appendChild(prField);
+
+    wizardBodyEl.appendChild(fieldRow);
+
+    var skipBtn = document.createElement('button');
+    skipBtn.className = 'btn btn-ghost';
+    skipBtn.textContent = 'Skip';
+    skipBtn.addEventListener('click', function(){
+      wizardState.skippedCount++;
+      wizardState.index++;
+      renderWizardStep();
+    });
+
+    var confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn btn-primary';
+    confirmBtn.textContent = 'Confirm';
+    confirmBtn.addEventListener('click', function(){
+      // Unlike the automatic AI Sort (applySuggestion()), the wizard
+      // applies exactly what's shown on screen — the user has
+      // explicitly reviewed and possibly adjusted it, so the
+      // "only fill triage columns" gate doesn't apply here. Every
+      // actual change is still logged individually for the report.
+      var changed = false;
+      if(card.column !== colSelect.value){
+        logAiChange(card.id, 'column', card.column, colSelect.value, 'ai-sort-wizard');
+        card.column = colSelect.value;
+        changed = true;
+      }
+      if(typeSelect.value && card.type !== typeSelect.value){
+        logAiChange(card.id, 'type', card.type || '(blank)', typeSelect.value, 'ai-sort-wizard');
+        card.type = typeSelect.value;
+        changed = true;
+      }
+      if(card.priority !== prSelect.value){
+        logAiChange(card.id, 'priority', card.priority, prSelect.value, 'ai-sort-wizard');
+        card.priority = prSelect.value;
+        changed = true;
+      }
+      if(changed) wizardState.appliedCount++;
+      wizardState.index++;
+      renderWizardStep();
+    });
+
+    wizardFooterEl.appendChild(skipBtn);
+    wizardFooterEl.appendChild(confirmBtn);
+  }
+
+  /**
+   * Renders one Spell Check step: the original text (read-only) next
+   * to Gemini's suggested correction in an editable textarea — so
+   * the user can tweak the suggestion itself before accepting, not
+   * just accept-or-reject it wholesale.
+   * @param {object} item - { id, original, corrected }
+   * @param {object} card - the live card object
+   */
+  function renderSpellCheckWizardStep(item, card){
+    wizardTitleEl.textContent = 'Spell Check';
+
+    var oLabel = document.createElement('div');
+    oLabel.className = 'wizard-orig-label';
+    oLabel.textContent = 'Original';
+    wizardBodyEl.appendChild(oLabel);
+
+    var oText = document.createElement('div');
+    oText.className = 'wizard-orig-text';
+    oText.textContent = item.original;
+    wizardBodyEl.appendChild(oText);
+
+    var sLabel = document.createElement('div');
+    sLabel.className = 'wizard-suggest-label';
+    sLabel.textContent = 'Suggested correction (editable)';
+    wizardBodyEl.appendChild(sLabel);
+
+    var sTextarea = document.createElement('textarea');
+    sTextarea.className = 'wizard-suggest-text';
+    sTextarea.value = item.corrected;
+    wizardBodyEl.appendChild(sTextarea);
+
+    var skipBtn = document.createElement('button');
+    skipBtn.className = 'btn btn-ghost';
+    skipBtn.textContent = 'Skip';
+    skipBtn.addEventListener('click', function(){
+      wizardState.skippedCount++;
+      wizardState.index++;
+      renderWizardStep();
+    });
+
+    var acceptBtn = document.createElement('button');
+    acceptBtn.className = 'btn btn-primary';
+    acceptBtn.textContent = 'Accept';
+    acceptBtn.addEventListener('click', function(){
+      var finalText = sTextarea.value;
+      if(finalText !== card.text){
+        logAiChange(card.id, 'text', card.text, finalText, 'spell-check');
+        card.text = finalText;
+        wizardState.appliedCount++;
+      }
+      wizardState.index++;
+      renderWizardStep();
+    });
+
+    wizardFooterEl.appendChild(skipBtn);
+    wizardFooterEl.appendChild(acceptBtn);
+  }
+
+  /**
+   * Kicks off the AI Sort Wizard: fetches suggestions from the same
+   * Edge Function/mode as the one-click AI Sort, then opens the
+   * modal to step through them one at a time instead of applying
+   * them automatically.
+   * @param {object[]} cards - typically getFilteredCards()
+   */
+  async function openAiSortWizard(cards){
+    if(cards.length === 0){
+      showToast('No cards match the current filters to sort');
+      return;
+    }
+    var btn = document.getElementById('ai-sort-wizard-btn');
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '🧭 Loading…';
+
+    try{
+      var payload = {
+        mode: 'sort',
+        cards: cards.map(function(c){ return { id: c.id, text: c.text }; }),
+        columns: COLUMNS.map(function(c){ return { id: c.id, label: c.label, types: c.types }; }),
+        priorities: PRIORITY_ORDER
+      };
+      var res = await supabaseClient.functions.invoke('smooth-processor', { body: payload });
+      if(res.error) throw res.error;
+
+      var suggestions = (res.data && res.data.suggestions) || [];
+      if(suggestions.length === 0){
+        showToast('Gemini returned no suggestions');
+        return;
+      }
+
+      wizardState = { kind: 'sort', items: suggestions, index: 0, appliedCount: 0, skippedCount: 0 };
+      wizardOverlayEl.classList.add('active');
+      renderWizardStep();
+    }catch(err){
+      showToast('AI Sort Wizard failed — ' + (err && err.message ? err.message : 'check your connection'));
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
+
+  /**
+   * Kicks off Spell Check: sends card text to the Edge Function in
+   * 'spellcheck' mode, filters out any "corrections" that are
+   * actually identical to the original (so the wizard only shows
+   * real suggestions, not busywork confirmations), then opens the
+   * modal to step through the rest.
+   * @param {object[]} cards - typically getFilteredCards()
+   */
+  async function openSpellCheckWizard(cards){
+    if(cards.length === 0){
+      showToast('No cards match the current filters to check');
+      return;
+    }
+    var btn = document.getElementById('spell-check-btn');
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '🔤 Checking…';
+
+    try{
+      var payload = {
+        mode: 'spellcheck',
+        cards: cards.map(function(c){ return { id: c.id, text: c.text }; })
+      };
+      var res = await supabaseClient.functions.invoke('smooth-processor', { body: payload });
+      if(res.error) throw res.error;
+
+      var corrections = (res.data && res.data.corrections) || [];
+      var withOriginal = corrections.map(function(c){
+        var card = state.cards[c.id];
+        return { id: c.id, original: card ? card.text : '', corrected: c.corrected };
+      }).filter(function(c){
+        return normalizeText(c.original) !== normalizeText(c.corrected);
+      });
+
+      if(withOriginal.length === 0){
+        showToast('No spelling or grammar issues found');
+        return;
+      }
+
+      wizardState = { kind: 'spellcheck', items: withOriginal, index: 0, appliedCount: 0, skippedCount: 0 };
+      wizardOverlayEl.classList.add('active');
+      renderWizardStep();
+    }catch(err){
+      showToast('Spell Check failed — ' + (err && err.message ? err.message : 'check your connection'));
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
+
+  document.getElementById('ai-sort-wizard-btn').addEventListener('click', function(){
+    openAiSortWizard(getFilteredCards());
+  });
+  document.getElementById('spell-check-btn').addEventListener('click', function(){
+    openSpellCheckWizard(getFilteredCards());
   });
 
   /* ---------------- Toast ---------------- */
