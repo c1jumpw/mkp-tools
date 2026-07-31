@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MKP Task Auditor</title>
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,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">
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAQAElEQVR4AeydB4Bcdbn239lNuNIhEAKptNC5otKDEASSgOhFRFG61CAtAUQIRVBQEEWliViQjhcIvV4RVLhYQOT7vvvpvUizYKFIIJBks+U+v/ec9+TM7OxmZneT7MwePM95+/s/83+fOTmZnawtVvxX7EAT7UBB6CYaZvFSzApCFyxoqh0oCN1U4yxeTEHoggNNtQMFoZtqnL29mKERKwg9NOY8ZF5lr4SeuP8lTxUo9mCwcaC3d2evhKawZKUPFCj2YLBwAE72hsUSurfiIlbswGDbgYLQg20ixfX0awcKQptZv3awKB5UO1AQelCNo7iY/u5AQej+7mBRP6h2oCD0oBpHcTH93YGC0P3dwaJ+UO1AQehBNY7iYvq7A4shdH/bF/XFDizdHSgIvXT3u1htCe9AQeglvMFF+6W7AwWhl+5+F6st4R0oCL2EN7hov3R3oCD00t3vAV2tpVSyieuNtA/tONFWWek9/evdJNUFoRt4kKuu8h47Yt/322cP3cmuOH8/W3GF5Uwcb+BX1P9LLwhd4x62tJRs2LDWbhgu35JEa2tLVZIOG9Zi58yYZhtvMtZaW1psheWXswtO+7ANHz6san6NL7Ph01oa/hUspRew5ZZj7bJvftou/9YBdqVwlXD1pQfad4XvX3aQXSP88PKD7TrhhisOsZuEm6881H4k3JICvRLEevNdfeH+9i/LDev2Kq//5sG27tgRmb9Fb7jxo1e3C0/f25arkp8lNrlSELqeAad/nndRgx4Iu0KWUrtFeaBUkkcolUq6iybAL0NHYpdKJXOflWzuOwvshHNutwVtHRb/Dded+aZLDxbJW8O1SKp2wpgRduX5n1C8+5tgUWLzagWh65htZ1eXQWbQqboubMF12RzEHPKHxB8ohZKTlT7WWdC20GZ99T6bv2ChsQ7pq670L/aFk6bY8nq8KJUqq8gwa+/otAuv/LG1ty96EySRoXEuCL34OWcZeYJCMogMwu96SmR0EDFk1qgXpaOzy+bPb7dzvv6A/eVvc6xTNuk8duy711a22cajMbuBN8HCtna74tqf24t/fN3o0y1pCDgKQtc4ZPHUMyEmwEA6FHTySrpNUID0eVuuHg/yIO9bb8+zGefOtudefDW7M/NMvN+Ht7I9d93USqXkzkx+NGOdhQs77Hu3PGmP//oF4y4dsaEmC0LXMXEnrfK5G0IogM7dcGF7pyXoMMi1UH/kJ3bi5xGgXTk9oUMxHi/O1GPGq2/M1SrJMUzPzEd9egfbZ8oWNlyfqCRes4TW5qRvE5nPv/Rhe/xXL1hXeke3IfpfQegaBw95uRO6VI2TW3dkCDr77mfsR7OfsluEm25/ym68/dd2w23gV3bdbb+0a2/7lf3wVvBLyZ5x1tfut7/+4y11T45SqWRH7L+9Td5hQ/+4MPGWn3nTXK/1Xnj5NZu3oN2f8cszhpZVELqOeUNm7sjIAHfix5/8g/3kp7+3R1L8WPI/hIfBY7+3hx77nT0oPLAYvPSnN7Kr4WO4g/bd2nbfaWPjs2gCrIkMcGf+1TMv2SNP/I/IvDDcQ1oWhK55/F0GmUn3O7XuzhDMoT/mef7tL+hLfx4tph80yT66+xZO5ni8CElOhz7NeHvuPLviuiesTR/r6XJwD3n0j9BDaPucuHq9ISE3BOTRQ+4BO/gL4FEH7GC77jDRWvX8nD0sV6zw8p/fsJnn3WltC9uzN1pFypA0C0LXMXbI7EROayAzpE7Nfgs+mttvr/da8szc4lzO35V9ff1p8Lyel3nefmdem/GnQr8XbqIGLU30Wpb4S4FQwImcroadqt2E/k5nPAt3C1RxDB/eagfrmXmfqVv6pxnV+kLeOXPn25kX8wMX3ZlF7iqthrSrIHSN44dgAdMDKzp3a8rRkXlA5Anj1ki/AZe/z+azEr21tcWmHzjJpuyyqZMZb2UFa73x5js289w7bAGfZugaSqWS6SC9QLoDBaHTjahFdIlEkNeR6hCtWu1mm6xjZ5wyzb5+/n62zqhVeiXeQR/b2nbefgORuedxvPDy63biObfbHP3gJdabtPV6Nn6d1cIspHag5x1UsDjKdyCI7I8c6a0RX3mW2ZjRq9n0o3axYfpByPDlWu28M/a2Eaut2O3xY5juzIfvv53tvdvm1tpSPop831f+Pkc/Cr+/7EtK2201wY47dCfbaotxlcsvEbtRmpbvYqNc9TK4TggWYPn83Ro7sN66a9qpM6ca30u2krwiPs/H53z+w7b8e4ZnpF5ueKsdc/Akmzp5U2sRsT1X6XFQiv7POfPsbP3AZUFbu550ukT8ku263QY286jJ/o26lpbIJLtAQeg6OMDjBaRGdqoOiS3VSqWSTZw4yk48YXd7z/LDZevH0gqQg7H6qsvbxV/c18boEQFif/Kj77dJ265vPD+r1CppyRuGTzOOP/tWe/Otef5pRqvIyxf5jzpwR+MNUSpVVmnBIX4UhK6RAHpk9h8rQ2RInIGAesCttdZa2WAmMfKA68pBX2nFf7GzTp5mH//IVjb1Q5s6mYlDXqSl//FpBt+0O+vi+/2bd9jD9Jn0ZhuOssvO29eW7+Xro2mLISsKQtcxekiXkU8kdTuth3RPPPEHu+HGX+iHHR3+eEAuRI485Aoi9TQ9Mw/T8zU28Jy0H190end+m8366r16Zl5o3OFLpZJt997xdsbxe9iqq66QrliIajtQELrarvTgg3gAovL1eSSEzKc//fRLdvvsp/2bd8QiJyQEJR8ZcexEN/vTK/+0Y07/d3t77gK9KYiYP17sOmkjvzMnnkVn6hZZhVYQukYOdPkDR/JcDImAk9u6N3jiiefszrue8Ts1UfIANW6nd+M8yYm9+KfXbdZF99o83aHJC5xw2AftfZuPdZM8V9JT8RSdbkQqCkKnG1GLyAio5CAWPpllB48fP/v5f9u11z/hpCaHfO7KQWxsgI/iN/X58nmXPJD+0ATPIvB4Ep9mFARetC/VtILQ1XalBx8EDHIig5zV0vme9LPP/tluvPkXxhf+IW6+PrNV/Ec9ZnzuvDvNv5uhu7dcVQ/qqwYKZ7YDBaGzrehdgUxBYPRKVKtub++wXz/1kt159zPlpE6TOzo77eU/vWHnXHSfvTV3vnFnT0PlIiV5cXcu35ZqVkHoarvSg4+7shNZBENyl4XkPaS7m+8tP/Lo7+3GW37pjx/U0KdDPebNX2hXf/9Rm7+gvWcye5fyE2uXewordqAgdOxEDRIiBZyYqoGcEr0e5Dz5i+ftuhuf9E8/2ju7bL7I/J3vPmov/e1tfZpB155bVEa5U1f6eq4eWpElSuhm2koI5NCdFclrQwL0WsDjx+y7fmN/ePFVm3nGrfbb3/+tlrKqOZCaQD3rk9/sKAhdx4QhD+DuzKMGd15krS3If/Sn/22XfOthq+efTQV5Yx2uIfTKWPiHqiwIXePkIRHkReZRY3mWxjM1n4BA7sy5GIX18ikFifO7Ua4XhC7fj54tsQoSZqROHz3w9Vw0MBF+14aWH5hmTd6lqQldailZ6/BWxzDJ/qBlWIv/rBACQ66AlbSGYnxFtBYst1yr9Y5hipej1Jrck1nTKv5rbWnxr5Hy7xH7C77NV9G+4cyWhrviOi545REr2JTDtrGpn9nWph6+nU09YnubdsQONu3IHW3Po4SjJ9mex+xkex3zQfvw9A/a3sfubB89dhfb57MJ9pXc77jJ9glh0l5bJITW+hDL79S6S0P0g6bvYoefuJsdIRwlHH3S7jZd+OxJe9hxwgkz9rATZ0yxk4QZwswZU+2UmVPt1JnT7LSTp9nnhdNP3tNmCWeeMs3OPmVP+8Kpe9q5whc/t5dtOnFt/ySkpLUrj2mTN/HfC83vhgbnn/bhMhtfT6jM3XKT0ZXta7UHTV5TE5p/LbLGOqvYiBSuj17F1gBjVrM1hDVHr2prjlnV1hi7uuRqtubYxD9StmPMaraW9FVHrJgRmr8UMkGIXWptsZFrr2rrKGf0uBEGxkgmWN3GjB9hY2WPlRwnoCPHyTdeNnLC+DVsXenrTkAKqVxvwpryr2F8Q4+1AOsGsNdYfUXbQHl9wYa5uvWlr9wE/7cWTU1oBs/QkbrFOSHR/bFBd1d8bvsp+foR+Q7FuQsD8kN6TPmZVF5eJw/CV/rogU+lfh3oAWrQs7roKUk+IJ7vga8aqt3Fq+WFj77o9dZRMxjR9ISGtBDBNx+CAAxJhukx6Ymry4JUQTLPUTBkFldNliOdeGYrn7y8TTxDmp+387kqz0iPn16RSywwECQciB5xPYNBNjWhxZtkj6UEcSFG4tRZfp3F+S6HTk4kSJT5pbitXCT1IK9jZ1BepquWg7Xdp1hZnWyP6+RxpHyeI4kvril6BLmVWnZ4bplnaBpNTWhGChGQwIcOUVI4WaQTcx0FW4BUbupEHTbSoTgyyIXOOi7TfHTiZXW5GPnEyCE3bNdzeeRU+hQuO4j3905Lj7KmDWo0PaEhKrOBMOjIrs5Oa29rtwXzFlqbsGBem7XNX6S7jV8+dL534VCeS/wC+jx8yuWLRvNDf7fN5uED+JQLcZ2c6ZsBAnEt/HLyecp5NwVfIX3n3QWGjQw7L+cqDtyXr5Mevp4k67EflejvG6Ky37Kym5/Q2lmII+GPE8iOhR02+xuP2S1ffthuvuAhu/n8h+zGLz4g3G83nne/3XDufXbdF+6xH55zj10j/ODsu+17wtXCVWfdZVcKl595p10mfEu45Mw77Ouz7rCLhYtmzbYLhS+fcbtdIHzx9NvtPNn8hJC1g8idMvi66JNP/I997vO32sxTf2QzTrnFThSOF449+WabLhwz8yY7Sjhixo32GeGwk26wQ4SDhYNOvN7qRf5X9uoSsoPryowGVpqc0F26KWtU3BUFGTpS31Iemq4i+wsnOsvzFdK35rahLnMUd+hlPoIaL0BEjju0V8jObtXuWDon7sgQGaDzCMLK2MgCA7MDTX6Hzm2SiBzEXhYkYk0H16HLQofYUotjAHeg6QkNcfSckdyUIZOQ/NvtAdzFxbZKHnO4K3e7nsXWLpkErgNE97wevkaUy5LQ3fbLv0w0rMVaBwgtLXp5IrAPSzJbUI6W3BeX4gtMedmfLzLla/0LS/xSmVLJ31TclYEuwfhi00orv8c8Z3hrN8mv++qGbl9uGtbty0zLLdezj9dt+q+UQsIP7GHa995qFxvTa/Bmy/CkiS/D1SuWHjlmJdth7w1sx4+ADW3Hj25ok/5torCRTdpnI9tpn41tp48J+25iH/z4psJmtvN+CXb5xOa2yye3cEzef0ub/Kl/ta2nTdTNWdSBzII/ckjyxpn86ffZHgdvbXscsrVNOXQbm3LYtjblM9vZVHD49jY1/RLTtCMn2bSjdrI9jxb4EpPwEeHfjtnZPibsO30X+7jwCWH/Y3exTwkHfHayHSgcJBx83K528Gd39VeqK1n0F0Ndh+lNtf2kDe3Yef0KowAAEABJREFU43ez407c3U4QTjxpDztJmHnSFAOnzJhipwqnzZhqp8+camfMmGazZk6zs4RzZu5pXzh5mp178p52nvDFU/a0L1VB3r/OWqv4tcSJawr9k3tvZZFbKav1rfRxHXrfRrtlIgcVoZdbfpitPmoFW23Uii5Xdyl97RVtBLokPnSH7ESuZCPWTrDGOivbCAG5yojls00NMiNbWku22lor2RpjV7U1+WKSwJeSRoYcu5p/Scl941azkY7Vba1xwvgRthaYICmMGr+6rS0JRsm/9oQ1bB3J0ZIOdMF0C4Q8ZRCpsfni0oR117Txwrqq4zeYrrvemraesK5866830taXvn4qN5BvA+kbrD/SNpScKAk2Wn8tq4aNc35+UWS2KVJ0Wf4nh1Rbe+QqFrmVslrfSt9EXVeJF0qzZYSWZbRuz8tqyLqtJpssHQLm7SiECOiVEh/wOm4X0QNnCo+hE0OCvI6dIvpzDbioxRfPw/H4gM/jOuEjLtVfB7E8iJHjPq3reZLY+AHrIIkhAfEyRE0qqSFOTT0o1ZPcS25f1u6lXZ9Cg4vQ2hEdyQvRkBJFf4VDBzgkGZwTTDouh3T8wGM48YXM6RHPchVzXyozP7UAvyTXFpCZkRWC4nfSKRcdYHte6os8YoB4XnquTvgcqvMcSezKevcpnwPdoVzsShCr9PXF7q3PQL0x+nJdUTO4CA1FNBAnlK7QN0+2VD/cdi05ua145Acp3Q6/ZJKts/SsRj/+locVVaZPIdxIpXR6AAV1yK9aUw31EAuiIbEBNrIMqsn80j1WKWMtyaxfmiNXcn1SqPVeaYxrw4fEn9WmuRJ+kIMyUGTrWx+uYOlgkBE696I1ODHJB+oyb5OW2qiAwSIrgR/gd6m6GDJ9HQoScz9xQS7+aFDYvYnJWTE83ZD3p7oTTTXkoiMDbqd54XMZvipSrXw/PE9GnsQyF8WiVs48AamTq6mPQUXozo4ua2/rsPYFHbYwldihu3R/u8exQYd8MSWIie5Sg0UHbqOA1O8+6SHFXicxKej429vazb+4NH+hLRTQkQuk9wa+uOTxeW1lv4ARUtEXqZdr/N67+QsWmn+5ST2RAb6g5Pq8hfauYth5Scx9WoPfvhR9/fp1ypNZpv91jXXRewNvFK4rW0v9Y53e5Lz57f6m6q33ko4NKkK/8sIce/Da/y/8lz34w/+yB374/+yBH/xfx/0/+D92//eetfu++1u7F1z9jN37nd/YPVc9rbzf+j4xUJRKCTkBflCWg5GCYXsckuOTvPvyn9lNX3rQ+PLSDekXl67/wr12/Tn32LXCNWffbd8Xvit856y77NvCFQJfXrr0zDvtm8I3zrzD+D12EIU14u7cqUeYxx75nZ13xmw757Rb7SzhTOGMz/27fV44TTj11B/ZyafeYjNPucVOEk44+WY7Tjh25k3GF5eOljxyxo02/XO3OJm4/ujPWryMPPIkrxYnl1+z8NWrHrGDTrzODjzx+ppxyMwbtM09daXzksegInR/Xi6D9HqRULuqI91Y2anmYQV0yCO/lOSOLN3rJUnK69gDBa2qJTlrWTVNNCkDdDiR1Yu+rqevR67sIBZGntz48jHsRkRzEDomoQGG6sOQHTJImo+7HjmeKKJhC+Qn8TTQT+G/8V896LnoTo0l5wAdcc1IWtIdoAN0SIzErgSxSl+j2c1BaHYdEiIFH2hquy6fbo2cYazD/fkcdCFJSs+Vdurui2A9iOx3TjVwUnWZ4Zc5IAc96edSHV3mXkMzEFYvq9ejaQjNIP2VpgNkmE5i2RHLpCfCa2UpTp7HpCNB5ktz+yu0UvKMq0aus1aqSwzI4X3ViTcNb56wkXJnRzMTu2kI7dNKSRK6y/TkJEVXDmR1YAsx8JByOfnyEr0/oDdEQ+bRn57ltV16SULq9DX0WpFB7jRUVZBXNdBgzuYhNMMTNFVuvT4GSBxIHeVEVT5xakLmdfd5Yf9PEMaRrum62iIlBuSgF+QF6AGaL+61NMtdu3kIzdQEBscgIaZMCbec5MTk0CFfSiwZpCUInyxleI1Osvp/xNrcpQH9O/X2Qva/e9Ih34v1sJGxHnqSuejsOTKREg1/NBehRUifiGTZgCptkuRDAB+07KxGehnRSeon6J0HJOtny27l9HTo+n0tSWxeCzY6Ml/InTmQ9zeqPogJXd+W5gcVBGWQdMnboUe+2yQBEYAa90l3iX8AEGSiJ2vzWNCJMgC9aUGr6O26nNma0vFJlB3VfGUJDWg0DaHzRPQ5BCEl3dYpBsjgyXfgV477Ul1CocjGGhhUEizsgemePBz5G0UN86/H1+E1yk88Xhl3Zrma6hhUhOaL9yPHrmRrjVu5HONlpxglmWAVGzUhwcixK5cTMB0ek4rhuZRfibgdMXT3KVZmkyHfqAmr25iJawojbcxGI22sYy0bu/EijNtklGXYdG0bJ4xPMUFywqbr6GmZhgnpYh0ItfrIlWwDxSduNtombj7aNkqxsSTYZPMxtmmKzbYYY2BzSbCF5BZbjLUthc03G5OtwUq83iAv62Fn0Osipye0tpRsw3VH2tb/Or4OjLP3bjra+Ap6T32Xhn9QERqifmC3cbb1HhXYfZxts8d422bKBNta2GbqurbNtHVt22nrOT6w+wQxhXEhEukkjR1kgEA2wyXmMmykEAcdiIPt9t7MdvnU+2zyp7ayXZGffr/tesD77UMHfMA+dODWtttB29huB2+b4JDtbHdhj0O3tz0O28GmfmZHmwakd4kkGcG0kOvybbLVOPv44ZPsE0fuZPsfsZN96sgP2gEpDjpqZzv46J3tUOEw4TNH72JHCEceM9mOFo6ZvqtNnz7Zjj12Vzv6yJ2NntyNkf4atE5eVvoVrnq0trbY/h95n806fg+bdcIedmYFqvnOPGGKcqdYSf+r2nQpOQcVoVtaSwasyn8MBiISgmjIzHYjR+a8LSJHbdS5TY5i9HC/dCTAR9ghf9heJ5sc15XgunxSkyPViYPeCEYBOSDTVY+dQTY9MluJvqZkRlDllMWJCe6LWA9Sab0epTRKr1TtkbLL+u7M9Q0qQnNBPUIDKYvJ9k2WhHCh+7Dlc1sF2MSl+uF+xfG57t70hD9ViYOoz2Qu7j5s1bmOlJ3pYeMTnJjyucSWzjWQHz7svO52Lg8bdCNzZU7Y+XWkU5tBOXLVdASxe0qm5+Jyeqq1AQw0DqH1otk0hi81OTQQfIlRcVYMQoY3y8MvZ9jeTz6X+FMd23Ow5efA5z3xCZU6cR9qGqMeX0iICjKfmkLMvA9dbn8eJg+b+pDoIMuRgg2kJnVSsKlHyjSv13Vh48fG7zZKDSC3t7TFxXurHahYQxHaCcQrZzACqgNd8A1FCvjLbPkYpPuley8kDoCeR+or64FPiD5SnUDIQMSyOgXQgVQnFmTCBviQeR8kxweIA/piu9R15vPxYUddSPJD5/Vik1sp/U3IIotBb3m9xRbTdkDDg4zQNWyLhhk7wHBiUO6rEnO/TpFLvkyJLodOOhixnsEJCIklm34V8D7kVPPjy8U8Vz4khEMq7G+CIFq2lgJ5H7nE8HltLh6256i/25LkB/ABbCRAzyPvU/umOAYVobu6Wu2dOW3Cgl7QZnPnLLC5b84XEvnuW23lpNRwYzoMUMEwpbqnuk1dCshC0jtz5ttbr78rvCOElP7aXJvz2jv2Vl6+Otfe/MfbNkcyQaorh34QCILSl6tAf/edNntdNYHX/vGWvSYbvPr30N+yV+UH/5DvH9JD/l25f5fv1dfe9jcK63h/vQ7WcEhnbWLYrIustKkDnZ1d9sab79pf/janLvxV10FfeiwrDCpCv/L86/bT2/8gPN8LFL8t8Jw9dutz9vidzyX7p8GJsZnOwLB9k4klEbncwy3YPeQBjDSSxFTz6M2/tfuu/qXd951f2r1XPWn3fvtJu+fK/3TcfcXjdtflwmU/szsvBT+1O7/1mN3xzUdt9jd+YrMv+Ynd/vUf22wBktAbBKE6Ozvt2f/8g133tYfsmosetO8L37vwQbv6wgfsKuHbwhVfud8u+/L9dqnwTeGSL99nX7/gPrv4gnvtovPvtQvPv8e+Inz1wvv9deWJy2tymxcmdKWQ8FxsriVsJOCXon/7+sfthHNus+PPrh0nnTvb+9JjWWFQEbpfmyDyMSDtqA7XFrVTDIMBI5WQCD/rRFzweEjcwkAd9HaoIVcHnGwoQP4qR10ub6Pr976qxM7WlB8bApfFlYePGJDZ0EfzELpiDD4chigQclsKA5bI7sBhR9xjOoVf6sAcuetgrQw1/LWh1gugZ0ZWrYcN8AF0Ry5Gb/dJ4TWjS23Yo2kIzTC482YD0dBiKlks9WGDanH3p3n0i5x+S/WkN4BcflfMLrbf3b0BfWnJGkhfQxF0UGmTl9WkeQP6mtVzaR9NQ+hs40ScGApDDN3juRh2t7g7u1SiiHIZOK6BgDp6GyR9Xeru3KofM9sA/Ygt66uV6C+R/UUxIzOvSwFyncw5mxp8Cjfs0VSEZkhMgsG4ng5LDNWBV08anpAjLTZQrpKcAImZ5KPXg3XWX8NGb7imMDL5QtPEkTZaEHfVXj21js7+eTRyq+3Ws3EbjbLxG4+yCY61bd2NwSjxnKraV6cfrxsJgSFn2HRxvxQkkOqvFz0Paok1IpqH0CIKA2CAYg5qORTvFpPPcyV9oJJuRyV26DXKyZ9+v+120Na228FgG9v9kG2lb2sGN6MfEujO3Ln8cNvr8B3tI0fuZB8V9jlqJ/uYsM8RO1mphSKr+T9/DcpGSpSRFXIHUZHksB95mfkpblA0LqErNpzBlJGROKQRPIadwu2c3+00hmDQ3XoRqBXq7akh3UhO3lsqawYgkhMOv2rQpdZ90Jue9EN2s9WR3sTIcV3rhY2kRmn+ZkA2GpqG0Gw8A3GpIUFIt1Mdv/t6svEryQea072H/DUfqvUaSWqiHxLkrwGb3Dz4hTTUQTZkrcj3oIZ69+WuI2yXSupJUqtwQx7NQ+h0cBCGSUAWl37SMzMyBTGGmZou3I4e8pDjvTwgR42H1ykX6aXqGVJutZQln+s6kSfhfkVQ/XvNobujxhM1AELSF70aers7e356fTUuO6jSmofQ6bYyELEjsfKDkV41hl+gxuOqhAwSff5jN+rpSR8kPoDNOq5rXcgHwocOPE5yHYgeLlVHD3pBYPdpPZfEcpCqSySivzQrx21ODYjmInQ6jJgDA9WkEmISAwQliQFMcjKpGHoyXrT64D3VAxnI98fndpqDjo/1AKshAXo9qEZc768m2Rqsm7OpgfSsFxJdKQ15NBehGUE6MAaJ6QifjMphhc3AFS4nv+rw9QvqEWv01Ic4gFAQjDxsZD3w+rSA10OP3kA+cdZEZjW65rTNoBD1XETzEZpXr4EwoEQNTZb8EN090hkgtiL8WStVEfnd1snjCcVl1Xio3utSqY5Z7zK/4lpQhygDKcwAAAwtSURBVDKke0xLyPLPqCGbzLoOagG1SIBOE9e1DjZrYYfM4lIgd5IjowGP5iR0DEIDRGVwYk5CTXwgCWRkw3QoFvlu13mK2pC+rnoiQfiDULTHByAT/pDE6kG+tkzX+vSnF5JYSNZKCJz8xdljJDYompfQDLHKUBhY3h22y1yN2/nEmvXyysxS72gBmawTGvF+SjMURwPkeQ5KHaCG+iAppW5LyUv0alCav+npg96IaF5CxzREFFQfUqpnd8okwBlm+TCzGLkgidZ+FlNirZDRM7PTbpmtdVSWXEOqu53m1SqoyYO3DGtkvugt6bG0MTnYvBGy3GQ30ozGEc1JaA3MRyDJgCCU25zCJ91jSPkkuh0MuptzMQ6voV8KbOBl8vmaSIHrIuY+EuQLO/PhrxHUUA85kW6rtkzHFmJtz5WdkZlrkN2oR3MSupT7DkRuQAy2bFCKuY0MuIObJXRIjT6IympsAJG6tUvX9riCXGdnTXdIJecO6gEuiJqRVA78ZdAekcNa4Xc7zZVoyKM5CV05ipQwuBkgpHIpRyZT3e0033X56zmoAdka6pW30UE+nvVPc51gnLJAbQp9KcukyjKS0lt2xCC7TH/boHudHOSHLbPhjqFBaI2FgUEiqcnBgAWMypjbBPqEpNrP6g+BaONSNjrIx4k5PKBILg9XrVClXmL5pxX05fshEBU9cuhZSdwsTrBBMWQIzXwYpss8YdAFj0kSFyv8zoV0u84TxCirjb70kV4ZxwZRgw5Irwe8BlBG3rQBfuAx+UKyDnqQG5s8oLSGO5qf0CKQT6VCMjj8lYMLf5ArYTaZNSLXMHq5TNcPHemp+FOU+Xxhz6hxYT33KzMqkPSDrEi3Fed1VfqyuK4jyyO3AdH8hNZffrK5pANjqO6TjWSg+BimS/yC2yTUgayX6r0slfTymJzoEmJg8niAHjHWx86kG7WduMtCViRrOLQ+Mu+jGz7WdClHuZSlQ+6GO5qW0LVMgoGWEUfD9zpJn6ek23WevJYa1WdrSE9cikrHDyrXx5eA7Pqgztl93XuoHB8kD4meJ3eWxzWl+VK9j8yGO4YeoTUthhuTYqCuy4/Mx7DrhfejlxC9wucyGiruqmT4XcrGH7XotYIaeiAhLtKhnmVSDSPP/dgB5VIrsyGPoUdoxqShdbszys+QM79y3Ja/3oM6iEIvdOrDzvtc96CiWi9R9RiCDnDUAXXxO2sQsvJOjL/Mp95eo7WQxMjhuvQ8pGjjHUOT0JoTA0wGp9FpoHJlR5Aw4lmgFiV6SfoaUSObft5bOhKEL3RPVxy/6zWeWIseEDKTqkX3mHQOdM+REQTGB+TSsl3+bb+w8TUShgahIUjlVOTzoUl6CBmQw2OS9R4QSKzQoQ70UwP3IQWOsMt05YYf2eX3WjJqRxBVK/v6LlUOcUN3yVryl+ny5esVbshjaBA6/0lHD2OCRIQYstjAbTullHsI1Q16AvqFRPdGIpBLTtKzVaTjShd3tdYTPVjHpYpCSk3uuuodviAvsfCFxNdAKLvUoUHospecM9IBB8kgQ+iRxZBDr1WW9Yk10uKIIQFul+SlSK6h/pWpyCN/Z2YdJzFryGBNcsMXUiEtTwSt8dB8hNbA6hpDlXwfJ35QVzNu7F6dVFGfAyQikGUo1s2nBOIKSavv8DqV0NMJih5Qw8p4EJ5cpfkfCviwycXXaGg+QtfweFE5JB+eBo4fMrj0k0fQagd9hLI+qvZO8kuF9Q7PkS+kbo06PNPjzjAvqO1EH6oBFUgI6lKOiAdh3a/1FbLIwwfwNSKah9DpYPo0hMra1O7rYLM6+ggQSUx1frqui/SciMnmCJ/5v2ZxC3fNcKLSUxVOUOn4AN0CCvsbJuzKeFyj5zXYqXkI3Yc7c35WPlwRAJ8PNNWx6wF9IC9wPV9MT6Fb/5yPGgenfG0NOiWQE6ADylgP3aG1iAO3leDklyzLk92IR/MQur+7r0FDQod6MdzQZdZ+0EfZXh9SvrDl8rsjEkKxhks5PEe5UnWEV2qNBxUQlXT0LimQFR8yfKzjutZySZ6AHnkyG/IoCJ0fm+7yDDVcDD70emTUhfRakQcZPpepD1I7SBCIRUhmzYfXKbtDxbyOaoDcZf7ITaXK/dEI2YgoCJ2fmobqZipLpdw/5fJADae01gmKLkA0KjOZGErRj08Ul6JDNJOuc3IHl05aPaA2g+ohL/Wsiz/uvuiZTwluS5IP3OYkX6MdBaErJyYi+CyRQmV4cTZEIcd7SHGpPu6XlMsJ6343ZKZSrJYRkZARXLx0MmoNKkN3qdLMl+rYGdIartF9snUhymy8oyB0DzNjsAnBekjoze2EECWQgvdK8yFN0ldeYkLY8kiNu3ZaUIegt/dQTTfJOvJ3u0vLn8+NuFIb8igIXW1sGnI1d60+iCVmenqmq2foEIhgJom5Izx6M/ThSZYHJDqwTnZnTnu7X2sgg7RZDv5cHvH2tvZ4CYo2ztEUhF64oMMeuu739WDxudf+zh4U5s1tq2uakIkCiIMMlNmQR3DGIEmS9BzJxI+zdrS3ddg1Z99t15x1l31f+N6Zd9p3hKuEK2fdYZfPutMuPeMO+5bwDeFrp8+2i4WLhK98/na7QPjSabcZOH/WbHv++VdrX3wQZTYFoeFAR3unLQnQu0/zohCo2EmOLrguXxxdKOFPZZLjEaI1gRpIXYmFInqCdluou+7i0EbOwg79bKe+9Wu6yKWQ1BSEXgr7VPsSKSkpgGR+t8UQnCIRz0mF/MjyI+be4lTPDhSErme3asgtI20uPyNrzoeKH+SJj78Pj9BeNtRPBaEHnAFOaf2tLpGVZMWLD+RJjB8bf2DAL20INCwIPdBDFjN1eFeIieJ2PEZI4oO8IT0v/O4sTn3dge6E7munos53oItnhSCnZJDVSa2MsKWK0+HF4qYuO1eTeItzPTtQELqe3aolV5wkzYmLAkRSsRctg6fJ73khFXV/Tkotjjp2oCB0HZtVW6ru0SIouU5O6S7lcPKGlF+qH+F30svvtqQHi1NdO1AQuq7tqiE52EtqjpQZSVMfafgAqZAZn+vFqc87UBC6z1vXS6FI2+X/6kTPxaTJRgAnLTbAkcKJLV+ZTGOFqH0HCkLXvlc1ZTph08wycubImoYTIT9358RIz/j4y2VqLinRjH0LQg/0VEVGJ3LaN68Hcd2X5vEGyNvk4Cv4nG5gnaIgdJ0btvh0p2PCR5E28hOvHkFyPsjriKSQytFfLcMqZB07UBC6js2qOVWEzIgqPe7AXp/a7nNHQnK305i74x3gRnGqdQcKQte6UzXmiZPJ3Vn5TlJJDnSAHnDOUpA6PC47ZOouRB07UBC6js2qLdVpym3X090SSd3QKewgrdvyxxF2yPAXsrYdKAhddZ/64YSJIjDCHzukR7cgsdvyZ3boBKR7XXafx1mg1h0oCF3rTtWbJ2I6qVXnUrZUP5zIriUnj0sNv9u5fIWKo8YdKAhd40bVmsanE0HMrEbkDJKWxfALfkdGRoF0HWEVso4dKAhdx2bVlOrM5RFailhZRuBcg0q/sikSt13LZRZqPTtQELqe3aopV4QUkUkN0rqUT5Ey0pbZEVdh5Estjjp3oCB0nRu22HRnaS5LRHUrJAZ6ADuQ81W2iZRC9r4DdRO693ZFtLOjyzqEzo5O68xkZ+LjX6anfnI6pPMv1TvbO6xD6EztxNdZfM7RBzoVhO7DpvVW8uzP/2LP/vTP9tvHwJ/smUf/bM/8BPlH+81PXrbfPCL5CPIl+82PX7Knf/yiPfUfLwmSD79gTz38vD31kCCpB+relipiVXagIHSVTemP6+8vv21/femtHOZIF14MvGmvvCi8kMc/7ZXn/2l/yfCG9DcKPvdhEAWh+7Bpiy3hAXggsNiFioTKHSgIXbkjhd3QO1AQuqHHt0QvviGbF4RuyLEVF93TDhSE7mlnCn9D7kBB6IYcW3HRPe1AQeiedqbwN+QOFIRuyLEVF93TDhSE7mlnevMXsUG7AwWhB+1oigvryw4sltBd1vV0gWIPBgsHFkfyXgn93I9O3rpAsQeDjQO9kbpXQvdWWMSKHRiMO1AQejBOpbimPu/AQBO6zxdSFBY7MBA7UBB6IHax6DFodqAg9KAZRXEhA7EDBaEHYheLHoNmB/4XAAD//+uEr0IAAAAGSURBVAMAnMl7o1yeytIAAAAASUVORK5CYII=">
+<meta property="og:title" content="MKP Task Auditor">
+<meta property="og:description" content="Paste notes, parse them into tasks, and triage across your branches.">
+<meta property="og:image" content="https://raw.githubusercontent.com/c1jumpw/mkp-tools/main/media/mkp-task-auditor/social-logo-400x400.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="MKP Task Auditor">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/c1jumpw/mkp-tools/main/media/mkp-task-auditor/social-logo-400x400.jpg">
 <style>
   :root{
     --ink:#12161d;
@@ -802,6 +810,22 @@
     border-radius:4px;
     padding:6px 7px;
   }
+  .wizard-ongoing-row{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-size:12px;
+    color:var(--text-light);
+    margin:10px 0 4px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .wizard-ongoing-row input[type="checkbox"]{
+    width:15px;
+    height:15px;
+    accent-color:var(--accent);
+    cursor:pointer;
+  }
   .wizard-footer{
     padding:12px 18px;
     border-top:1px solid var(--col-border);
@@ -966,7 +990,7 @@
 <header>
   <div class="header-top">
     <div class="brand">
-      <span class="mark">MKP-TA v10</span>
+      <span class="mark">MKP-TA v11</span>
       <div>
         <h1>MKP Task Auditor</h1>
         <p>Paste your notes → parse → triage into branches → export to your workspace</p>
@@ -1256,6 +1280,18 @@
           the other flags. "Recurring" (Priority) and "Reminder"
           (Type, most branches) were already covered pre-v10 and are
           unchanged.
+     v11 (this file) — Fixed AI Sort / AI Sort Wizard re-asking about
+          cards already confirmed in a prior run: both now pre-filter
+          to getSortableCards() (still sitting in a TRIAGE_COLUMNS
+          column) before ever calling the Edge Function, so a card
+          that's already been filed into a real branch naturally
+          drops out of future batches — no separate "reviewed" flag
+          needed. Added an Ongoing checkbox to the AI Sort Wizard
+          step so it can be set during review, not just from the
+          board afterward. Added branding: embedded favicon +
+          apple-touch-icon (base64, fully self-contained — no
+          external dependency) and Open Graph/Twitter social-preview
+          meta tags pointing at the repo's hosted social image.
    ================================================================ */
 
 (function(){
@@ -2981,9 +3017,32 @@
    *   (typically getFilteredCards(), so filters double as scoping)
    * @returns {Promise<void>}
    */
+  /**
+   * Narrows a card list down to only cards that still actually need
+   * sorting — i.e. still sitting in a TRIAGE_COLUMNS column (Inbox /
+   * Needs Clarification / Unsorted). This is what stops both AI Sort
+   * and the AI Sort Wizard from re-asking about cards you already
+   * confirmed in a previous run: once a card's been filed into a
+   * real branch, it naturally drops out of every future batch here,
+   * with no extra "reviewed" flag or bookkeeping needed — filing
+   * status IS the review status.
+   * Note: a card the wizard confirmed but you deliberately kept in a
+   * triage column (e.g. you picked "Needs Clarification" on purpose)
+   * will still reappear next run — that's correct, it isn't filed
+   * yet, even though you did make a decision about it.
+   * @param {object[]} cards
+   * @returns {object[]}
+   */
+  function getSortableCards(cards){
+    return cards.filter(function(c){ return TRIAGE_COLUMNS.indexOf(c.column) !== -1; });
+  }
+
   async function requestAiSortSuggestions(cards){
-    if(cards.length === 0){
-      showToast('No cards match the current filters to sort');
+    var sortable = getSortableCards(cards);
+    if(sortable.length === 0){
+      showToast(cards.length > 0
+        ? 'All ' + cards.length + ' matching card' + (cards.length === 1 ? ' is' : 's are') + ' already filed into a branch'
+        : 'No cards match the current filters to sort');
       return;
     }
 
@@ -2994,7 +3053,7 @@
 
     var payload = {
       mode: 'sort',
-      cards: cards.map(function(c){ return { id: c.id, text: c.text }; }),
+      cards: sortable.map(function(c){ return { id: c.id, text: c.text }; }),
       columns: COLUMNS.map(function(c){ return { id: c.id, label: c.label, types: c.types }; }),
       priorities: PRIORITY_ORDER
     };
@@ -3233,6 +3292,20 @@
 
     wizardBodyEl.appendChild(fieldRow);
 
+    // Ongoing toggle — mirrors the board's 🔁 flag. Deliberately not
+    // suggested by Gemini (the Edge Function doesn't return an
+    // opinion on this); it just starts pre-checked if the card was
+    // already marked Ongoing, so reviewing a card here doesn't
+    // accidentally clear a flag you'd already set.
+    var ongoingRow = document.createElement('label');
+    ongoingRow.className = 'wizard-ongoing-row';
+    var ongoingCheckbox = document.createElement('input');
+    ongoingCheckbox.type = 'checkbox';
+    ongoingCheckbox.checked = !!card.ongoing;
+    ongoingRow.appendChild(ongoingCheckbox);
+    ongoingRow.appendChild(document.createTextNode(' \uD83D\uDD01 Ongoing responsibility (not a one-off)'));
+    wizardBodyEl.appendChild(ongoingRow);
+
     var skipBtn = document.createElement('button');
     skipBtn.className = 'btn btn-ghost';
     skipBtn.textContent = 'Skip';
@@ -3265,6 +3338,11 @@
       if(card.priority !== prSelect.value){
         logAiChange(card.id, 'priority', card.priority, prSelect.value, 'ai-sort-wizard');
         card.priority = prSelect.value;
+        changed = true;
+      }
+      if(!!card.ongoing !== ongoingCheckbox.checked){
+        logAiChange(card.id, 'ongoing', card.ongoing ? 'true' : 'false', ongoingCheckbox.checked ? 'true' : 'false', 'ai-sort-wizard');
+        card.ongoing = ongoingCheckbox.checked;
         changed = true;
       }
       if(changed) wizardState.appliedCount++;
@@ -3338,12 +3416,18 @@
    * Kicks off the AI Sort Wizard: fetches suggestions from the same
    * Edge Function/mode as the one-click AI Sort, then opens the
    * modal to step through them one at a time instead of applying
-   * them automatically.
+   * them automatically. Cards already filed into a real branch are
+   * excluded via getSortableCards() before the request is even
+   * made — see that function's comment for why this is what stops
+   * previously-confirmed cards from being asked about again.
    * @param {object[]} cards - typically getFilteredCards()
    */
   async function openAiSortWizard(cards){
-    if(cards.length === 0){
-      showToast('No cards match the current filters to sort');
+    var sortable = getSortableCards(cards);
+    if(sortable.length === 0){
+      showToast(cards.length > 0
+        ? 'All ' + cards.length + ' matching card' + (cards.length === 1 ? ' is' : 's are') + ' already filed into a branch'
+        : 'No cards match the current filters to sort');
       return;
     }
     var btn = document.getElementById('ai-sort-wizard-btn');
@@ -3354,7 +3438,7 @@
     try{
       var payload = {
         mode: 'sort',
-        cards: cards.map(function(c){ return { id: c.id, text: c.text }; }),
+        cards: sortable.map(function(c){ return { id: c.id, text: c.text }; }),
         columns: COLUMNS.map(function(c){ return { id: c.id, label: c.label, types: c.types }; }),
         priorities: PRIORITY_ORDER
       };
