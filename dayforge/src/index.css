@@ -1,21 +1,83 @@
+/**
+ * =============================================================================
+ * FILE: src/index.css
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * =============================================================================
+ * PURPOSE
+ *   Global design tokens (the "forge" theme: dark graphite + steel + ember)
+ *   and base styles shared across the whole app. Tailwind utility classes
+ *   throughout the codebase reference these tokens via arbitrary values like
+ *   `bg-[var(--color-ink)]` rather than hardcoded hex codes, so changing a
+ *   value here (or overriding it per-theme, see below) updates everywhere.
+ *
+ * KEY RESPONSIBILITIES
+ *   - Define the DARK theme's color/font tokens as CSS custom properties
+ *     inside @theme (Tailwind v4's token block — these become real :root-
+ *     scoped CSS variables, not just Tailwind-internal values).
+ *   - Define a LIGHT theme override, applied when `<html data-theme="light">`
+ *     is set — see ThemeContext.jsx for how/when that attribute gets toggled.
+ *   - Provide small reusable utility classes (.plate, .blueprint-tick,
+ *     .rise-in) used by multiple components instead of duplicating the same
+ *     Tailwind class strings everywhere.
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — dark-only "forge" theme tokens + base styles.
+ *   v2 (this version) — added a light-theme variable override block
+ *       (:root[data-theme="light"]) per user request for a light/dark
+ *       toggle. Same token NAMES are reused in both themes (e.g.
+ *       --color-ink still means "app background", --color-paper still means
+ *       "primary text color") so no component code needs to change — only
+ *       the values differ per theme.
+ * =============================================================================
+ */
+
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+ * DARK THEME (default). These become the initial values of each CSS
+ * variable. Every component references these BY NAME (e.g. var(--color-ink))
+ * rather than hardcoding hex values, which is what makes the light-theme
+ * override below work without touching component code.
+ * ------------------------------------------------------------------------- */
 @theme {
-  --color-ink: #1B1D22;
-  --color-surface: #24272E;
-  --color-surface-raised: #2C3038;
-  --color-line: #363B45;
-  --color-steel: #5B8AA6;
-  --color-steel-soft: #3E5A6C;
-  --color-ember: #E8622C;
-  --color-ember-soft: #7A3B23;
-  --color-paper: #F0EDE6;
-  --color-muted: #9BA0AA;
-  --color-good: #6B9E78;
+  --color-ink: #1B1D22;             /* app background */
+  --color-surface: #24272E;         /* card/plate background (base) */
+  --color-surface-raised: #2C3038;  /* card/plate background (raised/hover) */
+  --color-line: #363B45;            /* borders, dividers */
+  --color-steel: #5B8AA6;           /* "work" category accent */
+  --color-steel-soft: #3E5A6C;      /* muted steel, e.g. selection bg */
+  --color-ember: #E8622C;           /* "personal" category accent + primary CTA */
+  --color-ember-soft: #7A3B23;      /* muted ember, e.g. selection bg */
+  --color-paper: #F0EDE6;           /* primary text color */
+  --color-muted: #9BA0AA;           /* secondary/disabled text */
+  --color-good: #6B9E78;            /* success/complete/pinned accent */
 
   --font-display: "Barlow Condensed", sans-serif;
   --font-body: "Inter", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
+}
+
+/* ---------------------------------------------------------------------------
+ * LIGHT THEME override. Same variable NAMES, different values — flipping the
+ * ink/paper relationship (dark bg -> light bg) while keeping the steel/ember
+ * accents recognizable but re-tuned for contrast against a light background.
+ * Activated by ThemeContext setting document.documentElement.dataset.theme
+ * = 'light'. The `:root[data-theme='light']` selector has higher specificity
+ * than the plain `:root` that @theme generates above, so this correctly wins
+ * when the attribute is present.
+ * ------------------------------------------------------------------------- */
+:root[data-theme='light'] {
+  --color-ink: #EDEAE2;             /* app background (warm paper, not stark white) */
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #F7F4EC;
+  --color-line: #DBD5C7;
+  --color-steel: #3E6E88;           /* darkened for contrast on light bg */
+  --color-steel-soft: #C7DAE2;
+  --color-ember: #C94E1D;           /* darkened for contrast on light bg */
+  --color-ember-soft: #F0C6AE;
+  --color-paper: #201C16;           /* primary text — dark, warm near-black */
+  --color-muted: #767066;
+  --color-good: #3F7A4E;
 }
 
 html, body, #root {
@@ -27,6 +89,9 @@ body {
   color: var(--color-paper);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  /* Smooth the visual transition when the theme toggle flips these variables,
+     rather than an abrupt color snap. */
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 ::selection {
@@ -39,7 +104,9 @@ body {
   scrollbar-color: var(--color-line) transparent;
 }
 
-/* Beveled "forged plate" look for scheduled task blocks */
+/* Beveled "forged plate" look for scheduled task blocks and cards.
+   --accent (set inline per-component via style={{'--accent': ...}}) controls
+   the left edge stripe color; falls back to steel if not provided. */
 .plate {
   position: relative;
   background: linear-gradient(180deg, var(--color-surface-raised) 0%, var(--color-surface) 100%);
