@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/Dashboard.jsx
- * VERSION: v5 (previously v1-v4 — see REVISION HISTORY below)
+ * VERSION: v6 (previously v1-v5 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The main authenticated screen: header (branding, actions, account menu),
@@ -64,6 +64,18 @@
  *       recurring tasks are expanded into concrete per-date events for
  *       export (not re-encoded as iCalendar RRULEs — see icsExport.js for
  *       why).
+ *   v6 (this version), per user feedback after using Export:
+ *     - Replaced the plain "Export day / Export week" dropdown with a full
+ *       ExportModal offering INDEPENDENT category (personal/work) and type
+ *       (to-do/reminder/event) checkboxes that combine with AND logic —
+ *       see ExportModal.jsx header comment for the UX reasoning (an "event"
+ *       filter needs to combine with, not replace, personal/work, since a
+ *       task can be a work event just as easily as a personal one).
+ *     - Header: added safe-area-aware top padding and flex-wrap on the
+ *       action-button row, after mobile testing found the top of the
+ *       Routines/Export/+New task buttons hard to tap accurately on some
+ *       smaller phones (buttons sat flush against the screen edge/notch
+ *       area with no breathing room).
  * =============================================================================
  */
 
@@ -82,6 +94,7 @@ import UnscheduledTray from './UnscheduledTray'
 import TaskModal from './TaskModal'
 import RoutinesPanel from './RoutinesPanel'
 import AccountModal from './AccountModal'
+import ExportModal from './ExportModal'
 
 const UNDO_TOAST_MS = 6000 // how long the "Undo" toast stays on screen
 
@@ -96,7 +109,7 @@ export default function Dashboard() {
   const [routinesOpen, setRoutinesOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false) // small header dropdown: Account / Sign out
-  const [exportOpen, setExportOpen] = useState(false) // Export dropdown: day / week .ics
+  const [exportOpen, setExportOpen] = useState(false) // Export options modal
 
   // Undo toast: { message, taskId, previousFields } | null.
   // previousFields holds exactly what to pass back to updateTask() to revert.
@@ -167,20 +180,29 @@ export default function Dashboard() {
 
   /**
    * Collects every scheduled occurrence (expanding recurrence via
-   * occursOnDate) across `numDays` days starting at `startDate`, in the
-   * plain-object shape icsExport.buildICS expects. Shared by both the
-   * "Export day" (numDays=1) and "Export week" (numDays=7) actions below.
-   * Each occurrence gets a UID unique per (task, date) — since recurring
-   * tasks produce one concrete VEVENT per occurrence in the exported range
-   * rather than an RRULE (see icsExport.js header comment for why).
+   * occursOnDate) across `numDays` days starting at `startDate`, filtered to
+   * the chosen categories AND types (both must match — see ExportModal.jsx
+   * header comment for why these are independent, combinable filters rather
+   * than one flat set of choices), in the plain-object shape
+   * icsExport.buildICS expects.
+   * @param {Date} startDate
+   * @param {number} numDays
+   * @param {string[]} categories - subset of ['personal', 'work']
+   * @param {string[]} types - subset of ['todo', 'reminder', 'event']
    */
-  function collectEventsForExport(startDate, numDays) {
+  function collectEventsForExport(startDate, numDays, categories, types) {
     const events = []
     for (let i = 0; i < numDays; i++) {
       const d = addDays(startDate, i)
       const iso = toISODate(d)
       const occurring = data.tasks.filter(
-        (t) => !t.pinned && t.date && t.start_time && occursOnDate(t, d)
+        (t) =>
+          !t.pinned &&
+          t.date &&
+          t.start_time &&
+          occursOnDate(t, d) &&
+          categories.includes(t.category) &&
+          types.includes(t.type)
       )
       for (const t of occurring) {
         events.push({
@@ -197,18 +219,19 @@ export default function Dashboard() {
     return events
   }
 
-  function handleExportDay() {
-    const events = collectEventsForExport(selectedDate, 1)
-    const ics = buildICS(events, `DayForge — ${dateISO}`)
-    downloadICS(`dayforge-${dateISO}.ics`, ics)
-    setExportOpen(false)
-  }
-
-  function handleExportWeek() {
-    const events = collectEventsForExport(selectedDate, 7)
-    const endISO = toISODate(addDays(selectedDate, 6))
-    const ics = buildICS(events, `DayForge — ${dateISO} to ${endISO}`)
-    downloadICS(`dayforge-${dateISO}-to-${endISO}.ics`, ics)
+  /**
+   * Called by ExportModal's "Download .ics" button with the user's chosen
+   * range/category/type filters. Builds the file and triggers the browser
+   * download, then closes the modal.
+   */
+  function handleExport(range, categories, types) {
+    const numDays = range === 'week' ? 7 : 1
+    const events = collectEventsForExport(selectedDate, numDays, categories, types)
+    const endISO = toISODate(addDays(selectedDate, numDays - 1))
+    const label = range === 'week' ? `${dateISO} to ${endISO}` : dateISO
+    const filename = range === 'week' ? `dayforge-${dateISO}-to-${endISO}.ics` : `dayforge-${dateISO}.ics`
+    const ics = buildICS(events, `DayForge — ${label}`)
+    downloadICS(filename, ics)
     setExportOpen(false)
   }
 
@@ -267,7 +290,21 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen pb-16">
-      <header className="border-b border-[var(--color-line)] px-4 sm:px-8 py-4 flex items-center justify-between sticky top-0 bg-[var(--color-ink)]/95 backdrop-blur z-10">
+      {/* Header spacing notes (mobile fix):
+          - pt-[max(...)] adds real top padding on top of whatever the
+            device's notch/status-bar safe area already reserves (env(...)
+            resolves to 0 on devices without a notch, so this is a no-op
+            there and just uses the 0.75rem/1rem floor). Without this,
+            testing found the action row sitting flush against the very top
+            edge on some smaller phones, making the top of "Routines" /
+            "Export" / "+ New task" hard to tap accurately.
+          - flex-wrap + gap-y on the actions row lets buttons wrap onto a
+            second line on narrow viewports instead of being squeezed
+            edge-to-edge, which was shrinking effective tap targets. */}
+      <header
+        className="border-b border-[var(--color-line)] px-4 sm:px-8 pb-4 flex flex-wrap items-center justify-between gap-y-3 sticky top-0 bg-[var(--color-ink)]/95 backdrop-blur z-10"
+        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-2">
           <svg width="22" height="22" viewBox="0 0 32 32">
             <rect width="32" height="32" rx="6" fill="var(--color-surface)" />
@@ -276,57 +313,37 @@ export default function Dashboard() {
           <span className="[font-family:var(--font-display)] text-xl tracking-wide uppercase">DayForge</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Theme toggle — sun/moon glyph swaps based on current theme. */}
           <button
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-            className="text-sm border border-[var(--color-line)] rounded w-8 h-8 flex items-center justify-center hover:border-[var(--color-steel)] transition"
+            className="text-sm border border-[var(--color-line)] rounded w-9 h-9 flex items-center justify-center hover:border-[var(--color-steel)] transition"
           >
             {theme === 'dark' ? '☀' : '☾'}
           </button>
 
           <button
             onClick={() => setRoutinesOpen(true)}
-            className="text-sm border border-[var(--color-line)] rounded px-3 py-1.5 hover:border-[var(--color-steel)] transition"
+            className="text-sm border border-[var(--color-line)] rounded px-3 py-2 hover:border-[var(--color-steel)] transition"
           >
             Routines
           </button>
 
-          {/* Export dropdown: "Export day" / "Export week" both download a
-              .ics file — see icsExport.js and handleExportDay/Week above. */}
-          <div className="relative">
-            <button
-              onClick={() => setExportOpen((v) => !v)}
-              className="text-sm border border-[var(--color-line)] rounded px-3 py-1.5 hover:border-[var(--color-steel)] transition"
-            >
-              Export
-            </button>
-            {exportOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setExportOpen(false)} />
-                <div className="absolute right-0 mt-2 w-48 plate rounded-md py-1 z-30">
-                  <button
-                    onClick={handleExportDay}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition"
-                  >
-                    Export this day (.ics)
-                  </button>
-                  <button
-                    onClick={handleExportWeek}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition"
-                  >
-                    Export this week (.ics)
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          {/* Opens ExportModal, where range + category + type filters are
+              chosen before the .ics download happens — see ExportModal.jsx
+              and handleExport() above for the filtering logic. */}
+          <button
+            onClick={() => setExportOpen(true)}
+            className="text-sm border border-[var(--color-line)] rounded px-3 py-2 hover:border-[var(--color-steel)] transition"
+          >
+            Export
+          </button>
 
           <button
             onClick={() => setCreatingNew(true)}
-            className="text-sm bg-[var(--color-ember)] text-[var(--color-ink)] font-semibold rounded px-3 py-1.5 hover:brightness-110 transition"
+            className="text-sm bg-[var(--color-ember)] text-[var(--color-ink)] font-semibold rounded px-3 py-2 hover:brightness-110 transition"
           >
             + New task
           </button>
@@ -337,7 +354,7 @@ export default function Dashboard() {
             <button
               onClick={() => setMenuOpen((v) => !v)}
               aria-label="Account menu"
-              className="text-sm border border-[var(--color-line)] rounded w-8 h-8 flex items-center justify-center hover:border-[var(--color-steel)] transition"
+              className="text-sm border border-[var(--color-line)] rounded w-9 h-9 flex items-center justify-center hover:border-[var(--color-steel)] transition"
             >
               ⋮
             </button>
@@ -431,6 +448,8 @@ export default function Dashboard() {
       )}
 
       {accountOpen && <AccountModal onClose={() => setAccountOpen(false)} />}
+
+      {exportOpen && <ExportModal onExport={handleExport} onClose={() => setExportOpen(false)} />}
 
       {/* Undo toast for drag-triggered reschedule/unschedule — see UNDO
           TOAST in this file's header comment for rationale. */}
