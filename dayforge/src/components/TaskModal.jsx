@@ -32,6 +32,12 @@
  *   onClose      {function}    () -> void; dismiss without side effects
  *                               beyond whatever onSave/onDelete already did.
  *
+ * REVISION HISTORY (v2, this version, continued)
+ *   Added a "Send back to tray" quick action (only shown when editing an
+ *   already-scheduled task), per user request after mobile testing — a
+ *   one-tap way to unschedule instead of unchecking "Give this a date and
+ *   time block" and then hitting Save separately.
+ *
  * EDGE CASES
  *   - If the end time is set EARLIER than the start time, we treat it as
  *     spanning past midnight (adding 24h before computing the difference)
@@ -117,6 +123,35 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
     setDuration(diff)
     setDurHours(Math.floor(diff / 60))
     setDurMinutes(diff % 60)
+  }
+
+  /**
+   * Quick action: unschedule this task in one tap, without requiring the
+   * user to uncheck "Give this a date and time block" and then hit Save
+   * separately. Keeps every other field as-is (title, notes, type,
+   * category, pinned) — only date/start_time/duration/recurrence reset to
+   * their "unscheduled" defaults, matching what unchecking the checkbox +
+   * saving would have produced.
+   */
+  async function handleSendToTray() {
+    setBusy(true)
+    try {
+      await onSave({
+        title: title.trim(),
+        notes: notes.trim() || null,
+        type,
+        category,
+        pinned,
+        date: null,
+        start_time: null,
+        duration_minutes: 30,
+        recurrence: 'none',
+        recurrence_days: [],
+      })
+      onClose()
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleSave() {
@@ -287,13 +322,24 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
           </div>
         )}
 
-        <div className="flex items-center gap-2 mt-5">
+        <div className="flex items-center gap-2 mt-5 flex-wrap">
           {!isNew && (
             <button
               onClick={() => onDelete(task.id).then(onClose)}
               className="text-sm text-[var(--color-ember)] hover:brightness-110 mr-auto"
             >
               Delete
+            </button>
+          )}
+          {/* Only meaningful for an already-scheduled existing task — a new
+              or already-unscheduled task has nothing to "send back". */}
+          {!isNew && task?.date && (
+            <button
+              onClick={handleSendToTray}
+              disabled={busy}
+              className="text-sm text-[var(--color-steel)] hover:brightness-110 disabled:opacity-40"
+            >
+              Send to tray
             </button>
           )}
           <button onClick={onClose} className="text-sm text-[var(--color-muted)] hover:text-[var(--color-paper)] px-3 py-1.5">

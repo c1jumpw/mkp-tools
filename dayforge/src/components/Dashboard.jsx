@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/Dashboard.jsx
- * VERSION: v3 (previously v1, v2 — see REVISION HISTORY below)
+ * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The main authenticated screen: header (branding, actions, account menu),
@@ -16,7 +16,8 @@
  *   - Derive `dayTasks` / `scheduled` / `trayTasks` from the raw task list
  *     returned by useDayForgeData, expanding recurrence via occursOnDate().
  *   - Configure dnd-kit's DndContext + sensors, and handle the drop logic
- *     (schedule into an hour, or unschedule back to the tray).
+ *     (schedule into an hour, or unschedule back to the tray) — including
+ *     an "Undo" safety net (see UNDO TOAST below).
  *
  * DATA FLOW
  *   useDayForgeData() (Supabase-backed) --> Dashboard (derives day-specific
@@ -25,25 +26,40 @@
  *   Child components call back up into `data.*` functions passed down as
  *   props; Dashboard itself never talks to Supabase directly.
  *
+ * UNDO TOAST (new in v4)
+ *   Every drag-and-drop reschedule/unschedule snapshots the task's PREVIOUS
+ *   date/start_time/recurrence before applying the change, then shows a
+ *   small bottom toast with an "Undo" button for a few seconds. This is a
+ *   lighter-weight alternative to a blocking "Are you sure?" dialog on every
+ *   single drop (which would make routine drag-and-drop tedious) while still
+ *   giving a real safety net against accidental drags — the underlying
+ *   scenario reported was drags being misfired during mobile scrolling,
+ *   which the TaskBlock.jsx v4 drag-handle fix addresses at the source; this
+ *   toast is the backstop for anything that still slips through.
+ *   TODO: if a blocking confirm-before-drop is preferred over this toast
+ *   after living with it a while, swap the immediate data.updateTask() call
+ *   in handleDragEnd for a pending-confirmation state instead — flagging
+ *   this as a deliberate UX trade-off, not an oversight.
+ *
  * REVISION HISTORY
  *   v1 (initial build) — core layout, DndContext with default sensor config,
  *       Routines/Sign out buttons in header.
  *   v2 — (see supabaseClient.js v2) no changes to this file.
- *   v3 (this version), per user feedback batch:
- *     - Added explicit PointerSensor/TouchSensor configuration with an
- *       8px activation distance, so a plain tap/click reliably opens the
- *       edit modal instead of being swallowed by drag-start (previously
- *       relied on dnd-kit's zero-distance default, which is drag-happy).
- *     - Wired onDelete through to Timeline and UnscheduledTray so items can
- *       be removed inline (see TaskBlock.jsx v2).
- *     - Added a theme toggle button (uses ThemeContext, new in this batch).
- *     - Added an Account menu button opening the new AccountModal, and
- *       consolidated it with Sign out into a small header menu so the header
- *       doesn't get too crowded as features accumulate.
+ *   v3 — 8px pointer activation distance (tap-vs-drag fix), onDelete
+ *       passthrough, theme toggle, account menu.
+ *   v4 (this version), per user's mobile testing feedback batch:
+ *     - Added the Undo toast described above for drag-triggered changes.
+ *     - Added handleClearPinned / handleClearTray (bulk delete, with a
+ *       window.confirm guard each lives in the child component that
+ *       triggers it — PinnedReminders.jsx / UnscheduledTray.jsx).
+ *     - TouchSensor's `delay`/`tolerance` activationConstraint is no longer
+ *       load-bearing for "don't block scrolling" (that's now handled by
+ *       TaskBlock.jsx v4's dedicated drag handle + scoped touch-action), but
+ *       is kept as a reasonable default for the handle's own long-press feel.
  * =============================================================================
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -58,6 +74,8 @@ import TaskModal from './TaskModal'
 import RoutinesPanel from './RoutinesPanel'
 import AccountModal from './AccountModal'
 
+const UNDO_TOAST_MS = 6000 // how long the "Undo" toast stays on screen
+
 export default function Dashboard() {
   const { signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
@@ -70,14 +88,18 @@ export default function Dashboard() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false) // small header dropdown: Account / Sign out
 
+  // Undo toast: { message, taskId, previousFields } | null.
+  // previousFields holds exactly what to pass back to updateTask() to revert.
+  const [undoToast, setUndoToast] = useState(null)
+  const undoTimerRef = useRef(null)
+
   const dateISO = toISODate(selectedDate)
 
-  // dnd-kit sensors: without `activationConstraint`, ANY pointer movement
-  // (even a few px of natural hand tremor during a tap) starts a drag,
-  // which makes plain taps unreliable — especially on touchscreens. Requiring
-  // 8px of movement before a drag "activates" means a quick tap always
-  // reaches the TaskBlock's onClick (opening the edit modal), while a real
-  // drag gesture still works normally.
+  // dnd-kit sensors. PointerSensor's 8px distance keeps plain taps from
+  // misfiring as drags on desktop/trackpad. TouchSensor's delay+tolerance
+  // gives the drag HANDLE (see TaskBlock.jsx v4) a deliberate long-press
+  // feel on touch devices — it's no longer responsible for protecting
+  // scrolling, since only the small handle carries touch-action:none now.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
@@ -118,6 +140,40 @@ export default function Dashboard() {
     await data.addTask({ title, type: 'reminder', category: 'personal', pinned: true })
   }
 
+  // "Clear all pins" — bulk-deletes every currently pinned task. The
+  // confirmation prompt lives in PinnedReminders.jsx (closer to the button
+  // the user actually taps), so by the time this runs, confirmation already
+  // happened.
+  async function handleClearPinned() {
+    const ids = data.tasks.filter((t) => t.pinned).map((t) => t.id)
+    await data.deleteTasksBulk(ids)
+  }
+
+  // "Clear tray" — bulk-deletes everything currently shown in the tray for
+  // the selected day. Confirmation lives in UnscheduledTray.jsx.
+  async function handleClearTray() {
+    await data.deleteTasksBulk(trayTasks.map((t) => t.id))
+  }
+
+  /**
+   * Shows the Undo toast for a just-applied drag change, replacing any
+   * currently-showing toast and resetting its auto-dismiss timer. Kept as
+   * its own function since handleDragEnd has two call sites (schedule vs.
+   * unschedule) that both need this same "show + auto-dismiss" behavior.
+   */
+  function showUndoToast(message, taskId, previousFields) {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    setUndoToast({ message, taskId, previousFields })
+    undoTimerRef.current = setTimeout(() => setUndoToast(null), UNDO_TOAST_MS)
+  }
+
+  async function handleUndo() {
+    if (!undoToast) return
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    await data.updateTask(undoToast.taskId, undoToast.previousFields)
+    setUndoToast(null)
+  }
+
   /**
    * Handles the end of a drag gesture from dnd-kit. Two possible outcomes:
    *   1. Dropped on the tray (`over.id === 'tray'`) -> clear date/start_time.
@@ -126,6 +182,8 @@ export default function Dashboard() {
    *      header comment for why minute precision isn't handled by drag).
    * If `over` is null (dropped outside any droppable), this is a no-op —
    * dnd-kit already snaps the item back to its origin visually.
+   * Both branches snapshot the task's pre-drag date/start_time/recurrence
+   * and surface an Undo toast afterward (see showUndoToast above).
    */
   function handleDragEnd(event) {
     const { active, over } = event
@@ -133,9 +191,12 @@ export default function Dashboard() {
     const task = active.data.current?.task
     if (!task) return
 
+    const previousFields = { date: task.date, start_time: task.start_time, recurrence: task.recurrence }
+
     if (over.id === 'tray') {
       if (task.date || task.start_time) {
         data.updateTask(task.id, { date: null, start_time: null })
+        showUndoToast(`Sent "${task.title}" back to the tray`, task.id, previousFields)
       }
       return
     }
@@ -143,6 +204,7 @@ export default function Dashboard() {
       const hour = over.data.current.hour
       const newStart = `${String(hour).padStart(2, '0')}:00`
       data.updateTask(task.id, { date: dateISO, start_time: newStart, recurrence: task.date ? task.recurrence : 'none' })
+      showUndoToast(`Moved "${task.title}" to ${formatHourLabel(hour)}`, task.id, previousFields)
     }
   }
 
@@ -223,6 +285,7 @@ export default function Dashboard() {
             onAdd={handlePinAdd}
             onToggle={(t) => data.updateTask(t.id, { completed: !t.completed })}
             onDelete={data.deleteTask}
+            onClearAll={handleClearPinned}
           />
         </div>
 
@@ -245,6 +308,7 @@ export default function Dashboard() {
                 toggleCompletion={data.toggleCompletion}
                 onEdit={setEditingTask}
                 onDelete={(t) => data.deleteTask(t.id)}
+                onClearAll={handleClearTray}
               />
             </div>
           </DndContext>
@@ -279,6 +343,30 @@ export default function Dashboard() {
       )}
 
       {accountOpen && <AccountModal onClose={() => setAccountOpen(false)} />}
+
+      {/* Undo toast for drag-triggered reschedule/unschedule — see UNDO
+          TOAST in this file's header comment for rationale. */}
+      {undoToast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 plate rounded-md px-4 py-2.5 flex items-center gap-3 rise-in">
+          <span className="text-sm">{undoToast.message}</span>
+          <button
+            onClick={handleUndo}
+            className="text-sm font-semibold text-[var(--color-ember)] hover:brightness-110"
+          >
+            Undo
+          </button>
+        </div>
+      )}
     </div>
   )
+}
+
+// Formats an hour-of-day integer (0-23) as a 12-hour clock label for the
+// undo toast's message, e.g. 14 -> "2 PM". Small and local to this file
+// rather than importing Timeline's identical helper, to keep Timeline.jsx
+// focused purely on rendering concerns.
+function formatHourLabel(h) {
+  const period = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12} ${period}`
 }

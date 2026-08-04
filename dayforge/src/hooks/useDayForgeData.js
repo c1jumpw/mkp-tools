@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * FILE: src/hooks/useDayForgeData.js
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * =============================================================================
+ * PURPOSE
+ *   The single source of truth for all Supabase-backed app data: tasks,
+ *   per-date completions, routines, and routine items. Every component that
+ *   reads or mutates this data goes through the functions this hook returns
+ *   — no component talks to `supabase` directly except this file.
+ *
+ * KEY RESPONSIBILITIES
+ *   - Fetch all four tables on mount / whenever `user` changes (refetch()).
+ *   - Provide CRUD functions for tasks, completions, routines, and routine
+ *     items that both call Supabase AND update local React state optimistically
+ *     (i.e. update `tasks`/`routines`/etc. from the function's own return
+ *     value rather than re-fetching everything after every write).
+ *
+ * DATA FLOW
+ *   Dashboard.jsx calls useDayForgeData() once and passes the individual
+ *   functions down as props to QuickAdd, PinnedReminders, Timeline,
+ *   UnscheduledTray, TaskModal, RoutinesPanel.
+ *
+ * ASSUMPTIONS
+ *   - Every table has Row Level Security policies (see supabase/schema.sql)
+ *     restricting rows to `auth.uid() = user_id` — this hook always includes
+ *     `user_id: user.id` on inserts, but does NOT re-check ownership on
+ *     reads/updates/deletes client-side, since Postgres RLS is the actual
+ *     enforcement layer (client-side filtering would be redundant, not a
+ *     real security boundary).
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — fetch + per-row CRUD for tasks/completions/
+ *       routines/routine_items.
+ *   v2 (this version) — added deleteTasksBulk(ids), used by the "Clear
+ *       tray" and "Clear all pins" actions so removing many tasks at once
+ *       is a single DELETE ... WHERE id IN (...) request instead of one
+ *       network round-trip per task.
+ * =============================================================================
+ */
+
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -59,6 +100,20 @@ export function useDayForgeData() {
     const { error } = await supabase.from('tasks').delete().eq('id', id)
     if (error) throw error
     setTasks((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  /**
+   * Deletes multiple tasks in a single request (used by "Clear tray" and
+   * "Clear all pins" — deleting one-by-one in a loop would be N separate
+   * network round-trips instead of one).
+   * @param {string[]} ids - task ids to delete. No-ops safely on an empty array.
+   */
+  async function deleteTasksBulk(ids) {
+    if (!ids.length) return
+    const { error } = await supabase.from('tasks').delete().in('id', ids)
+    if (error) throw error
+    const idSet = new Set(ids)
+    setTasks((prev) => prev.filter((t) => !idSet.has(t.id)))
   }
 
   // ---- Completions (per-date, for recurring tasks) ----
@@ -149,6 +204,7 @@ export function useDayForgeData() {
     addTasksBulk,
     updateTask,
     deleteTask,
+    deleteTasksBulk,
     toggleCompletion,
     isCompletedOn,
     createRoutine,

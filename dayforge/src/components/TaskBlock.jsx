@@ -1,22 +1,19 @@
 /**
  * =============================================================================
  * FILE: src/components/TaskBlock.jsx
- * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
- *   Renders a single task/reminder/event as a draggable "plate" — used both in
+ *   Renders a single task/reminder/event as a "plate" card — used in both
  *   the Timeline (scheduled tasks) and the UnscheduledTray (tray items).
  *
  * KEY RESPONSIBILITIES
- *   - Make itself draggable via @dnd-kit's useDraggable, so Dashboard's
- *     DndContext can detect drops onto timeline hour-rows or back into the tray.
+ *   - Expose a small DEDICATED DRAG HANDLE (grip icon) as the only draggable
+ *     region — see IMPORTANT MOBILE UX FIX below for why the whole card is
+ *     no longer draggable.
  *   - Show a checkbox to toggle completion for a given date instance.
- *   - Open the edit modal on tap/click (via onEdit) so the user can change
- *     type/category/notes, or set/clear a date+time — this is the *alternate*
- *     path to scheduling a task for touch devices where drag-and-drop is
- *     less reliable than on desktop.
- *   - Offer an inline delete ("✕") button so tray/timeline items can be
- *     removed without opening the full edit modal first.
+ *   - Open the edit modal on tap/click of the main body (onEdit).
+ *   - Offer an inline delete ("✕") button.
  *
  * PROPS
  *   task       {object}   The task row from Supabase (id, title, type, category, ...).
@@ -24,33 +21,34 @@
  *   onToggle   {function} Called with no args; toggles completion for this date.
  *   onEdit     {function} Called with no args; opens TaskModal for this task.
  *   onDelete   {function} Optional. Called with no args; deletes the task entirely.
- *                         Omit this prop to hide the delete button (not currently
- *                         used anywhere, but kept optional for flexibility).
- *   dense      {boolean}  Optional. Slightly tighter vertical padding, used in
- *                         the tray where more items need to fit in less space.
+ *   dense      {boolean}  Optional. Slightly tighter vertical padding (tray use).
  *
- * IMPORTANT INTERACTION DETAIL
- *   This component renders three separately-clickable regions (checkbox, main
- *   body, delete button) INSIDE one drag-handle. Every non-drag control calls
- *   e.stopPropagation() on both onPointerDown and onClick so a tap on them
- *   doesn't get eaten by dnd-kit's drag-start listener, and doesn't trigger
- *   the drag itself. The actual click-vs-drag disambiguation (so a plain tap
- *   opens the modal instead of "dragging" a few pixels) is handled by the
- *   PointerSensor's `activationConstraint: { distance: 8 }` configured in
- *   Dashboard.jsx — a drag only begins once the pointer has moved 8px.
+ * IMPORTANT MOBILE UX FIX (v4)
+ *   v1-v3 made the ENTIRE card a drag source using dnd-kit's useDraggable,
+ *   which required `touch-action: none` on that element so the browser
+ *   wouldn't fight the drag gesture. The problem: `touch-action: none` also
+ *   PERMANENTLY blocks native scrolling on that element — not just during an
+ *   active drag, but always. Mobile testing surfaced the result: touching a
+ *   card to scroll the page either failed to scroll, or (if the finger
+ *   lifted without much movement) registered as a tap and opened the edit
+ *   modal — an "accidental edit while scrolling" bug.
+ *
+ *   Fix: only the small grip-icon handle (⠿) carries the drag listeners and
+ *   `touch-action: none`. The rest of the card has normal touch-action, so
+ *   scrolling over it works exactly like scrolling over plain text. dnd-kit
+ *   supports this natively — `setNodeRef` (which tracks the draggable
+ *   element's position) stays on the card root, while `{...listeners}` and
+ *   `{...attributes}` (which start the drag gesture) move to just the
+ *   handle button. This is dnd-kit's documented "drag handle" pattern.
  *
  * REVISION HISTORY
- *   v1 (initial build) — draggable block with checkbox + click-to-edit body.
- *   v2 — added the onDelete prop and its button, per user request to allow
- *       removing tray items without opening the edit modal.
- *   v3 (this version) — added `h-full` to the root element so the plate's
- *       colored background visibly fills whatever height its parent gives
- *       it. This matters specifically for Timeline v3, which now sizes each
- *       task's WRAPPER div proportional to duration — without h-full here,
- *       the block would only be as tall as its text content and leave a
- *       visually-empty gap below it instead of the plate itself "stretching"
- *       to fill the duration. Harmless everywhere else (e.g. the tray),
- *       where parents don't set an explicit height and h-full has no effect.
+ *   v1 (initial build) — whole card draggable, click-to-edit body.
+ *   v2 — added the onDelete prop and its button.
+ *   v3 — added h-full so the plate fills duration-proportional heights.
+ *   v4 (this version) — replaced whole-card dragging with a dedicated grip
+ *       handle (see IMPORTANT MOBILE UX FIX above), fixing the accidental-
+ *       edit-while-scrolling bug found in mobile testing. Also removed the
+ *       now-redundant `cursor-grab`/`touch-none` from the root element.
  * =============================================================================
  */
 
@@ -62,23 +60,20 @@ import { formatTimeLabel } from '../lib/recurrence'
 const TYPE_ICON = { todo: '☐', reminder: '◆', event: '▣' }
 
 export default function TaskBlock({ task, completed, onToggle, onEdit, onDelete, dense }) {
-  // useDraggable wires this whole element up as a drag source. `data: { task }`
-  // is how Dashboard's handleDragEnd knows WHICH task was dropped, since
-  // dnd-kit only gives us IDs by default.
+  // useDraggable wires up the drag SOURCE. `setNodeRef` tracks the card
+  // (so dnd-kit knows what to visually translate during a drag), but
+  // `listeners`/`attributes` — the actual gesture activators — are applied
+  // ONLY to the small handle button below, not the card root.
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { task },
   })
 
   // Work tasks get the cool steel accent stripe; personal tasks get ember.
-  // This is purely visual (see .plate::before in index.css).
   const accent = task.category === 'work' ? 'var(--color-steel)' : 'var(--color-ember)'
 
   const style = {
     '--accent': accent,
-    // While dragging, dnd-kit reports a live pixel offset via `transform` —
-    // we apply it directly rather than letting the item actually move in
-    // the DOM, which keeps the drop-target hour-row calculations stable.
     transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
     opacity: isDragging ? 0.4 : 1,
   }
@@ -87,19 +82,14 @@ export default function TaskBlock({ task, completed, onToggle, onEdit, onDelete,
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
       className={
-        'plate rounded-md px-3 cursor-grab active:cursor-grabbing touch-none h-full ' +
-        (dense ? 'py-1.5' : 'py-2')
+        'plate rounded-md px-2.5 h-full ' + (dense ? 'py-1.5' : 'py-2')
       }
     >
       <div className="flex items-start gap-2">
-        {/* Completion checkbox — stopPropagation on both events so this never
-            starts a drag or bubbles into onEdit. */}
+        {/* Completion checkbox */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggle() }}
-          onPointerDown={(e) => e.stopPropagation()}
           className={
             'mt-0.5 w-4 h-4 rounded-sm border flex-shrink-0 flex items-center justify-center text-[10px] ' +
             (completed ? 'bg-[var(--color-good)] border-[var(--color-good)] text-[var(--color-ink)]' : 'border-[var(--color-line)]')
@@ -109,9 +99,8 @@ export default function TaskBlock({ task, completed, onToggle, onEdit, onDelete,
           {completed ? '✓' : ''}
         </button>
 
-        {/* Main body — tapping/clicking here opens the edit modal. On mobile,
-            this is the primary way to give a tray item a date/time, since
-            precise drag-and-drop is harder on a touchscreen. */}
+        {/* Main body — tapping/clicking here opens the edit modal. Has NO
+            drag listeners and normal touch-action, so it scrolls naturally. */}
         <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
           <div className="flex items-center gap-1.5">
             <span className="text-xs opacity-70">{TYPE_ICON[task.type]}</span>
@@ -131,22 +120,32 @@ export default function TaskBlock({ task, completed, onToggle, onEdit, onDelete,
           )}
         </div>
 
-        {/* Delete button — only rendered when the caller passes onDelete.
-            Confirms before deleting since this is a destructive, non-undoable
-            action (no "trash/restore" concept in this schema). */}
+        {/* Delete button */}
         {onDelete && (
           <button
             onClick={(e) => {
               e.stopPropagation()
               if (window.confirm(`Delete "${task.title}"?`)) onDelete()
             }}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="flex-shrink-0 text-[var(--color-muted)] hover:text-[var(--color-ember)] text-xs px-1 transition"
+            className="flex-shrink-0 text-[var(--color-muted)] hover:text-[var(--color-ember)] text-xs px-0.5 transition"
             aria-label={`Delete ${task.title}`}
           >
             ✕
           </button>
         )}
+
+        {/* Drag handle — the ONLY draggable region on this card. touch-none
+            is scoped to just this small element, so it doesn't interfere
+            with scrolling anywhere else on the card. */}
+        <button
+          {...listeners}
+          {...attributes}
+          className="flex-shrink-0 cursor-grab active:cursor-grabbing touch-none text-[var(--color-muted)] hover:text-[var(--color-paper)] px-0.5 text-sm leading-none"
+          aria-label={`Drag to reschedule ${task.title}`}
+          title="Drag to reschedule"
+        >
+          ⠿
+        </button>
       </div>
     </div>
   )
