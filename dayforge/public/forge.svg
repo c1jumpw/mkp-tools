@@ -1,4 +1,14 @@
+<!--
+  FILE: public/forge.svg
+  VERSION: v2 (previously v1, background changed dark to white per user request)
+  Used as the browser tab favicon (see index.html link rel=icon) and as the
+  source for the rasterized PNG icons (apple touch icon, icon 192, favicon
+  32/16) generated alongside it in this repo.
+  NOTE: colors are hardcoded hex, not CSS custom properties, because
+  favicons and home screen icons render outside the page DOM and have no
+  access to the app's stylesheet variables.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#1B1D22"/>
+  <rect width="32" height="32" rx="6" fill="#FFFFFF"/>
   <path d="M8 22 L16 8 L20 8 L14 18 L24 18 L14 26 Z" fill="#E8622C"/>
 </svg>

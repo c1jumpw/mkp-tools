@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/Dashboard.jsx
- * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
+ * VERSION: v5 (previously v1-v4 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The main authenticated screen: header (branding, actions, account menu),
@@ -56,6 +56,14 @@
  *       load-bearing for "don't block scrolling" (that's now handled by
  *       TaskBlock.jsx v4's dedicated drag handle + scoped touch-action), but
  *       is kept as a reasonable default for the handle's own long-press feel.
+ *   v5 (this version) — added an "Export" header dropdown with "Export this
+ *       day" / "Export this week" actions, each generating a standard .ics
+ *       calendar file (via lib/icsExport.js) and triggering a browser
+ *       download, so the schedule can be imported into Google Calendar,
+ *       Outlook, Apple Calendar, etc. See collectEventsForExport() for how
+ *       recurring tasks are expanded into concrete per-date events for
+ *       export (not re-encoded as iCalendar RRULEs — see icsExport.js for
+ *       why).
  * =============================================================================
  */
 
@@ -65,6 +73,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useDayForgeData } from '../hooks/useDayForgeData'
 import { occursOnDate, toISODate, addDays } from '../lib/recurrence'
+import { buildICS, downloadICS } from '../lib/icsExport'
 import QuickAdd from './QuickAdd'
 import PinnedReminders from './PinnedReminders'
 import ForecastStrip from './ForecastStrip'
@@ -87,6 +96,7 @@ export default function Dashboard() {
   const [routinesOpen, setRoutinesOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false) // small header dropdown: Account / Sign out
+  const [exportOpen, setExportOpen] = useState(false) // Export dropdown: day / week .ics
 
   // Undo toast: { message, taskId, previousFields } | null.
   // previousFields holds exactly what to pass back to updateTask() to revert.
@@ -153,6 +163,53 @@ export default function Dashboard() {
   // the selected day. Confirmation lives in UnscheduledTray.jsx.
   async function handleClearTray() {
     await data.deleteTasksBulk(trayTasks.map((t) => t.id))
+  }
+
+  /**
+   * Collects every scheduled occurrence (expanding recurrence via
+   * occursOnDate) across `numDays` days starting at `startDate`, in the
+   * plain-object shape icsExport.buildICS expects. Shared by both the
+   * "Export day" (numDays=1) and "Export week" (numDays=7) actions below.
+   * Each occurrence gets a UID unique per (task, date) — since recurring
+   * tasks produce one concrete VEVENT per occurrence in the exported range
+   * rather than an RRULE (see icsExport.js header comment for why).
+   */
+  function collectEventsForExport(startDate, numDays) {
+    const events = []
+    for (let i = 0; i < numDays; i++) {
+      const d = addDays(startDate, i)
+      const iso = toISODate(d)
+      const occurring = data.tasks.filter(
+        (t) => !t.pinned && t.date && t.start_time && occursOnDate(t, d)
+      )
+      for (const t of occurring) {
+        events.push({
+          uid: `${t.id}-${iso}@dayforge.app`,
+          title: t.title,
+          description: t.notes || undefined,
+          category: t.category,
+          date: iso,
+          startTime: t.start_time.slice(0, 5),
+          durationMinutes: t.duration_minutes,
+        })
+      }
+    }
+    return events
+  }
+
+  function handleExportDay() {
+    const events = collectEventsForExport(selectedDate, 1)
+    const ics = buildICS(events, `DayForge — ${dateISO}`)
+    downloadICS(`dayforge-${dateISO}.ics`, ics)
+    setExportOpen(false)
+  }
+
+  function handleExportWeek() {
+    const events = collectEventsForExport(selectedDate, 7)
+    const endISO = toISODate(addDays(selectedDate, 6))
+    const ics = buildICS(events, `DayForge — ${dateISO} to ${endISO}`)
+    downloadICS(`dayforge-${dateISO}-to-${endISO}.ics`, ics)
+    setExportOpen(false)
   }
 
   /**
@@ -236,6 +293,37 @@ export default function Dashboard() {
           >
             Routines
           </button>
+
+          {/* Export dropdown: "Export day" / "Export week" both download a
+              .ics file — see icsExport.js and handleExportDay/Week above. */}
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen((v) => !v)}
+              className="text-sm border border-[var(--color-line)] rounded px-3 py-1.5 hover:border-[var(--color-steel)] transition"
+            >
+              Export
+            </button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 mt-2 w-48 plate rounded-md py-1 z-30">
+                  <button
+                    onClick={handleExportDay}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition"
+                  >
+                    Export this day (.ics)
+                  </button>
+                  <button
+                    onClick={handleExportWeek}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition"
+                  >
+                    Export this week (.ics)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           <button
             onClick={() => setCreatingNew(true)}
             className="text-sm bg-[var(--color-ember)] text-[var(--color-ink)] font-semibold rounded px-3 py-1.5 hover:brightness-110 transition"
