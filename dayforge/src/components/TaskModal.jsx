@@ -1,6 +1,53 @@
+/**
+ * =============================================================================
+ * FILE: src/components/TaskModal.jsx
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * =============================================================================
+ * PURPOSE
+ *   Full create/edit form for a single task: title, notes, type, category,
+ *   pinned flag, and (if scheduled) date/start time/duration/end time/
+ *   recurrence. This is the ONE place all task fields can be changed —
+ *   both the Timeline and the UnscheduledTray open this same modal.
+ *
+ * KEY RESPONSIBILITIES
+ *   - Hold local form state, seeded from `task` when editing or from
+ *     `defaultDate` when creating new.
+ *   - Keep duration (hours+minutes) and end time in sync with EACH OTHER
+ *     bidirectionally, per user request: changing duration recalculates
+ *     the end time, and changing the end time recalculates the duration.
+ *     Start time changes preserve the duration and shift the end time.
+ *   - On save, translate the form's UI-friendly fields (hours+minutes,
+ *     end time) back into the single `duration_minutes` value the database
+ *     actually stores (there is no end_time column — see supabase/schema.sql
+ *     — end time is purely a derived UI convenience, recomputed on load).
+ *
+ * PROPS
+ *   task         {object|null} Existing task to edit, or null/undefined to
+ *                               create a new one.
+ *   defaultDate  {string}      'YYYY-MM-DD' to preselect when creating new
+ *                               (typically the currently-viewed day).
+ *   onSave       {function}    (fields) -> Promise; called with the full
+ *                               field set to insert/update.
+ *   onDelete     {function}    (id) -> Promise; only used when editing.
+ *   onClose      {function}    () -> void; dismiss without side effects
+ *                               beyond whatever onSave/onDelete already did.
+ *
+ * EDGE CASES
+ *   - If the end time is set EARLIER than the start time, we treat it as
+ *     spanning past midnight (adding 24h before computing the difference)
+ *     rather than silently producing a negative/zero duration. This covers
+ *     the reasonable case of "10pm to 1am", though the task itself is still
+ *     stored against a single `date` (no explicit multi-day support here).
+ *   - Duration is floored at 5 minutes regardless of which field drove the
+ *     change, to avoid a zero/negative-duration task on the timeline.
+ * =============================================================================
+ */
+
 import { useState } from 'react'
+import { timeToMinutes, minutesToTime } from '../lib/recurrence'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MIN_DURATION_MINUTES = 5
 
 export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose }) {
   const isNew = !task
@@ -12,13 +59,64 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
   const [scheduled, setScheduled] = useState(isNew ? !!defaultDate : !!task?.date)
   const [date, setDate] = useState(task?.date || defaultDate || '')
   const [startTime, setStartTime] = useState(task?.start_time?.slice(0, 5) || '09:00')
-  const [duration, setDuration] = useState(task?.duration_minutes || 30)
+
+  // Duration is the SOURCE OF TRUTH (this is what actually gets saved to
+  // duration_minutes). Hours/minutes-part and endTime are derived display
+  // fields kept in sync with it and with each other — see the three handlers
+  // below for the sync logic.
+  const initialDuration = task?.duration_minutes || 30
+  const [duration, setDuration] = useState(initialDuration)
+  const [durHours, setDurHours] = useState(Math.floor(initialDuration / 60))
+  const [durMinutes, setDurMinutes] = useState(initialDuration % 60)
+  const [endTime, setEndTime] = useState(
+    minutesToTime((timeToMinutes(task?.start_time?.slice(0, 5) || '09:00') + initialDuration) % (24 * 60))
+  )
+
   const [recurrence, setRecurrence] = useState(task?.recurrence || 'none')
   const [recurDays, setRecurDays] = useState(task?.recurrence_days || [])
   const [busy, setBusy] = useState(false)
 
   function toggleDay(i) {
     setRecurDays((prev) => (prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i].sort()))
+  }
+
+  /**
+   * Start time changed: duration stays fixed, so the end time must shift
+   * with it (e.g. start moves 9:00 -> 9:30, a 60-min task now ends 10:30
+   * instead of 10:00).
+   */
+  function handleStartTimeChange(newStart) {
+    setStartTime(newStart)
+    setEndTime(minutesToTime((timeToMinutes(newStart) + duration) % (24 * 60)))
+  }
+
+  /**
+   * Duration fields (hours and/or minutes) changed: recompute the total
+   * duration_minutes, then push the end time forward from the (unchanged)
+   * start time to match.
+   */
+  function handleDurationPartsChange(hours, minutesPart) {
+    const total = Math.max(MIN_DURATION_MINUTES, hours * 60 + minutesPart)
+    setDurHours(hours)
+    setDurMinutes(minutesPart)
+    setDuration(total)
+    setEndTime(minutesToTime((timeToMinutes(startTime) + total) % (24 * 60)))
+  }
+
+  /**
+   * End time changed directly: recompute duration as the gap between start
+   * and end. If end <= start clock-time, assume it spans past midnight
+   * (add a full day) rather than producing a zero/negative duration —
+   * e.g. start 22:00, end 01:00 -> treated as 3 hours, not -21 hours.
+   */
+  function handleEndTimeChange(newEnd) {
+    setEndTime(newEnd)
+    let diff = timeToMinutes(newEnd) - timeToMinutes(startTime)
+    if (diff <= 0) diff += 24 * 60
+    diff = Math.max(MIN_DURATION_MINUTES, diff)
+    setDuration(diff)
+    setDurHours(Math.floor(diff / 60))
+    setDurMinutes(diff % 60)
   }
 
   async function handleSave() {
@@ -33,6 +131,8 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
         pinned,
         date: scheduled ? date : null,
         start_time: scheduled ? startTime : null,
+        // duration_minutes is the single number the database stores — hours/
+        // minutes-part and endTime were only ever UI conveniences for editing it.
         duration_minutes: scheduled ? Number(duration) : 30,
         recurrence: scheduled ? recurrence : 'none',
         recurrence_days: recurrence === 'weekly' ? recurDays : [],
@@ -107,13 +207,56 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
               </div>
               <div className="flex-1">
                 <label className="blueprint-tick uppercase block mb-1">Start time</label>
-                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm" />
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => handleStartTimeChange(e.target.value)}
+                  className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm"
+                />
               </div>
             </div>
-            <div>
-              <label className="blueprint-tick uppercase block mb-1">Duration (minutes)</label>
-              <input type="number" min={5} step={5} value={duration} onChange={(e) => setDuration(e.target.value)} className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm" />
+
+            {/* Duration (hours + minutes) and End time — bidirectionally
+                synced via handleDurationPartsChange / handleEndTimeChange.
+                Editing either one updates the other automatically. */}
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="blueprint-tick uppercase block mb-1">Duration</label>
+                <div className="flex gap-1.5 items-center">
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={durHours}
+                    onChange={(e) => handleDurationPartsChange(Math.max(0, Number(e.target.value) || 0), durMinutes)}
+                    className="w-16 bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm"
+                    aria-label="Duration hours"
+                  />
+                  <span className="text-xs text-[var(--color-muted)]">h</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    step={5}
+                    value={durMinutes}
+                    onChange={(e) => handleDurationPartsChange(durHours, Math.max(0, Math.min(59, Number(e.target.value) || 0)))}
+                    className="w-16 bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm"
+                    aria-label="Duration minutes"
+                  />
+                  <span className="text-xs text-[var(--color-muted)]">m</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <label className="blueprint-tick uppercase block mb-1">End time</label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => handleEndTimeChange(e.target.value)}
+                  className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm"
+                />
+              </div>
             </div>
+
             <div>
               <label className="blueprint-tick uppercase block mb-1">Repeats</label>
               <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm mb-2">

@@ -41,8 +41,16 @@
  *
  * REVISION HISTORY
  *   v1 (initial build) — draggable block with checkbox + click-to-edit body.
- *   v2 (this version) — added the onDelete prop and its button, per user
- *       request to allow removing tray items without opening the edit modal.
+ *   v2 — added the onDelete prop and its button, per user request to allow
+ *       removing tray items without opening the edit modal.
+ *   v3 (this version) — added `h-full` to the root element so the plate's
+ *       colored background visibly fills whatever height its parent gives
+ *       it. This matters specifically for Timeline v3, which now sizes each
+ *       task's WRAPPER div proportional to duration — without h-full here,
+ *       the block would only be as tall as its text content and leave a
+ *       visually-empty gap below it instead of the plate itself "stretching"
+ *       to fill the duration. Harmless everywhere else (e.g. the tray),
+ *       where parents don't set an explicit height and h-full has no effect.
  * =============================================================================
  */
 
@@ -82,7 +90,7 @@ export default function TaskBlock({ task, completed, onToggle, onEdit, onDelete,
       {...listeners}
       {...attributes}
       className={
-        'plate rounded-md px-3 cursor-grab active:cursor-grabbing touch-none ' +
+        'plate rounded-md px-3 cursor-grab active:cursor-grabbing touch-none h-full ' +
         (dense ? 'py-1.5' : 'py-2')
       }
     >

@@ -1,87 +1,83 @@
 /**
  * =============================================================================
  * FILE: src/components/Timeline.jsx
- * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * VERSION: v3 (previously v1, v2 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
- *   Renders the selected day as a vertical hour-by-hour grid (5am-11pm), with
- *   scheduled tasks appearing inside the row for the hour they start in.
+ *   Renders the selected day as a vertical hour grid (5am-11pm) with tasks
+ *   drawn as blocks whose HEIGHT is proportional to their actual duration —
+ *   a 90-minute task visibly taller than a 30-minute one — rather than every
+ *   task rendering as an identical fixed-size row item.
  *
  * KEY RESPONSIBILITIES
- *   - Build one droppable HourRow per hour so dnd-kit can detect "task X was
- *     dropped on hour Y" (id format: `hour-${hour}`, read by Dashboard).
- *   - Bucket + sort the day's scheduled tasks into their starting hour.
+ *   - Render one droppable "hour band" per hour (still used for drag-and-drop
+ *     target detection — dropping a task snaps it to that hour's :00).
+ *   - Absolutely position each task block within a shared day-length
+ *     content column, using timelineLayout.js to compute pixel top/height
+ *     from start_time + duration_minutes, and to place overlapping tasks in
+ *     side-by-side lanes rather than stacked illegibly.
  *
- * PROPS
- *   dayTasks          {array}    Scheduled tasks (has start_time) for the
- *                                currently selected day, already recurrence-
- *                                expanded by Dashboard.
- *   dateISO           {string}   The currently-selected day, 'YYYY-MM-DD'.
- *   isCompletedOn     {function} (task, dateISO) -> boolean.
- *   toggleCompletion  {function} (task, dateISO) -> Promise.
- *   onEdit            {function} (task) -> void; opens the edit modal, where
- *                                the exact minute/duration can be fine-tuned
- *                                beyond the hour-level precision of drag/drop.
- *   onDelete          {function} (task) -> void; permanently deletes a task.
+ * PROPS — unchanged from v2, see previous revision's doc comment:
+ *   dayTasks, dateISO, isCompletedOn, toggleCompletion, onEdit, onDelete
  *
- * ASSUMPTIONS / CONSTRAINTS
- *   - Drag-and-drop here only snaps to the HOUR (task lands at :00). Minute-
- *     level placement is intentionally left to the edit modal (TaskModal),
- *     since building pixel-accurate minute drag zones adds a lot of
- *     complexity for a marginal UX gain over "drag to the hour, then
- *     fine-tune in the modal if needed".
+ * LAYOUT STRUCTURE
+ *   A two-column flex row: a fixed-width label gutter (hour labels, e.g.
+ *   "9 AM") on the left, and a single relative-positioned "content column"
+ *   on the right that is exactly `hours.length * HOUR_PX` tall. Both the
+ *   hour drop-target bands AND the task blocks are absolutely positioned
+ *   WITHIN that same content column, so their vertical math (top/height in
+ *   pixels) lines up directly without any compensating offsets.
+ *
+ * LAYOUT MATH
+ *   HOUR_PX = pixel height of one hour's band. MINUTE_PX = HOUR_PX / 60.
+ *   A task starting at minute M (relative to START_HOUR) with duration D
+ *   renders at `top: M * MINUTE_PX` with `height: D * MINUTE_PX`, clamped to
+ *   a MIN_BLOCK_PX floor so very short tasks (e.g. 5 minutes) stay legible
+ *   and tappable instead of shrinking to a sliver.
+ *
+ * WHY THE HOUR BANDS CAN SIT BEHIND THE TASK BLOCKS
+ *   dnd-kit's collision detection compares the DRAGGED item's screen
+ *   position against the registered bounding rectangles of all droppable
+ *   elements — it does not care what's rendered visually on top of them.
+ *   So the hour bands can sit behind the absolutely-positioned task blocks
+ *   (earlier in the DOM, same stacking context) and dropping still
+ *   correctly detects "this task was dropped on hour 14" even when a
+ *   differently-sized task block visually overlaps that band.
  *
  * REVISION HISTORY
- *   v1 (initial build) — hour rows with droppable zones, no delete action.
- *   v2 (this version) — wired the onDelete prop through to each TaskBlock so
- *       scheduled items can be removed directly from the timeline, matching
- *       the tray's delete behavior.
+ *   v1 (initial build) — each hour a droppable row; tasks bucketed into
+ *       their starting hour, rendered as ordinary same-height list items.
+ *   v2 — added onDelete prop passthrough (see file's v2 history for detail).
+ *   v3 (this version) — full rework to absolute positioning + proportional
+ *       block heights via timelineLayout.js, per user request that items
+ *       "should be stretched based on the duration" instead of all showing
+ *       as identical hour-sized blocks.
  * =============================================================================
  */
 
 import { useDroppable } from '@dnd-kit/core'
 import TaskBlock from './TaskBlock'
-import { timeToMinutes } from '../lib/recurrence'
+import { layoutTasks } from '../lib/timelineLayout'
 
-// Visible hour range for the timeline. Tasks outside this window (rare, e.g.
-// a 4am wake-up) still SAVE fine — they just won't show a row here.
-// TODO: if users report needing hours outside 5am-11pm, make this
-// configurable per-user rather than a hardcoded constant. Safe to defer:
-// no reports of this being a real need yet, and widening it just adds
-// scroll length for the common case.
 const START_HOUR = 5
 const END_HOUR = 23
+const HOUR_PX = 64            // pixel height of one hour band
+const MINUTE_PX = HOUR_PX / 60
+const MIN_BLOCK_PX = 30       // floor so very short tasks stay tappable/legible
 
 /**
- * Renders a single hour's droppable row, plus any tasks starting in that hour.
- * Not exported — an internal implementation detail of Timeline.
+ * One hour's droppable background band, absolutely positioned within the
+ * content column. Purely a drop target + gridline — no label (labels live
+ * in the separate gutter column, see Timeline below) and no task content.
  */
-function HourRow({ hour, tasks, dateISO, isCompletedOn, toggleCompletion, onEdit, onDelete }) {
+function HourBand({ hour }) {
   const { setNodeRef, isOver } = useDroppable({ id: `hour-${hour}`, data: { hour } })
-  const label = formatHour(hour)
-
   return (
-    <div className="flex border-b border-[var(--color-line)] last:border-b-0">
-      <div className="w-14 flex-shrink-0 pt-2 pr-2 text-right blueprint-tick">{label}</div>
-      <div
-        ref={setNodeRef}
-        className={
-          'flex-1 min-h-16 py-1.5 px-2 space-y-1.5 transition-colors ' +
-          (isOver ? 'bg-[var(--color-surface-raised)]' : '')
-        }
-      >
-        {tasks.map((t) => (
-          <TaskBlock
-            key={t.id}
-            task={t}
-            completed={isCompletedOn(t, dateISO)}
-            onToggle={() => toggleCompletion(t, dateISO)}
-            onEdit={() => onEdit(t)}
-            onDelete={() => onDelete(t)}
-          />
-        ))}
-      </div>
-    </div>
+    <div
+      ref={setNodeRef}
+      className={'absolute left-0 right-0 border-b border-[var(--color-line)] transition-colors ' + (isOver ? 'bg-[var(--color-surface-raised)]' : '')}
+      style={{ top: (hour - START_HOUR) * HOUR_PX, height: HOUR_PX }}
+    />
   )
 }
 
@@ -94,6 +90,12 @@ function formatHour(h) {
 
 export default function Timeline({ dayTasks, dateISO, isCompletedOn, toggleCompletion, onEdit, onDelete }) {
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i)
+  const containerHeight = hours.length * HOUR_PX
+  const dayStartMin = START_HOUR * 60
+
+  // Compute {task, startMin, endMin, lane, lanesInCluster} for every
+  // scheduled task — see timelineLayout.js for the overlap/lane algorithm.
+  const positioned = layoutTasks(dayTasks)
 
   return (
     <div className="plate rounded-lg overflow-hidden">
@@ -101,26 +103,51 @@ export default function Timeline({ dayTasks, dateISO, isCompletedOn, toggleCompl
         <h2 className="[font-family:var(--font-display)] uppercase tracking-wide text-lg">Timeline</h2>
       </div>
       <div className="max-h-[65vh] overflow-y-auto">
-        {hours.map((h) => {
-          // Bucket this hour's tasks: must have a start_time AND that time's
-          // hour component must match. Sorted so multiple tasks in the same
-          // hour appear in chronological (not insertion) order.
-          const tasks = dayTasks
-            .filter((t) => t.start_time && Math.floor(timeToMinutes(t.start_time) / 60) === h)
-            .sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time))
-          return (
-            <HourRow
-              key={h}
-              hour={h}
-              tasks={tasks}
-              dateISO={dateISO}
-              isCompletedOn={isCompletedOn}
-              toggleCompletion={toggleCompletion}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          )
-        })}
+        <div className="flex">
+          {/* Label gutter — fixed width, one absolutely-positioned label per
+              hour so its vertical rhythm matches the content column exactly. */}
+          <div className="relative w-14 flex-shrink-0" style={{ height: containerHeight }}>
+            {hours.map((h) => (
+              <div
+                key={h}
+                className="absolute right-2 blueprint-tick"
+                style={{ top: (h - START_HOUR) * HOUR_PX + 4 }}
+              >
+                {formatHour(h)}
+              </div>
+            ))}
+          </div>
+
+          {/* Content column — hour drop-target bands behind, duration-sized
+              task blocks on top, both positioned in the SAME coordinate
+              space so no cross-column offset math is needed. */}
+          <div className="relative flex-1" style={{ height: containerHeight }}>
+            {hours.map((h) => <HourBand key={h} hour={h} />)}
+
+            {positioned.map(({ task, startMin, endMin, lane, lanesInCluster }) => {
+              const top = (startMin - dayStartMin) * MINUTE_PX
+              const height = Math.max(MIN_BLOCK_PX, (endMin - startMin) * MINUTE_PX)
+              const widthPct = 100 / lanesInCluster
+              return (
+                <div
+                  key={task.id}
+                  className="absolute px-1"
+                  style={{ top, height, left: `${lane * widthPct}%`, width: `${widthPct}%` }}
+                >
+                  <div className="h-full overflow-hidden">
+                    <TaskBlock
+                      task={task}
+                      completed={isCompletedOn(task, dateISO)}
+                      onToggle={() => toggleCompletion(task, dateISO)}
+                      onEdit={() => onEdit(task)}
+                      onDelete={() => onDelete(task)}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
     </div>
   )
