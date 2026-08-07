@@ -89,6 +89,55 @@ device's own copy, entered once, saved locally after it's verified).
 1. Open Dispatch. You'll land on a passcode lock screen — enter the `APP_PASSCODE` you set in step 1.6. This is saved on this device only; you won't be asked again unless you clear the site's storage.
 2. Gear icon → **Settings**. If this is the very first device ever, tap **Connect to ClickUp** and approve access on ClickUp's page — this only needs to happen once, ever, for the whole app (the connection is stored server-side on the Worker, not per-device). Every other device just needs the passcode from step 1.
 
+## 4. Auto-deploy setup (optional but recommended)
+
+By default, deploying a Worker change means running `wrangler deploy`
+by hand from a terminal every time. A GitHub Actions workflow
+(`.github/workflows/deploy-worker.yml`, already in this repo) can do
+that step automatically instead, the moment a change lands on `main`.
+
+**What this does and doesn't cover:**
+- The **frontend** (everything except `worker/`) already auto-deploys
+  on every push — that's just how GitHub Pages works, always has been,
+  nothing to set up.
+- The **Worker** is the one piece that needed a manual step. This
+  workflow removes it.
+- Getting a code change from wherever it's written (a local editor, or
+  handed to you as files) *into* this GitHub repo in the first place
+  still requires either a manual `git push`, or granting direct push
+  access to whatever's generating the code — that part is a separate
+  decision from the Worker-deploy automation below, and isn't
+  something a GitHub Actions workflow can shortcut on its own.
+
+**Setup (5 minutes, one time):**
+
+1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → click
+   your profile icon (top right) → **My Profile** → **API Tokens**.
+2. **Create Token** → find the **"Edit Cloudflare Workers"** template →
+   **Use template**.
+3. Under **Account Resources**, make sure it's scoped to the account
+   this Worker lives in (not "All accounts" — narrower is safer).
+4. Create it, then **copy the token** — this is the one and only time
+   Cloudflare shows it to you.
+5. In GitHub: this repo → **Settings** → **Secrets and variables** →
+   **Actions** → **New repository secret**.
+   - Name: `CLOUDFLARE_API_TOKEN` (exact spelling matters)
+   - Value: paste the token from step 4
+   - Save.
+
+That's it — this token is now stored encrypted by GitHub, injected
+only into this workflow's run, and never visible again to anyone
+(including in the Actions logs). It does **not** need to be shared
+anywhere else, including in chat with an AI assistant helping edit
+this project — GitHub's secret store is the correct, secure place for
+it, precisely so that it doesn't have to pass through anyone/anything
+else.
+
+**Test it:** repo → **Actions** tab → **Deploy Cloudflare Worker** →
+**Run workflow** → **Run workflow** button. Should turn green in
+~15 seconds. From then on, any push touching `mkp-dispatch/worker/**`
+triggers this automatically — no more manual `wrangler deploy`.
+
 ---
 
 ## Editing what goes where

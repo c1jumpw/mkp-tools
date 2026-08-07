@@ -83,13 +83,6 @@
  *                        always works; see app.js for what's done (and
  *                        NOT done, i.e. never persisted locally) with
  *                        that field client-side.
- *   v7  2026-07-28  buildTaskPayload() now also folds account-specific
- *                    fields (accountType, adminUsername, adminEmail,
- *                    password, notes) into the task description — used
- *                    when "Add to Accounts" is routed directly to a
- *                    List instead of Chat (new destination toggle, see
- *                    app.js). Same plaintext-password trade-off as the
- *                    Chat-message path, just in a task description.
  * =========================================================================
  */
 
@@ -155,15 +148,6 @@ const ClickUp = (() => {
     if (entry.fields.company) descriptionParts.push(`Company: ${entry.fields.company}`);
     if (entry.fields.contactMethod) descriptionParts.push(`Best contact method: ${entry.fields.contactMethod}`);
     if (entry.fields.opportunity) descriptionParts.push(`Opportunity: ${entry.fields.opportunity}`);
-    // "Add to Accounts" fields, when routed directly to a List instead
-    // of Chat (see app.js's destination toggle) — same plaintext
-    // trade-off as the Chat-message version (see formatAccountMessage
-    // in app.js), just landing in a task description instead.
-    if (entry.fields.accountType) descriptionParts.push(`Account Type: ${entry.fields.accountType}`);
-    if (entry.fields.adminUsername) descriptionParts.push(`Admin Username: ${entry.fields.adminUsername}`);
-    if (entry.fields.adminEmail) descriptionParts.push(`Admin Email: ${entry.fields.adminEmail}`);
-    if (entry.fields.password) descriptionParts.push(`Password: ${entry.fields.password}`);
-    if (entry.fields.notes) descriptionParts.push(`Notes: ${entry.fields.notes}`);
     if (entry.transcript) descriptionParts.push(`\n— Voice transcript —\n${entry.transcript}`);
     if (descriptionParts.length) payload.description = descriptionParts.join('\n\n');
 

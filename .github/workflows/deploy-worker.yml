@@ -1,0 +1,51 @@
+# =============================================================================
+# deploy-worker.yml — auto-deploys the Cloudflare Worker on push to main
+# =============================================================================
+# PURPOSE
+#   Replaces the manual `wrangler deploy` step that previously had to be
+#   run by hand from PowerShell after every Worker change. Whenever a
+#   commit touching mkp-dispatch/worker/** lands on `main`, this runs
+#   `wrangler deploy` automatically in GitHub's cloud runner instead.
+#
+# WHAT THIS DOES NOT COVER
+#   The frontend (everything outside worker/) doesn't need a workflow at
+#   all — GitHub Pages already rebuilds automatically on every push to
+#   main, and always has. This file exists specifically because the
+#   Worker deploy step was the one piece GitHub Pages doesn't handle.
+#
+# REQUIRED SETUP (one-time, done in GitHub's web UI — never touches
+# this repo's code or any chat/AI tool):
+#   Repo → Settings → Secrets and variables → Actions → New repository
+#   secret → name it exactly CLOUDFLARE_API_TOKEN → paste a Cloudflare
+#   API token scoped to "Edit Cloudflare Workers" for this account (see
+#   README.md "Auto-deploy setup" for how to create one). That's the
+#   only secret this workflow needs.
+#
+# VERSION HISTORY
+#   v1  2026-07-28  Initial workflow.
+# =============================================================================
+
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mkp-dispatch/worker/**'
+  # Lets you trigger a deploy manually from the Actions tab without
+  # needing an actual code change — useful the first time, to confirm
+  # the secret is wired up correctly before relying on it.
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Deploy Worker via Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: 'mkp-dispatch/worker'

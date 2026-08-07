@@ -131,17 +131,8 @@
  *                    explicitly rather than read from the shared
  *                    `state` object, so a background retry can never
  *                    clobber whatever a different form has in progress.
- * *                    Also added a `password` field type to renderField
+ *                    Also added a `password` field type to renderField
  *                    (masked input) and bell/key icons.
- *   v8  2026-07-28  Added a destination toggle to "Add to Accounts"
- *                    (Chat review channel vs. direct to the one known
- *                    account-directory List — config.js
- *                    directListId). Reuses the existing action:'task'
- *                    path entirely (submitCapture just overrides
- *                    `action`/`listId` for this one submission when
- *                    "Direct to List" is selected) — no new send logic
- *                    needed, since performSend already knows how to
- *                    create a task.
  * =========================================================================
  */
 
@@ -392,7 +383,7 @@ const App = (() => {
     // existed.
     const action = type.action || 'task';
 
-    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null, parentTaskUrl: null, accountDestination: 'chat' };
+    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null, parentTaskUrl: null };
     const schema = FIELD_SCHEMAS[type.schema];
     const speechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     const recordSupported = !!(navigator.mediaDevices && window.MediaRecorder);
@@ -409,12 +400,6 @@ const App = (() => {
     const taskSearchListIds = requiresTaskSearch
       ? entity.captureTypes.filter(t => t.schema === 'task').map(t => t.listId)
       : (showAssignee ? [type.listId] : []);
-    // "Add to Accounts" specifically gets a destination toggle: post
-    // to the Chat review/buffer channel (default, matches everything
-    // before this feature existed) or file straight into the one
-    // known account-directory List (type.directListId — see config.js
-    // MKC_CLIENT_ACCOUNTS_LIST_ID comment for why there's only one).
-    const showDestinationToggle = type.schema === 'account' && type.directListId;
 
     root.innerHTML = `
       <header class="topbar">
@@ -424,11 +409,6 @@ const App = (() => {
       </header>
       <main class="form">
         <form id="capture-form">
-          ${showDestinationToggle ? `
-          <div class="segmented" id="account-destination">
-            <button type="button" class="segmented-btn active" data-dest="chat">${icon('note')} Review Channel</button>
-            <button type="button" class="segmented-btn" data-dest="direct">${icon('link')} Direct to List</button>
-          </div>` : ''}
           ${requiresTaskSearch ? `<div id="subtask-block"></div>` : ''}
           ${schema.map(f => renderField(f)).join('')}
           ${showAssignee ? `<div id="subtask-block"></div>` : ''}
@@ -458,15 +438,6 @@ const App = (() => {
     `;
 
     bindBack();
-
-    if (showDestinationToggle) {
-      root.querySelectorAll('#account-destination .segmented-btn').forEach(btn => {
-        btn.onclick = () => {
-          state.accountDestination = btn.dataset.dest;
-          root.querySelectorAll('#account-destination .segmented-btn').forEach(b => b.classList.toggle('active', b === btn));
-        };
-      });
-    }
 
     if (showAssignee) {
       loadAssigneeOptions(type.listId);
@@ -1016,19 +987,7 @@ const App = (() => {
     stopRecognizer();
     if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
 
-    let action = type.action || 'task';
-    let effectiveListId = type.listId;
-    // "Add to Accounts" destination toggle (see renderForm): flips
-    // this specific capture from a Chat post to a normal task
-    // creation against the one known account-directory List.
-    // Everything downstream (performSend, buildTaskPayload) already
-    // knows how to handle action:'task' — no new code path needed,
-    // just picking which one applies for this submission.
-    if (type.schema === 'account' && type.directListId && state.accountDestination === 'direct') {
-      action = 'task';
-      effectiveListId = type.directListId;
-    }
-
+    const action = type.action || 'task';
     const fields = collectFields(schema);
     const requiredMissing = schema.find(f => f.required && !fields[f.key]);
     if (requiredMissing) {
@@ -1056,7 +1015,7 @@ const App = (() => {
       color: entity.color,
       typeId: type.id,
       typeLabel: type.label,
-      listId: effectiveListId,
+      listId: type.listId,
       channelId: type.channelId || null,
       fields,
       title: fields.title || fields.name || (action === 'comment' ? 'Follow-up' : '(untitled)'),

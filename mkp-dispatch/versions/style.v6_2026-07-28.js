@@ -38,9 +38,6 @@
  *                    Home's topbar gained a leading icon (matching
  *                    every other screen's back-btn/brand/action
  *                    layout), so .brand is never first-child anymore.
- *   v6  2026-07-28  Added .segmented/.segmented-btn (the "Add to
- *                    Accounts" destination toggle: Chat review channel
- *                    vs. direct to List).
  * =========================================================================
  */
 
@@ -512,32 +509,6 @@ a { color: var(--amber); }
   font-size: 12px;
   text-decoration: underline;
   flex-shrink: 0;
-}
-
-.segmented {
-  display: flex;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 3px;
-  margin-bottom: 2px;
-}
-.segmented-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 9px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.segmented-btn svg { width: 14px; height: 14px; }
-.segmented-btn.active {
-  background: var(--amber);
-  color: #1A1200;
 }
 
 .pill-btn--wide {

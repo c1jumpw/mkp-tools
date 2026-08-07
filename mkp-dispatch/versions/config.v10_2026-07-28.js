@@ -126,15 +126,6 @@
  *                        review in Chat → manually exported to the
  *                        right destination. User confirmed keeping
  *                        only the Chat-based version.
- *   v11 2026-07-28  Added MKC_CLIENT_ACCOUNTS_LIST_ID and a
- *                    `directListId` on "Add to Accounts" — powers a
- *                    new destination toggle in the app (Chat review
- *                    channel vs. straight into this List). Only one
- *                    known List destination exists (MKC Client
- *                    accounts specifically, per the workspace doc);
- *                    the direct option uses it regardless of the
- *                    selected Account Type, since MKC's/MKP's own
- *                    accounts are exported outside ClickUp entirely.
  * =========================================================================
  */
 
@@ -162,15 +153,6 @@ const DEFAULT_PROXY_URL = 'https://dispatch-clickup-proxy.c1-jumpw.workers.dev';
 // "mkc-sa-add-to-accounts-admin"), matches the URL the user provided:
 // app.clickup.com/25724879/chat/r/rh1yf-12097
 const ADD_TO_ACCOUNTS_CHANNEL_ID = 'rh1yf-12097';
-
-// The one known ClickUp List destination for account entries — used
-// by "Add to Accounts"'s direct-to-list toggle (added 2026-07-28).
-// Per the user's workspace doc, this is specifically where *reviewed*
-// MKC Client accounts land; MKC's and MKP's own accounts get exported
-// outside ClickUp entirely once reviewed, so there's no equivalent
-// list ID for those — the direct option uses this same list
-// regardless of account type, since it's the only known destination.
-const MKC_CLIENT_ACCOUNTS_LIST_ID = '901711853904';
 
 const WORKSPACE_ID = '25724879';
 
@@ -297,7 +279,7 @@ const ENTITIES = [
       { id: 'team-note', label: 'Team Directory Update', icon: 'user', schema: 'log', listId: '901711759484' },
       { id: 'automation', label: 'Automation Idea', icon: 'bulb', schema: 'lightbulb', listId: '901711237466' },
       { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' },
-      { id: 'add-account', label: 'Add to Accounts', icon: 'key', schema: 'account', action: 'chat', channelId: ADD_TO_ACCOUNTS_CHANNEL_ID, directListId: MKC_CLIENT_ACCOUNTS_LIST_ID }
+      { id: 'add-account', label: 'Add to Accounts', icon: 'key', schema: 'account', action: 'chat', channelId: ADD_TO_ACCOUNTS_CHANNEL_ID }
     ]
   },
   {
