@@ -72,3 +72,25 @@ create policy "own routine items" on routine_items for all
 create index if not exists tasks_user_date_idx on tasks (user_id, date);
 create index if not exists completions_user_task_date_idx on task_completions (user_id, task_id, date);
 create index if not exists routine_items_routine_idx on routine_items (routine_id, sort_order);
+
+-- =============================================================================
+-- Voice notes (added in migrations/002_voice_notes.sql for already-deployed
+-- projects; included here too so a FRESH install gets the same schema in one
+-- pass). See that migration file's comments for the full explanation.
+-- =============================================================================
+alter table tasks add column if not exists voice_note_path text;
+alter table tasks add column if not exists voice_note_transcript text;
+alter table tasks add column if not exists voice_note_duration_seconds integer;
+
+insert into storage.buckets (id, name, public)
+values ('voice-notes', 'voice-notes', false)
+on conflict (id) do nothing;
+
+create policy "own voice note objects select" on storage.objects for select
+  using (bucket_id = 'voice-notes' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "own voice note objects insert" on storage.objects for insert
+  with check (bucket_id = 'voice-notes' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "own voice note objects delete" on storage.objects for delete
+  using (bucket_id = 'voice-notes' and (storage.foldername(name))[1] = auth.uid()::text);

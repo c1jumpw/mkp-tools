@@ -19,7 +19,7 @@ Your data is stored in a real database (Supabase), not browser localStorage — 
 
 1. Go to [supabase.com](https://supabase.com), sign up free, and create a new project.
 2. Once it's ready, open **SQL Editor** in the left sidebar → **New query**.
-3. Paste the entire contents of [`supabase/schema.sql`](./supabase/schema.sql) from this repo and click **Run**. This creates the tables and locks them down so only you can read/write your own data.
+3. Paste the entire contents of [`supabase/schema.sql`](./supabase/schema.sql) from this repo and click **Run**. This creates the tables and locks them down so only you can read/write your own data. (This file is kept up to date with every feature — a fresh install only needs this one script. If you already have a running DayForge database and are updating an existing deployment, check [`supabase/migrations/`](./supabase/migrations) for any incremental scripts you haven't run yet, and run them in filename order.)
 4. In your Supabase project, go to **Settings → API**. Copy:
    - **Project URL**
    - **anon public** key
