@@ -142,33 +142,6 @@
  *                    "Direct to List" is selected) — no new send logic
  *                    needed, since performSend already knows how to
  *                    create a task.
- *   v9  2026-08-07  Three refinements to the Direct-to-List path:
- *                    (1) Real custom fields, not just description
- *                        text. getAccountFieldMapping()/
- *                        loadAccountFieldMapping() look up the MKC
- *                        Client Accounts list's actual ClickUp custom
- *                        field IDs (Admin Username, Admin Email,
- *                        Registered Password, Tool/Software/Act via
- *                        our `title` field) by name-matching, prefetch
- *                        on toggle-click, and resolve into
- *                        entry.customFields before submit. sanitize
- *                        ForRecent() updated to scrub the password out
- *                        of customFields too, not just fields.password
- *                        — it can now live in either place depending
- *                        on which path was used.
- *                    (2) Direct-to-List now ALSO posts a note to the
- *                        accounts review channel (worded "Added
- *                        directly" rather than "New Account, pending
- *                        review") — per user request, so the channel
- *                        stays the single place to see all account
- *                        activity regardless of which path was used.
- *                    (3) "Direct to List" only enables once Account
- *                        Type = MKC Client is selected (auto-reverts
- *                        to Review Channel if changed away after being
- *                        selected) — there's no equivalent List for
- *                        MKC's or MKP's own accounts, confirmed by the
- *                        user; offering it for those would silently
- *                        fail or misfile.
  * =========================================================================
  */
 
@@ -399,12 +372,6 @@ const App = (() => {
   // duplicates.
   const listTasksCache = {};
 
-  // Same idea again, for "Add to Accounts"'s Direct-to-List custom
-  // field lookup — see loadAccountFieldMapping()/getAccountFieldMapping()
-  // below. Keyed by listId; holds a Promise of the resolved {key:
-  // fieldId} mapping (not the raw ClickUp field list).
-  const accountFieldMappingCache = {};
-
   // Cloudflare's free-tier Worker plan hard-caps any request body at
   // 100MB (ClickUp itself allows up to 1GB per attachment, but that
   // never matters here — the proxy rejects first). Warn well under
@@ -460,9 +427,8 @@ const App = (() => {
           ${showDestinationToggle ? `
           <div class="segmented" id="account-destination">
             <button type="button" class="segmented-btn active" data-dest="chat">${icon('note')} Review Channel</button>
-            <button type="button" class="segmented-btn" data-dest="direct" id="direct-to-list-btn" disabled title="Only available for MKC Client accounts">${icon('link')} Direct to List</button>
-          </div>
-          <p class="hint" id="direct-to-list-hint">"Direct to List" is only available once Account Type is set to MKC Client \u2014 MKC's and MKP's own accounts are reviewed and exported outside ClickUp.</p>` : ''}
+            <button type="button" class="segmented-btn" data-dest="direct">${icon('link')} Direct to List</button>
+          </div>` : ''}
           ${requiresTaskSearch ? `<div id="subtask-block"></div>` : ''}
           ${schema.map(f => renderField(f)).join('')}
           ${showAssignee ? `<div id="subtask-block"></div>` : ''}
@@ -494,41 +460,12 @@ const App = (() => {
     bindBack();
 
     if (showDestinationToggle) {
-      const directBtn = root.querySelector('#direct-to-list-btn');
-      const accountTypeSelect = root.querySelector('#field-accountType');
-
       root.querySelectorAll('#account-destination .segmented-btn').forEach(btn => {
         btn.onclick = () => {
-          if (btn.disabled) return;
           state.accountDestination = btn.dataset.dest;
           root.querySelectorAll('#account-destination .segmented-btn').forEach(b => b.classList.toggle('active', b === btn));
-          if (btn.dataset.dest === 'direct') {
-            // Prefetch now rather than waiting until Send — same
-            // "ready before it's needed" pattern as loadAssigneeOptions.
-            loadAccountFieldMapping(type.directListId);
-          }
         };
       });
-
-      // Direct-to-List only makes sense for MKC Client accounts (see
-      // config.js MKC_CLIENT_ACCOUNTS_LIST_ID comment — MKC's and
-      // MKP's own accounts have no equivalent List at all). React live
-      // to the Account Type field rather than only checking at submit
-      // time, so the option visibly enables/disables as you pick.
-      const syncDirectAvailability = () => {
-        const eligible = accountTypeSelect.value === 'MKC Client';
-        directBtn.disabled = !eligible;
-        directBtn.title = eligible ? '' : 'Only available for MKC Client accounts';
-        if (!eligible && state.accountDestination === 'direct') {
-          // Selected type changed away from MKC Client after Direct
-          // was already chosen — fall back to the always-valid option
-          // rather than leaving an unusable choice selected.
-          state.accountDestination = 'chat';
-          root.querySelectorAll('#account-destination .segmented-btn').forEach(b => b.classList.toggle('active', b.dataset.dest === 'chat'));
-        }
-      };
-      accountTypeSelect.addEventListener('change', syncDirectAvailability);
-      syncDirectAvailability();
     }
 
     if (showAssignee) {
@@ -645,68 +582,6 @@ const App = (() => {
         select.innerHTML = `<option value="">Unavailable — you can still send without an assignee</option>`;
       }
     }
-  }
-
-  /**
-   * loadAccountFieldMapping
-   * Kicks off (and caches) the fetch+match described in
-   * getAccountFieldMapping() below, without blocking on it — called
-   * as soon as "Direct to List" is selected so the mapping is likely
-   * already resolved by the time Send is tapped, same "prefetch early"
-   * pattern as loadAssigneeOptions.
-   * @param {string} listId
-   */
-  function loadAccountFieldMapping(listId) {
-    getAccountFieldMapping(listId).catch(() => {
-      // Swallow here — submitCapture() awaits the same cached promise
-      // and handles a failure there (falls back to plain description
-      // text for whichever fields didn't resolve, rather than
-      // blocking the whole submission on a field-lookup hiccup).
-    });
-  }
-
-  /**
-   * getAccountFieldMapping
-   * Fetches a List's real ClickUp custom field definitions
-   * (ClickUp.getListFields) and matches them by name to the "Add to
-   * Accounts" form fields that have a real custom-field home in the
-   * MKC Client Accounts list: Admin Username, Admin Email, Registered
-   * Password, and Tool/Software/Act (mapped from our `title` field,
-   * labeled "Account / Tool Name & Purpose" in the form). Matching is
-   * substring-based and case-insensitive rather than an exact string
-   * match, so a minor rename of the ClickUp field later doesn't
-   * silently break this. "Notes" and "Account Type" have no
-   * corresponding custom field in this list and are deliberately not
-   * mapped — they still land in the task description as plain text
-   * (see clickup.js buildTaskPayload()). "MKC ID" and "Notebook Link"
-   * are deliberately never set by Dispatch at all — see config.js/
-   * README for why (auto-generated by ClickUp, and manually filled in
-   * later, respectively).
-   * @param {string} listId
-   * @returns {Promise<{adminUsername?:string, adminEmail?:string, password?:string, title?:string}>}
-   *   values are ClickUp custom field IDs (only present for fields
-   *   that were actually found — a missing key means no match, not an
-   *   error, and callers should treat that field as description-only)
-   */
-  function getAccountFieldMapping(listId) {
-    if (!accountFieldMappingCache[listId]) {
-      accountFieldMappingCache[listId] = ClickUp.getListFields(listId).then(fields => {
-        const find = (...keywords) => {
-          const match = fields.find(f => keywords.some(k => f.name.toLowerCase().includes(k)));
-          return match ? match.id : undefined;
-        };
-        return {
-          adminUsername: find('admin username', 'username'),
-          adminEmail: find('admin email', 'email'),
-          password: find('registered password', 'password'),
-          title: find('tool/software', 'tool / software', 'software/act', 'tool')
-        };
-      }).catch(err => {
-        delete accountFieldMappingCache[listId]; // don't cache a failure — allow retry
-        throw err;
-      });
-    }
-    return accountFieldMappingCache[listId];
   }
 
   // -----------------------------------------------------------------
@@ -1169,32 +1044,6 @@ const App = (() => {
       return;
     }
 
-    // Direct-to-List "Add to Accounts": resolve real ClickUp custom
-    // field IDs for whichever of Admin Username/Email/Password/Title
-    // have a matching field in this List (see getAccountFieldMapping's
-    // doc comment). Awaited here (usually instant, since renderForm
-    // already prefetches this the moment Direct is selected) rather
-    // than fired-and-forgotten, since Send needs the real IDs before
-    // building the task payload — but a failure here doesn't block
-    // sending: buildTaskPayload() falls back to plain description
-    // text for whichever fields didn't resolve.
-    let customFields = [];
-    let customFieldKeys = [];
-    if (action === 'task' && type.schema === 'account') {
-      try {
-        const mapping = await getAccountFieldMapping(effectiveListId);
-        const candidates = { adminUsername: fields.adminUsername, adminEmail: fields.adminEmail, password: fields.password, title: fields.title };
-        Object.keys(candidates).forEach(key => {
-          if (mapping[key] && candidates[key]) {
-            customFields.push({ id: mapping[key], value: candidates[key] });
-            customFieldKeys.push(key);
-          }
-        });
-      } catch (err) {
-        // Swallow — see doc comment above.
-      }
-    }
-
     const sendBtn = root.querySelector('#send-btn');
     sendBtn.disabled = true;
     sendBtn.textContent = 'Sending…';
@@ -1210,8 +1059,6 @@ const App = (() => {
       listId: effectiveListId,
       channelId: type.channelId || null,
       fields,
-      customFields,
-      customFieldKeys,
       title: fields.title || fields.name || (action === 'comment' ? 'Follow-up' : '(untitled)'),
       createdAt: Date.now(),
       // For action:'task' + "Make this a subtask": the chosen parent.
@@ -1293,18 +1140,6 @@ const App = (() => {
     if (entry.clickupUrl) {
       ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
     }
-    // "Add to Accounts", Direct-to-List path specifically: entry.
-    // channelId is only ever set for this one capture type (see
-    // config.js — no other entry defines it), so this is naturally
-    // scoped to just Add to Accounts even though the check itself is
-    // generic. Per the user: even when filing straight into the List,
-    // still post a note to the accounts review channel too — just
-    // worded as "already added" rather than "needs review", since
-    // there's nothing left to action on it.
-    if (entry.channelId) {
-      const note = `\u2705 **Added directly to list** \u2014 ${entry.fields.accountType || ''}\n${entry.title}\n${entry.clickupUrl}`;
-      ClickUp.postToChannel(entry.channelId, note).catch(() => {});
-    }
   }
 
   /**
@@ -1331,29 +1166,15 @@ const App = (() => {
   /**
    * sanitizeForRecent
    * Returns a shallow copy of an entry safe to keep in the local
-   * Recent-captures log — currently strips fields.password (Add to
-   * Accounts, Chat-review path) and any matching value inside
-   * customFields (Add to Accounts, Direct-to-List path — the password
-   * can end up there too once resolved to a real ClickUp custom
-   * field; see submitCapture()'s customFields resolution). Everything
-   * else about the entry is unchanged.
+   * Recent-captures log — currently only strips fields.password
+   * (Add to Accounts). Everything else about the entry is unchanged.
    * @param {object} entry
    * @returns {object}
    */
   function sanitizeForRecent(entry) {
-    const hasPasswordField = entry.fields && entry.fields.password;
-    const hasPasswordCustomField = entry.customFieldKeys && entry.customFieldKeys.includes('password');
-    if (!hasPasswordField && !hasPasswordCustomField) return entry;
-
+    if (!entry.fields || !entry.fields.password) return entry;
     const clone = { ...entry, fields: { ...entry.fields } };
     delete clone.fields.password;
-    if (hasPasswordCustomField) {
-      clone.customFields = (entry.customFields || []).filter(cf => {
-        const idx = entry.customFieldKeys.indexOf('password');
-        const passwordFieldId = idx > -1 ? entry.customFields[idx].id : null;
-        return cf.id !== passwordFieldId;
-      });
-    }
     return clone;
   }
 

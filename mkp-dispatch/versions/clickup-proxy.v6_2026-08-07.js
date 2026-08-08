@@ -136,14 +136,6 @@
  *                        posts to a different Chat channel than the
  *                        general activity log, so the Worker needed a
  *                        second destination without a second route.
- *   v7  2026-08-07  Widened the allowlist to include `list/:id/field`
- *                    (GET) — needed so "Add to Accounts"'s Direct-to-
- *                    List mode can look up the MKC Client Accounts
- *                    list's real custom field IDs (Admin Username,
- *                    Admin Email, Registered Password, Tool/Software/
- *                    Act) and actually populate them, instead of the
- *                    previous behavior of only dumping everything into
- *                    the task description.
  * =========================================================================
  */
 
@@ -203,7 +195,7 @@ export default {
     //     WORKSPACE_ID/CHAT_CHANNEL_ID substituted in, not just the
     //     path forwarded as-is.
     // ---------------------------------------------------------------
-    const API_V2_PATHS = /^\/(user|list\/\d+\/task|list\/\d+\/member|list\/\d+\/field|task\/[A-Za-z0-9]+|task\/[A-Za-z0-9]+\/attachment|task\/[A-Za-z0-9]+\/comment)$/;
+    const API_V2_PATHS = /^\/(user|list\/\d+\/task|list\/\d+\/member|task\/[A-Za-z0-9]+|task\/[A-Za-z0-9]+\/attachment|task\/[A-Za-z0-9]+\/comment)$/;
     const isChatChannelsLookup = url.pathname === '/chat/channels' && request.method === 'GET';
     const isChatLog = url.pathname === '/log/chat' && request.method === 'POST';
 

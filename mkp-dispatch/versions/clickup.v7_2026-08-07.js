@@ -90,15 +90,6 @@
  *                    List instead of Chat (new destination toggle, see
  *                    app.js). Same plaintext-password trade-off as the
  *                    Chat-message path, just in a task description.
- *   v8  2026-08-07  Added getListFields() — looks up a List's real
- *                    ClickUp custom field IDs. buildTaskPayload() now
- *                    passes through entry.customFields (pre-resolved
- *                    by app.js via name-matching) as payload.
- *                    custom_fields, and skips re-dumping
- *                    adminUsername/adminEmail/password into the plain
- *                    description for whichever ones successfully
- *                    resolved to a real field — avoids the password
- *                    ending up duplicated in two places on one task.
  * =========================================================================
  */
 
@@ -168,20 +159,10 @@ const ClickUp = (() => {
     // of Chat (see app.js's destination toggle) — same plaintext
     // trade-off as the Chat-message version (see formatAccountMessage
     // in app.js), just landing in a task description instead.
-    // "Add to Accounts" fields, when routed directly to a List instead
-    // of Chat (see app.js's destination toggle). Admin
-    // Username/Email/Password/Tool now go into real ClickUp custom
-    // fields when a match was found (entry.customFields, resolved in
-    // app.js) — only fall back to writing them into the description
-    // for whichever ones DIDN'T resolve to a real field, so the
-    // password (in particular) never ends up duplicated in two places
-    // on the same task. "Notes" has no matching custom field in this
-    // list at all, so it always goes into the description.
-    const resolvedKeys = new Set((entry.customFieldKeys || []));
     if (entry.fields.accountType) descriptionParts.push(`Account Type: ${entry.fields.accountType}`);
-    if (entry.fields.adminUsername && !resolvedKeys.has('adminUsername')) descriptionParts.push(`Admin Username: ${entry.fields.adminUsername}`);
-    if (entry.fields.adminEmail && !resolvedKeys.has('adminEmail')) descriptionParts.push(`Admin Email: ${entry.fields.adminEmail}`);
-    if (entry.fields.password && !resolvedKeys.has('password')) descriptionParts.push(`Password: ${entry.fields.password}`);
+    if (entry.fields.adminUsername) descriptionParts.push(`Admin Username: ${entry.fields.adminUsername}`);
+    if (entry.fields.adminEmail) descriptionParts.push(`Admin Email: ${entry.fields.adminEmail}`);
+    if (entry.fields.password) descriptionParts.push(`Password: ${entry.fields.password}`);
     if (entry.fields.notes) descriptionParts.push(`Notes: ${entry.fields.notes}`);
     if (entry.transcript) descriptionParts.push(`\n— Voice transcript —\n${entry.transcript}`);
     if (descriptionParts.length) payload.description = descriptionParts.join('\n\n');
@@ -218,14 +199,6 @@ const ClickUp = (() => {
     // are enforced by how the search is scoped, not here.
     if (entry.parentTaskId) {
       payload.parent = entry.parentTaskId;
-    }
-    // Custom fields: resolved ahead of time by app.js (real ClickUp
-    // custom-field IDs looked up via getListFields(), matched by
-    // name to the relevant form fields — see app.js
-    // getAccountFieldMapping()). Passed straight through here since
-    // this file has no List-specific field knowledge of its own.
-    if (entry.customFields && entry.customFields.length) {
-      payload.custom_fields = entry.customFields;
     }
     return payload;
   }
@@ -512,34 +485,8 @@ const ClickUp = (() => {
     return res.json();
   }
 
-  /**
-   * getListFields
-   * Fetches the custom field definitions ClickUp has configured for a
-   * List — used to look up the real field IDs "Add to Accounts"'s
-   * Direct-to-List mode needs (Admin Username, Admin Email,
-   * Registered Password, Tool/Software/Act) so it can actually
-   * populate them, rather than only dumping everything into the task
-   * description. See app.js getAccountFieldMapping() for the
-   * name-matching that turns this into a usable mapping.
-   * @param {string} listId
-   * @returns {Promise<Array<{id:string, name:string, type:string}>>}
-   * @throws apiError on non-2xx
-   */
-  async function getListFields(listId) {
-    const res = await fetch(`${proxyUrl()}/list/${listId}/field`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_FIELDS_${res.status}: ${text}`, res.status);
-    }
-    const data = await res.json();
-    return data.fields || [];
-  }
-
   return {
     createTask, uploadAttachment, testConnection, getListMembers, logCapture,
-    getListTasks, getTaskById, addComment, postToChannel, getListFields
+    getListTasks, getTaskById, addComment, postToChannel
   };
 })();
