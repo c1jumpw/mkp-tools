@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/VoiceNoteRecorder.jsx
- * VERSION: v1 (new file)
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Self-contained recording widget: captures microphone audio via
@@ -19,21 +19,33 @@
  *   a backend proxy (e.g. a Supabase Edge Function) to hold that secret,
  *   which is real additional infrastructure beyond this app's current
  *   scope. The browser's own SpeechRecognition API sidesteps that entirely
- *   (no key, no server, runs during recording) at the cost of narrower
- *   browser support: it works in Chrome, Edge, and Safari, but NOT Firefox
- *   (as of this writing). When unsupported, recording still works — the
- *   transcript field just starts blank and the user can type it manually.
- *   TODO: if a specific browser's transcription quality proves
- *   insufficient, swapping in a cloud STT service is possible later, but
- *   requires standing up a small backend proxy first — flagged as a
- *   deliberate scope boundary, not an oversight.
+ *   (no key, no server, runs during recording), but browser support is
+ *   UNEVEN and this matters in practice:
+ *     - Desktop Chrome/Edge: reliable.
+ *     - Firefox: not supported at all — recording still works, transcript
+ *       just starts blank for manual typing.
+ *     - Safari / iOS (ALL browsers on iOS, since they're all WebKit under
+ *       the hood regardless of "Chrome"/"Firefox" branding): support is
+ *       inconsistent and, on many iOS versions, effectively non-functional
+ *       even though the `webkitSpeechRecognition` symbol exists — this is a
+ *       known platform limitation, not something fixable from application
+ *       code. v1 silently swallowed recognition errors, which made this
+ *       look like a silent bug rather than a browser limitation; v2 now
+ *       surfaces a visible message when recognition errors out (see
+ *       recognition.onerror below) so it's clear what happened.
+ *   Given this unreliability, the workflow no longer treats a full,
+ *   accurate live transcript as something to depend on — see the "Copy
+ *   transcript" and "Download audio" actions added in v2, which make the
+ *   RECORDING ITSELF (always reliable) the dependable artifact, with
+ *   transcription as a best-effort bonus you can fall back from.
  *
  * STATE MACHINE
  *   'idle' -> (user taps Record) -> 'recording' -> (user taps Stop) ->
  *   'reviewing' (blob + transcript ready, not yet handed to parent) ->
  *   (user taps Use this recording) -> onRecorded() called -> back to 'idle'.
  *   'reviewing' also offers "Discard & re-record" -> back to 'idle' without
- *   calling onRecorded.
+ *   calling onRecorded, "Copy transcript" (clipboard, no state change), and
+ *   "Download audio" (browser file save, no state change).
  *
  * PROPS
  *   onRecorded {function} (blob, transcript, durationSeconds, mimeType) -> void
@@ -41,14 +53,23 @@
  *   disabled   {boolean}  Optional. Disables the Record button (e.g. while
  *                         a previous recording is still uploading).
  *
- * BROWSER SUPPORT / PERMISSIONS
- *   Requires navigator.mediaDevices.getUserMedia and window.MediaRecorder.
- *   If either is missing (very old browser, or a non-HTTPS context — mic
- *   access requires a secure origin), shows a plain explanatory message
- *   instead of the recording controls. The user will also see the browser's
- *   own microphone-permission prompt on first use; a denial surfaces via
- *   the try/catch in startRecording() as a friendly inline error rather
- *   than an uncaught exception.
+ * REVISION HISTORY
+ *   v1 (initial build) — record + live-transcribe + review, silently
+ *       swallowed SpeechRecognition errors.
+ *   v2 (this version), per user feedback that automatic transcription
+ *       "isn't loading" (traced to iOS/mobile Safari's inconsistent
+ *       SpeechRecognition support — see WHY THE WEB SPEECH API above):
+ *     - recognition.onerror now sets a visible `transcriptionNote` instead
+ *       of failing silently, so a real failure is distinguishable from
+ *       "nothing was said yet".
+ *     - recognition.start() calls are now wrapped in try/catch, since some
+ *       browsers throw synchronously rather than firing onerror if
+ *       recognition can't start at all.
+ *     - Added "Copy transcript" (clipboard) and "Download audio" (file
+ *       save) actions to the reviewing step, so the recording and whatever
+ *       transcript WAS captured are both easy to get out of the app
+ *       immediately, independent of whether the user chooses to keep a
+ *       permanent copy attached to the task (see TaskModal.jsx v4).
  * =============================================================================
  */
 
@@ -60,8 +81,6 @@ const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRec
 const canRecordAudio = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)
 
 // Picks the first MediaRecorder-supported MIME type from a preference list.
-// Browsers vary in what they support — Chrome/Firefox generally offer
-// webm/opus, Safari offers mp4 — so we ask the browser rather than assuming.
 function pickSupportedMimeType() {
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
   for (const type of candidates) {
@@ -78,6 +97,15 @@ function formatDuration(totalSeconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+// Same extension-guessing logic as lib/voiceNotes.js's uploadVoiceNote, used
+// here only for the download filename (not for the actual upload path).
+function extensionForMimeType(mimeType) {
+  if (mimeType.includes('mp4')) return 'm4a'
+  if (mimeType.includes('ogg')) return 'ogg'
+  if (mimeType.includes('wav')) return 'wav'
+  return 'webm'
+}
+
 export default function VoiceNoteRecorder({ onRecorded, disabled }) {
   const [status, setStatus] = useState('idle') // 'idle' | 'recording' | 'reviewing'
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -86,6 +114,8 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
   const [reviewUrl, setReviewUrl] = useState(null)
   const [reviewTranscript, setReviewTranscript] = useState('')
   const [error, setError] = useState('')
+  const [transcriptionNote, setTranscriptionNote] = useState('') // best-effort status/error for the SpeechRecognition side specifically
+  const [copyStatus, setCopyStatus] = useState('') // '' | 'copied' — transient button feedback
 
   const mediaRecorderRef = useRef(null)
   const streamRef = useRef(null)
@@ -96,9 +126,6 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
   const tickIntervalRef = useRef(null)
   const mimeTypeRef = useRef('')
 
-  // Cleanup on unmount: stop any in-progress recording/recognition and
-  // release the review object URL, so nothing keeps the mic active or
-  // leaks memory after the component is gone (e.g. modal closed mid-recording).
   useEffect(() => {
     return () => {
       stopMediaTracks()
@@ -118,6 +145,8 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
 
   async function startRecording() {
     setError('')
+    setTranscriptionNote('')
+    setCopyStatus('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
@@ -141,8 +170,8 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
       recorder.start()
 
       // Live transcription, running IN PARALLEL with the audio recording
-      // above — entirely separate browser API, not derived from the
-      // MediaRecorder's output.
+      // above. See WHY THE WEB SPEECH API in the file header for why this
+      // is treated as best-effort rather than guaranteed.
       finalTranscriptRef.current = ''
       setLiveTranscript('')
       if (SpeechRecognitionCtor) {
@@ -152,9 +181,6 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
         recognition.lang = navigator.language || 'en-US'
         recognition.onresult = (event) => {
           let interim = ''
-          // event.resultIndex marks where NEW results start since the last
-          // callback — only that slice needs (re)processing, not the whole
-          // results list every time.
           for (let i = event.resultIndex; i < event.results.length; i++) {
             const res = event.results[i]
             if (res.isFinal) {
@@ -165,22 +191,36 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
           }
           setLiveTranscript((finalTranscriptRef.current + interim).trim())
         }
-        recognition.onerror = () => {
-          // Non-fatal: recording continues regardless of transcription
-          // errors (e.g. a brief network hiccup for the recognition
-          // service) — the user can still type/fix the transcript after.
+        // v2: surface the error instead of swallowing it, so "nothing is
+        // appearing" is distinguishable from "recognition actually failed".
+        // Common event.error values: 'not-allowed' (mic/permission denied
+        // specifically for recognition), 'network', 'no-speech', 'aborted'.
+        recognition.onerror = (event) => {
+          setTranscriptionNote(
+            `Live transcription stopped (${event.error}). The recording itself is unaffected — you can type the transcript below, or use "Copy transcript" for whatever was captured.`
+          )
         }
         recognition.onend = () => {
-          // Some browsers auto-stop recognition after a pause in speech
-          // even with continuous:true. If we're still actively recording,
-          // restart it so a long recording doesn't silently lose
-          // transcription partway through.
+          // Some browsers auto-stop recognition after a pause even with
+          // continuous:true. If we're still actively recording, restart it.
           if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            try { recognition.start() } catch { /* already starting/stopping; ignore */ }
+            try {
+              recognition.start()
+            } catch {
+              // Restart failed (e.g. browser refuses a rapid restart) —
+              // recording continues regardless; transcription just stops
+              // gaining new text from this point.
+            }
           }
         }
-        recognition.start()
-        recognitionRef.current = recognition
+        try {
+          recognition.start()
+          recognitionRef.current = recognition
+        } catch (err) {
+          // Some browsers (notably several iOS Safari versions) throw
+          // synchronously here rather than firing onerror.
+          setTranscriptionNote('Live transcription could not start on this device/browser. Recording will continue normally.')
+        }
       }
 
       startTimeRef.current = Date.now()
@@ -232,6 +272,19 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
     setStatus('idle')
   }
 
+  // Copies whatever transcript text exists (even if partial/empty) to the
+  // clipboard, so it can be pasted elsewhere without needing to keep it
+  // permanently attached to the task — see file header REVISION HISTORY.
+  async function copyTranscript() {
+    try {
+      await navigator.clipboard.writeText(reviewTranscript)
+      setCopyStatus('copied')
+      setTimeout(() => setCopyStatus(''), 2000)
+    } catch {
+      setError('Could not copy to clipboard — your browser may require a manual copy.')
+    }
+  }
+
   if (!canRecordAudio) {
     return (
       <p className="text-xs text-[var(--color-muted)]">
@@ -269,7 +322,9 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
               Stop
             </button>
           </div>
-          {SpeechRecognitionCtor ? (
+          {transcriptionNote ? (
+            <p className="text-xs text-[var(--color-ember)]">{transcriptionNote}</p>
+          ) : SpeechRecognitionCtor ? (
             <p className="text-xs text-[var(--color-muted)] italic min-h-[1.5em]">
               {liveTranscript || 'Listening…'}
             </p>
@@ -296,6 +351,26 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
               placeholder={SpeechRecognitionCtor ? '' : 'Type a transcript manually — automatic transcription is unavailable in this browser.'}
               className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm resize-none focus:border-[var(--color-ember)] outline-none"
             />
+          </div>
+          {/* Copy/Download work regardless of whether this recording is
+              ultimately kept attached to the task — an immediate way to get
+              the artifact out of the app. */}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={copyTranscript}
+              disabled={!reviewTranscript.trim()}
+              className="text-xs text-[var(--color-steel)] hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100"
+            >
+              {copyStatus === 'copied' ? 'Copied!' : 'Copy transcript'}
+            </button>
+            <a
+              href={reviewUrl}
+              download={`dayforge-voice-note-${Date.now()}.${extensionForMimeType(mimeTypeRef.current)}`}
+              className="text-xs text-[var(--color-steel)] hover:brightness-110"
+            >
+              Download audio
+            </a>
           </div>
           <div className="flex justify-end gap-2">
             <button

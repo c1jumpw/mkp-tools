@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/TaskModal.jsx
- * VERSION: v3 (previously v1-v2 — see REVISION HISTORY below)
+ * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Full create/edit form for a single task: title, notes, voice note, type,
@@ -66,6 +66,18 @@
  *   - Voice note: replacing an existing recording uploads the NEW file
  *     first, and only deletes the old one after the new upload succeeds —
  *     so a failed re-record never loses the previous recording.
+ *
+ * REVISION HISTORY (v4, this version)
+ *   Per user feedback: a saved voice note's transcript is now collapsed by
+ *   default (behind a "Show transcript" toggle) instead of always taking up
+ *   visible space every time the task is reopened — the far more common
+ *   need (get the text out to paste elsewhere) is covered by a always-
+ *   visible "Copy transcript" button that doesn't require expanding
+ *   anything. Also added an always-available "Download audio" action for a
+ *   saved voice note (previously the audio could only be played in-app, not
+ *   saved out as a file) — this was already true for a just-recorded,
+ *   not-yet-saved clip via VoiceNoteRecorder v2, and is now true for
+ *   already-saved voice notes too.
  * =============================================================================
  */
 
@@ -120,6 +132,8 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
   const [voiceNoteError, setVoiceNoteError] = useState('')
   const [playbackUrl, setPlaybackUrl] = useState(null)
   const [playbackLoading, setPlaybackLoading] = useState(false)
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false) // collapsed by default to keep the task view lean
+  const [copyStatus, setCopyStatus] = useState('') // '' | 'copied' — transient button feedback
 
   // Release the playback object URL (if any was fetched) when the modal
   // unmounts, so it doesn't leak — see voiceNotes.js's CALLER RESPONSIBILITY note.
@@ -272,6 +286,45 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
     }
   }
 
+  // Triggers a real file-save of the saved recording, reusing the playback
+  // object URL if it's already been fetched (e.g. the user hit Play first)
+  // rather than downloading the file twice.
+  async function handleDownloadVoiceNote() {
+    setVoiceNoteError('')
+    let url = playbackUrl
+    if (!url) {
+      setPlaybackLoading(true)
+      try {
+        url = await fetchVoiceNoteObjectUrl(voiceNotePath)
+        setPlaybackUrl(url)
+      } catch (err) {
+        setVoiceNoteError('Could not load the recording: ' + (err.message || 'unknown error'))
+        setPlaybackLoading(false)
+        return
+      }
+      setPlaybackLoading(false)
+    }
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `dayforge-voice-note-${task.id}.${voiceNotePath.split('.').pop()}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
+  // Copies the saved transcript to the clipboard — same "get it out of the
+  // app without needing to keep it visible" affordance as the recorder's
+  // in-review copy button (see VoiceNoteRecorder.jsx).
+  async function copyExistingTranscript() {
+    try {
+      await navigator.clipboard.writeText(voiceNoteTranscript)
+      setCopyStatus('copied')
+      setTimeout(() => setCopyStatus(''), 2000)
+    } catch {
+      setVoiceNoteError('Could not copy to clipboard — your browser may require a manual copy.')
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -310,7 +363,7 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
 
             {voiceNotePath ? (
               <div className="border border-[var(--color-line)] rounded-md p-3 space-y-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium">Voice note — {formatDuration(voiceNoteDuration)}</span>
                   <button
                     type="button"
@@ -333,16 +386,54 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
                     {playbackLoading ? 'Loading…' : '▶ Play'}
                   </button>
                 )}
-                <textarea
-                  value={voiceNoteTranscript}
-                  onChange={(e) => setVoiceNoteTranscript(e.target.value)}
-                  rows={2}
-                  placeholder="Transcript"
-                  className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm resize-none focus:border-[var(--color-ember)] outline-none"
-                />
-                <p className="text-[10px] text-[var(--color-muted)]">
-                  Transcript edits save with the main "Save changes" button below. Re-record to replace the audio itself.
-                </p>
+                {/* Download is always offered, independent of whether Play
+                    has been used — the audio file should always be
+                    gettable-out, not just playable in-app. */}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleDownloadVoiceNote}
+                    disabled={playbackLoading}
+                    className="text-xs text-[var(--color-steel)] hover:brightness-110 disabled:opacity-40"
+                  >
+                    Download audio
+                  </button>
+                  {voiceNoteTranscript && (
+                    <button
+                      type="button"
+                      onClick={copyExistingTranscript}
+                      className="text-xs text-[var(--color-steel)] hover:brightness-110"
+                    >
+                      {copyStatus === 'copied' ? 'Copied!' : 'Copy transcript'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setTranscriptExpanded((v) => !v)}
+                    className="text-xs text-[var(--color-muted)] hover:text-[var(--color-paper)]"
+                  >
+                    {transcriptExpanded ? 'Hide transcript ▴' : 'Show transcript ▾'}
+                  </button>
+                </div>
+                {/* Collapsed by default — a saved transcript stays out of
+                    the way each time the task is reopened, rather than
+                    permanently taking up space; Copy above covers the
+                    common "get it out and paste elsewhere" case without
+                    needing to expand this at all. */}
+                {transcriptExpanded && (
+                  <div>
+                    <textarea
+                      value={voiceNoteTranscript}
+                      onChange={(e) => setVoiceNoteTranscript(e.target.value)}
+                      rows={2}
+                      placeholder="Transcript"
+                      className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-2 py-1.5 text-sm resize-none focus:border-[var(--color-ember)] outline-none"
+                    />
+                    <p className="text-[10px] text-[var(--color-muted)] mt-1">
+                      Edits here save with the main "Save changes" button below.
+                    </p>
+                  </div>
+                )}
                 <VoiceNoteRecorder onRecorded={handleVoiceRecorded} disabled={voiceNoteBusy} />
               </div>
             ) : (
