@@ -169,32 +169,6 @@
  *                        MKC's or MKP's own accounts, confirmed by the
  *                        user; offering it for those would silently
  *                        fail or misfile.
- *   v10 2026-08-08  Added an Associated Client Account autocomplete
- *                    (renderAssociatedAccountBlock, native <datalist>,
- *                    sourced from CRM_COMPANIES_LIST_ID) shown whenever
- *                    Account Type = MKC Client, regardless of
- *                    Review-Channel vs. Direct-to-List. Links the new
- *                    account entry to its client's company record —
- *                    included in both formatAccountMessage() (Chat
- *                    path) and, via getAccountFieldMapping()'s new
- *                    associatedAccount candidate, the real ClickUp
- *                    custom field (Direct path). getAccountFieldMapping
- *                    now returns {id, type} per field instead of a
- *                    bare id, since a Relationship/Tasks-type custom
- *                    field needs a different value shape ({add:[id]})
- *                    than a plain text field — genuinely uncertain
- *                    which this particular field is without having
- *                    seen it, so buildTaskPayload() in clickup.js also
- *                    always writes a plain-text description line
- *                    regardless of whether the structured attempt
- *                    actually took. Also switched the account
- *                    schema's password field from masked to plain
- *                    text per user request (stored in plaintext
- *                    downstream regardless, so masking added friction
- *                    without real protection). Reordered the account
- *                    form: schema fields → Associated Account →
- *                    destination toggle (was toggle-first, before
- *                    Account Type had even been picked).
  * =========================================================================
  */
 
@@ -451,7 +425,7 @@ const App = (() => {
     // existed.
     const action = type.action || 'task';
 
-    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null, parentTaskUrl: null, accountDestination: 'chat', associatedAccountId: null, associatedAccountName: null };
+    state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null, parentTaskUrl: null, accountDestination: 'chat' };
     const schema = FIELD_SCHEMAS[type.schema];
     const speechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     const recordSupported = !!(navigator.mediaDevices && window.MediaRecorder);
@@ -474,13 +448,6 @@ const App = (() => {
     // known account-directory List (type.directListId — see config.js
     // MKC_CLIENT_ACCOUNTS_LIST_ID comment for why there's only one).
     const showDestinationToggle = type.schema === 'account' && type.directListId;
-    // Associated Account autocomplete: only relevant for MKC Client
-    // entries (the only Account Type with a real client-company
-    // relationship to capture) — actual visibility is toggled live by
-    // syncAccountTypeDependents() below, reacting to the Account Type
-    // field, but the container itself needs to exist in the DOM for
-    // any 'account' schema form regardless of the type initially picked.
-    const showAssociatedAccount = type.schema === 'account';
 
     root.innerHTML = `
       <header class="topbar">
@@ -490,15 +457,14 @@ const App = (() => {
       </header>
       <main class="form">
         <form id="capture-form">
-          ${requiresTaskSearch ? `<div id="subtask-block"></div>` : ''}
-          ${schema.map(f => renderField(f)).join('')}
-          ${showAssociatedAccount ? `<div id="associated-account-block"></div>` : ''}
           ${showDestinationToggle ? `
           <div class="segmented" id="account-destination">
             <button type="button" class="segmented-btn active" data-dest="chat">${icon('note')} Review Channel</button>
             <button type="button" class="segmented-btn" data-dest="direct" id="direct-to-list-btn" disabled title="Only available for MKC Client accounts">${icon('link')} Direct to List</button>
           </div>
           <p class="hint" id="direct-to-list-hint">"Direct to List" is only available once Account Type is set to MKC Client \u2014 MKC's and MKP's own accounts are reviewed and exported outside ClickUp.</p>` : ''}
+          ${requiresTaskSearch ? `<div id="subtask-block"></div>` : ''}
+          ${schema.map(f => renderField(f)).join('')}
           ${showAssignee ? `<div id="subtask-block"></div>` : ''}
           ${showAssignee ? `
           <label class="field" for="field-assigneeId">Assignee
@@ -529,6 +495,8 @@ const App = (() => {
 
     if (showDestinationToggle) {
       const directBtn = root.querySelector('#direct-to-list-btn');
+      const accountTypeSelect = root.querySelector('#field-accountType');
+
       root.querySelectorAll('#account-destination .segmented-btn').forEach(btn => {
         btn.onclick = () => {
           if (btn.disabled) return;
@@ -541,41 +509,26 @@ const App = (() => {
           }
         };
       });
-    }
 
-    if (showAssociatedAccount) {
-      const accountTypeSelect = root.querySelector('#field-accountType');
-      const directBtn = root.querySelector('#direct-to-list-btn');
-
-      // Both "Direct to List" eligibility and the Associated Account
-      // autocomplete react to the same Account Type field, so one
-      // handler covers both rather than two separate listeners.
-      const syncAccountTypeDependents = () => {
-        const isMkcClient = accountTypeSelect.value === 'MKC Client';
-
-        if (directBtn) {
-          directBtn.disabled = !isMkcClient;
-          directBtn.title = isMkcClient ? '' : 'Only available for MKC Client accounts';
-          if (!isMkcClient && state.accountDestination === 'direct') {
-            // Selected type changed away from MKC Client after Direct
-            // was already chosen — fall back to the always-valid
-            // option rather than leaving an unusable choice selected.
-            state.accountDestination = 'chat';
-            root.querySelectorAll('#account-destination .segmented-btn').forEach(b => b.classList.toggle('active', b.dataset.dest === 'chat'));
-          }
-        }
-
-        if (isMkcClient) {
-          renderAssociatedAccountBlock();
-        } else {
-          state.associatedAccountId = null;
-          state.associatedAccountName = null;
-          const block = root.querySelector('#associated-account-block');
-          if (block) block.innerHTML = '';
+      // Direct-to-List only makes sense for MKC Client accounts (see
+      // config.js MKC_CLIENT_ACCOUNTS_LIST_ID comment — MKC's and
+      // MKP's own accounts have no equivalent List at all). React live
+      // to the Account Type field rather than only checking at submit
+      // time, so the option visibly enables/disables as you pick.
+      const syncDirectAvailability = () => {
+        const eligible = accountTypeSelect.value === 'MKC Client';
+        directBtn.disabled = !eligible;
+        directBtn.title = eligible ? '' : 'Only available for MKC Client accounts';
+        if (!eligible && state.accountDestination === 'direct') {
+          // Selected type changed away from MKC Client after Direct
+          // was already chosen — fall back to the always-valid option
+          // rather than leaving an unusable choice selected.
+          state.accountDestination = 'chat';
+          root.querySelectorAll('#account-destination .segmented-btn').forEach(b => b.classList.toggle('active', b.dataset.dest === 'chat'));
         }
       };
-      accountTypeSelect.addEventListener('change', syncAccountTypeDependents);
-      syncAccountTypeDependents();
+      accountTypeSelect.addEventListener('change', syncDirectAvailability);
+      syncDirectAvailability();
     }
 
     if (showAssignee) {
@@ -738,21 +691,15 @@ const App = (() => {
   function getAccountFieldMapping(listId) {
     if (!accountFieldMappingCache[listId]) {
       accountFieldMappingCache[listId] = ClickUp.getListFields(listId).then(fields => {
-        // Returns {id, type} rather than just the id — type matters
-        // for associatedAccount specifically, since a Relationship/
-        // Tasks-type ClickUp custom field needs a different value
-        // shape than a plain text field (see submitCapture()'s
-        // customFields-building step).
         const find = (...keywords) => {
           const match = fields.find(f => keywords.some(k => f.name.toLowerCase().includes(k)));
-          return match ? { id: match.id, type: match.type } : undefined;
+          return match ? match.id : undefined;
         };
         return {
           adminUsername: find('admin username', 'username'),
           adminEmail: find('admin email', 'email'),
           password: find('registered password', 'password'),
-          title: find('tool/software', 'tool / software', 'software/act', 'tool'),
-          associatedAccount: find('associated account', 'associated client', 'client account', 'account id')
+          title: find('tool/software', 'tool / software', 'software/act', 'tool')
         };
       }).catch(err => {
         delete accountFieldMappingCache[listId]; // don't cache a failure — allow retry
@@ -760,60 +707,6 @@ const App = (() => {
       });
     }
     return accountFieldMappingCache[listId];
-  }
-
-  /**
-   * renderAssociatedAccountBlock
-   * Populates #associated-account-block with a company-name
-   * autocomplete (native <datalist>, so keyboard/accessibility comes
-   * for free rather than needing custom dropdown logic) sourced from
-   * CRM_COMPANIES_LIST_ID — each option is one client company record.
-   * Selecting or typing an exact match sets state.associatedAccountId/
-   * associatedAccountName; anything else leaves both null, and Send
-   * still works (this field is informative, not required — the user
-   * asked for it to be offered, not enforced).
-   * Shown only while Account Type = MKC Client — see
-   * syncAccountTypeDependents() in renderForm for the show/hide logic.
-   */
-  function renderAssociatedAccountBlock() {
-    const container = root.querySelector('#associated-account-block');
-    if (!container) return;
-    container.innerHTML = `
-      <label class="field" for="associated-account-search">Associated Client Account
-        <input type="text" id="associated-account-search" list="associated-account-options" placeholder="Search company name…" autocomplete="off">
-        <datalist id="associated-account-options"></datalist>
-      </label>
-      <p class="hint" id="associated-account-status">Loading client companies…</p>
-    `;
-    const input = container.querySelector('#associated-account-search');
-    const datalist = container.querySelector('#associated-account-options');
-    const status = container.querySelector('#associated-account-status');
-
-    loadParentTaskOptions(CRM_COMPANIES_LIST_ID).then(companies => {
-      if (!root.contains(container)) return; // navigated away before this resolved
-      datalist.innerHTML = companies.map(c => `<option value="${escapeHtml(c.name)}">`).join('');
-      status.textContent = 'Optional \u2014 links this entry to the client\u2019s company record.';
-
-      const syncMatch = () => {
-        const match = companies.find(c => c.name === input.value);
-        if (match) {
-          state.associatedAccountId = match.id;
-          state.associatedAccountName = match.name;
-          status.textContent = `\u2713 Matched: ${match.name}`;
-          status.className = 'hint hint--good';
-        } else {
-          state.associatedAccountId = null;
-          state.associatedAccountName = null;
-          status.textContent = input.value
-            ? 'No exact match \u2014 pick a company from the list to link it.'
-            : 'Optional \u2014 links this entry to the client\u2019s company record.';
-          status.className = 'hint';
-        }
-      };
-      input.addEventListener('input', syncMatch);
-    }).catch(() => {
-      if (root.contains(container)) status.textContent = 'Couldn\u2019t load client companies \u2014 you can still send without linking one.';
-    });
   }
 
   // -----------------------------------------------------------------
@@ -1290,34 +1183,12 @@ const App = (() => {
     if (action === 'task' && type.schema === 'account') {
       try {
         const mapping = await getAccountFieldMapping(effectiveListId);
-        const candidates = {
-          adminUsername: fields.adminUsername,
-          adminEmail: fields.adminEmail,
-          password: fields.password,
-          title: fields.title,
-          // Not a form field — comes from the Associated Account
-          // autocomplete (renderAssociatedAccountBlock), stored on
-          // `state` rather than `fields` since it isn't part of
-          // FIELD_SCHEMAS.account.
-          associatedAccount: state.associatedAccountId
-        };
+        const candidates = { adminUsername: fields.adminUsername, adminEmail: fields.adminEmail, password: fields.password, title: fields.title };
         Object.keys(candidates).forEach(key => {
-          const match = mapping[key];
-          if (!match || !candidates[key]) return;
-          // ClickUp's Relationship/Tasks-type custom fields expect
-          // {add: [taskId], rem: []} rather than a plain value — best
-          // guess based on the field's reported `type` containing
-          // "task" or "relat"; genuinely uncertain without having seen
-          // this exact field, which is why buildTaskPayload() in
-          // clickup.js ALSO always writes a plain-text description
-          // line for associatedAccount regardless of whether this
-          // structured attempt actually takes.
-          const isRelationshipType = match.type && /task|relat/i.test(match.type);
-          const value = key === 'associatedAccount' && isRelationshipType
-            ? { add: [candidates[key]], rem: [] }
-            : candidates[key];
-          customFields.push({ id: match.id, value });
-          customFieldKeys.push(key);
+          if (mapping[key] && candidates[key]) {
+            customFields.push({ id: mapping[key], value: candidates[key] });
+            customFieldKeys.push(key);
+          }
         });
       } catch (err) {
         // Swallow — see doc comment above.
@@ -1349,13 +1220,7 @@ const App = (() => {
       // logCapture()'s action-aware message building.
       parentTaskId: state.parentTaskId || null,
       parentTaskName: state.parentTaskName || null,
-      parentTaskUrl: state.parentTaskUrl || null,
-      // Associated Client Account — set whenever Account Type = MKC
-      // Client, regardless of Review-Channel vs. Direct-to-List (see
-      // formatAccountMessage() and buildTaskPayload() in clickup.js,
-      // which both surface it when present).
-      associatedAccountId: state.associatedAccountId || null,
-      associatedAccountName: state.associatedAccountName || null
+      parentTaskUrl: state.parentTaskUrl || null
     };
 
     try {
@@ -1403,7 +1268,7 @@ const App = (() => {
     }
 
     if (entry.action === 'chat') {
-      const content = formatAccountMessage(entry);
+      const content = formatAccountMessage(entry.fields);
       await ClickUp.postToChannel(entry.channelId, content);
       // Reference link back to the Chat channel itself — there's no
       // individual "message URL" the way a task has a task URL.
@@ -1451,19 +1316,7 @@ const App = (() => {
    * @param {object} fields - from FIELD_SCHEMAS.account
    * @returns {string}
    */
-  /**
-   * formatAccountMessage
-   * Builds the Markdown message posted for "Add to Accounts" — every
-   * field labeled plainly. Password included as plain text, same as
-   * how ClickUp Chat already works for anything typed directly into
-   * it; see the security note in this file's version history.
-   * @param {object} entry - the full capture entry (not just .fields)
-   *   so the Associated Client Account (state-derived, not a schema
-   *   field) can be included too.
-   * @returns {string}
-   */
-  function formatAccountMessage(entry) {
-    const fields = entry.fields;
+  function formatAccountMessage(fields) {
     const lines = [
       `🔑 **New Account** \u2014 ${fields.accountType || ''}`,
       fields.title || ''
@@ -1471,7 +1324,6 @@ const App = (() => {
     if (fields.adminUsername) lines.push(`Username: ${fields.adminUsername}`);
     if (fields.adminEmail) lines.push(`Email: ${fields.adminEmail}`);
     if (fields.password) lines.push(`Password: ${fields.password}`);
-    if (entry.associatedAccountName) lines.push(`Associated Client Account: ${entry.associatedAccountName}`);
     if (fields.notes) lines.push(`Notes: ${fields.notes}`);
     return lines.join('\n');
   }

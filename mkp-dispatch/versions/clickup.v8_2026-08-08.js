@@ -99,20 +99,6 @@
  *                    description for whichever ones successfully
  *                    resolved to a real field — avoids the password
  *                    ending up duplicated in two places on one task.
- *   v9  2026-08-08  buildTaskPayload() now always writes a readable
- *                    "Associated Client Account: <name> (<id>)" line
- *                    into the description when entry.associatedAccountName
- *                    is set (new autocomplete field, see app.js) — on
- *                    top of whatever gets attempted via the real
- *                    custom field. Deliberately NOT skipped even when
- *                    the structured field resolves, unlike the other
- *                    account fields: ClickUp's API has a known rough
- *                    edge setting Relationship/Tasks-type custom field
- *                    values via Create Task (community-reported
- *                    silent no-ops), and this field's real type isn't
- *                    reliably knowable in advance — the description
- *                    line is a guaranteed-visible fallback regardless
- *                    of whether the structured write actually took.
  * =========================================================================
  */
 
@@ -197,18 +183,6 @@ const ClickUp = (() => {
     if (entry.fields.adminEmail && !resolvedKeys.has('adminEmail')) descriptionParts.push(`Admin Email: ${entry.fields.adminEmail}`);
     if (entry.fields.password && !resolvedKeys.has('password')) descriptionParts.push(`Password: ${entry.fields.password}`);
     if (entry.fields.notes) descriptionParts.push(`Notes: ${entry.fields.notes}`);
-    // Associated Account: ALWAYS written here too (not only when the
-    // real custom field didn't resolve, unlike the fields above) —
-    // whether that ClickUp field is a plain-text field or a
-    // Relationship/Tasks field type isn't reliably knowable from the
-    // API's field-list response alone, and setting a Relationship
-    // field's value via Create Task is a known rough edge in
-    // ClickUp's API (community reports of it silently not applying).
-    // This plain-text line guarantees the association is visible on
-    // the task even if the structured field write silently no-ops.
-    if (entry.associatedAccountName) {
-      descriptionParts.push(`Associated Client Account: ${entry.associatedAccountName}${entry.associatedAccountId ? ` (${entry.associatedAccountId})` : ''}`);
-    }
     if (entry.transcript) descriptionParts.push(`\n— Voice transcript —\n${entry.transcript}`);
     if (descriptionParts.length) payload.description = descriptionParts.join('\n\n');
 

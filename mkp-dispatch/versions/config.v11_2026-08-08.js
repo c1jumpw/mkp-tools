@@ -135,18 +135,6 @@
  *                    the direct option uses it regardless of the
  *                    selected Account Type, since MKC's/MKP's own
  *                    accounts are exported outside ClickUp entirely.
- *   v12 2026-08-08  Two changes:
- *                    (1) Added CRM_COMPANIES_LIST_ID (was already
- *                        inline on the 'company' capture type; now
- *                        named/reused) — powers the new Associated
- *                        Account autocomplete on "Add to Accounts"
- *                        (see app.js), which links a new MKC Client
- *                        account entry back to its company record.
- *                    (2) Account schema's password field switched from
- *                        masked to plain text (per user request — the
- *                        value is stored in plaintext downstream
- *                        regardless, so on-screen masking added
- *                        friction without real protection).
  * =========================================================================
  */
 
@@ -183,15 +171,6 @@ const ADD_TO_ACCOUNTS_CHANNEL_ID = 'rh1yf-12097';
 // list ID for those — the direct option uses this same list
 // regardless of account type, since it's the only known destination.
 const MKC_CLIENT_ACCOUNTS_LIST_ID = '901711853904';
-
-// CRM & Operations' Companies & Accounts list — each task there is one
-// client company record. Used by "Add to Accounts"'s Associated
-// Account autocomplete (added 2026-08-08): when Account Type = MKC
-// Client, this list is searched by company name so the new account
-// entry can be linked back to the right client via that company
-// record's own ClickUp task ID. Same list already referenced by the
-// 'company' capture type under crm-ops, below.
-const CRM_COMPANIES_LIST_ID = '901710481777';
 
 const WORKSPACE_ID = '25724879';
 
@@ -266,7 +245,7 @@ const FIELD_SCHEMAS = {
     { key: 'title', label: 'Account / Tool Name & Purpose', type: 'text', required: true, placeholder: 'e.g. Canva \u2014 design tool for MCO content' },
     { key: 'adminUsername', label: 'Admin Username', type: 'text' },
     { key: 'adminEmail', label: 'Admin Email', type: 'text' },
-    { key: 'password', label: 'Password', type: 'text' },
+    { key: 'password', label: 'Password', type: 'password' },
     { key: 'notes', label: 'Additional Notes', type: 'textarea', placeholder: 'Secret question & answer, recovery codes, etc.' }
   ]
 };
@@ -330,7 +309,7 @@ const ENTITIES = [
       { id: 'lead', label: 'New Lead', icon: 'user', schema: 'lead', listId: '901710477809' },
       { id: 'pipeline', label: 'Pipeline Update', icon: 'check', schema: 'task', listId: '901710326878' },
       { id: 'contact', label: 'New Contact', icon: 'user', schema: 'contact', listId: '901710477009' },
-      { id: 'company', label: 'Company / Account Note', icon: 'building', schema: 'log', listId: CRM_COMPANIES_LIST_ID },
+      { id: 'company', label: 'Company / Account Note', icon: 'building', schema: 'log', listId: '901710481777' },
       { id: 'task', label: 'CRM Task', icon: 'check', schema: 'task', listId: '901714539764' },
       { id: 'activity', label: 'Activity Log', icon: 'note', schema: 'log', listId: '901715117797' },
       { id: 'email', label: 'Email Follow-up', icon: 'note', schema: 'note', listId: '901715226645' },
