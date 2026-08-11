@@ -216,17 +216,6 @@
  *                        directly investigated. processQueue() also no
  *                        longer lets one rejected entry block every
  *                        other queued entry behind it.
- *   v12 2026-08-11  The v11 error-surfacing fix immediately did its
- *                    job: a real submission surfaced ClickUp error
- *                    FIELD_011 ("Value must be an option index or
- *                    uuid") — proof "Tool/Software/Act" is a Dropdown/
- *                    Label field, not free text, and its real meaning
- *                    is a category picker (Tool/Software/Activity),
- *                    not literally "the tool's name" as assumed in
- *                    v9. Removed it from getAccountFieldMapping() and
- *                    submitCapture()'s candidates entirely — no data
- *                    lost, since the title still becomes the task's
- *                    own Name field regardless (unrelated code path).
  * =========================================================================
  */
 
@@ -782,16 +771,8 @@ const App = (() => {
         return {
           adminUsername: find('admin username', 'username'),
           adminEmail: find('admin email', 'email'),
-          password: find('registered password', 'password')
-          // Deliberately no "title" / Tool-Software-Act mapping — see
-          // v11 in version history: that field turned out to be a
-          // Dropdown/Label type (ClickUp error: "Value must be an
-          // option index or uuid"), not free text, and its real
-          // meaning is a category picker (Tool/Software/Activity),
-          // not literally "the tool's name" as first assumed. No data
-          // is lost by not mapping it — the title still becomes the
-          // task's own Name field regardless (see buildTaskPayload in
-          // clickup.js), which was always separate from this attempt.
+          password: find('registered password', 'password'),
+          title: find('tool/software', 'tool / software', 'software/act', 'tool')
         };
       }).catch(err => {
         delete accountFieldMappingCache[listId]; // don't cache a failure — allow retry
@@ -1343,7 +1324,8 @@ const App = (() => {
         const candidates = {
           adminUsername: fields.adminUsername,
           adminEmail: fields.adminEmail,
-          password: fields.password
+          password: fields.password,
+          title: fields.title
         };
         Object.keys(candidates).forEach(key => {
           const match = mapping[key];
