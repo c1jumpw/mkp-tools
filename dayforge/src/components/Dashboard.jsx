@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/Dashboard.jsx
- * VERSION: v7 (previously v1-v6 — see REVISION HISTORY below)
+ * VERSION: v8 (previously v1-v7 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The main authenticated screen: header (branding, actions, account menu),
@@ -80,6 +80,10 @@
  *       its new onEdit prop, so pinned items can be tapped open to the full
  *       edit modal — previously the only place in the app without this
  *       (Timeline and UnscheduledTray items already supported it).
+ *   v8 (this version) — added the Notes header button (+ un-sorted-count
+ *       badge) opening NotesPanel, a new raw-capture "notepad" feature that
+ *       sits earlier in the funnel than the tray (Notepad -> Tray ->
+ *       Timeline) — see NotesPanel.jsx and useDayForgeData's notes CRUD.
  * =============================================================================
  */
 
@@ -99,6 +103,7 @@ import TaskModal from './TaskModal'
 import RoutinesPanel from './RoutinesPanel'
 import AccountModal from './AccountModal'
 import ExportModal from './ExportModal'
+import NotesPanel from './NotesPanel'
 
 const UNDO_TOAST_MS = 6000 // how long the "Undo" toast stays on screen
 
@@ -114,6 +119,7 @@ export default function Dashboard() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false) // small header dropdown: Account / Sign out
   const [exportOpen, setExportOpen] = useState(false) // Export options modal
+  const [notesOpen, setNotesOpen] = useState(false) // Notepad panel
 
   // Undo toast: { message, taskId, previousFields } | null.
   // previousFields holds exactly what to pass back to updateTask() to revert.
@@ -147,6 +153,10 @@ export default function Dashboard() {
     [data.tasks]
   )
   const trayTasks = [...unscheduledToday, ...dayTasks.filter((t) => !t.start_time)]
+
+  // Backlog count for the Notes header button's badge — notes not yet
+  // converted into a task, i.e. still needing to be "sorted".
+  const unconvertedNotesCount = data.notes.filter((n) => !n.converted).length
 
   // Per-day task counts for the 7-day forecast strip's little "N tasks" labels.
   const taskCountByDate = useMemo(() => {
@@ -335,6 +345,21 @@ export default function Dashboard() {
             Routines
           </button>
 
+          {/* Notepad — see NotesPanel.jsx for the raw-capture "sort later"
+              feature. Badge shows the un-sorted (not yet converted) count,
+              so the backlog is visible without opening the panel. */}
+          <button
+            onClick={() => setNotesOpen(true)}
+            className="relative text-sm border border-[var(--color-line)] rounded px-3 py-2 hover:border-[var(--color-steel)] transition"
+          >
+            Notes
+            {unconvertedNotesCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-ember)] text-[var(--color-ink)] text-[10px] font-bold flex items-center justify-center">
+                {unconvertedNotesCount}
+              </span>
+            )}
+          </button>
+
           {/* Opens ExportModal, where range + category + type filters are
               chosen before the .ics download happens — see ExportModal.jsx
               and handleExport() above for the filtering logic. */}
@@ -455,6 +480,17 @@ export default function Dashboard() {
       {accountOpen && <AccountModal onClose={() => setAccountOpen(false)} />}
 
       {exportOpen && <ExportModal onExport={handleExport} onClose={() => setExportOpen(false)} />}
+
+      {notesOpen && (
+        <NotesPanel
+          notes={data.notes}
+          onAddBulk={data.addNotesBulk}
+          onUpdate={data.updateNote}
+          onDelete={data.deleteNote}
+          onConvert={data.convertNoteToTask}
+          onClose={() => setNotesOpen(false)}
+        />
+      )}
 
       {/* Undo toast for drag-triggered reschedule/unschedule — see UNDO
           TOAST in this file's header comment for rationale. */}

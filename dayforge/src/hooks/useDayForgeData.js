@@ -1,13 +1,14 @@
 /**
  * =============================================================================
  * FILE: src/hooks/useDayForgeData.js
- * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * VERSION: v3 (previously v1-v2 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The single source of truth for all Supabase-backed app data: tasks,
- *   per-date completions, routines, and routine items. Every component that
- *   reads or mutates this data goes through the functions this hook returns
- *   — no component talks to `supabase` directly except this file.
+ *   per-date completions, routines, routine items, and notes. Every
+ *   component that reads or mutates this data goes through the functions
+ *   this hook returns — no component talks to `supabase` directly except
+ *   this file.
  *
  * KEY RESPONSIBILITIES
  *   - Fetch all four tables on mount / whenever `user` changes (refetch()).
@@ -36,12 +37,21 @@
  *       tray" and "Clear all pins" actions so removing many tasks at once
  *       is a single DELETE ... WHERE id IN (...) request instead of one
  *       network round-trip per task.
+ *   v3 (this version) — added the `notes` table (a raw-capture "notepad"
+ *       feature, separate from tasks — see NotesPanel.jsx) and its CRUD:
+ *       addNotesBulk (one insert per "—)"-split topic from a single
+ *       capture, see lib/notesParsing.js), updateNote, deleteNote, and
+ *       convertNoteToTask (creates a task from a note's parsed
+ *       topic+bullets, then links the note to it via converted_task_id
+ *       rather than deleting the note — the note stays as a visible,
+ *       filterable record that it was acted on).
  * =============================================================================
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import { parseNoteDisplay } from '../lib/notesParsing'
 
 export function useDayForgeData() {
   const { user } = useAuth()
@@ -49,21 +59,24 @@ export function useDayForgeData() {
   const [completions, setCompletions] = useState([]) // [{task_id, date}]
   const [routines, setRoutines] = useState([])
   const [routineItems, setRoutineItems] = useState([])
+  const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
 
   const refetch = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    const [t, c, r, ri] = await Promise.all([
+    const [t, c, r, ri, n] = await Promise.all([
       supabase.from('tasks').select('*').order('start_time', { ascending: true, nullsFirst: false }),
       supabase.from('task_completions').select('task_id, date'),
       supabase.from('routines').select('*').order('created_at', { ascending: true }),
       supabase.from('routine_items').select('*').order('sort_order', { ascending: true }),
+      supabase.from('notes').select('*').order('created_at', { ascending: false }),
     ])
     if (!t.error) setTasks(t.data)
     if (!c.error) setCompletions(c.data)
     if (!r.error) setRoutines(r.data)
     if (!ri.error) setRoutineItems(ri.data)
+    if (!n.error) setNotes(n.data)
     setLoading(false)
   }, [user])
 
@@ -193,12 +206,74 @@ export function useDayForgeData() {
     if (rows.length) await addTasksBulk(rows)
   }
 
+  // ---- Notes (notepad) ----
+
+  /**
+   * Inserts one note row per string in `contents` in a single request —
+   * used when a capture is split into multiple topics via
+   * lib/notesParsing.js's splitIntoTopics() before this is called.
+   * @param {string[]} contents - raw text for each note to create.
+   */
+  async function addNotesBulk(contents) {
+    if (!contents.length) return []
+    const payload = contents.map((content) => ({ content, user_id: user.id }))
+    const { data, error } = await supabase.from('notes').insert(payload).select()
+    if (error) throw error
+    setNotes((prev) => [...data, ...prev]) // newest-first, matching the fetch order
+    return data
+  }
+
+  async function updateNote(id, fields) {
+    const { data, error } = await supabase
+      .from('notes')
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    setNotes((prev) => prev.map((n) => (n.id === id ? data : n)))
+    return data
+  }
+
+  async function deleteNote(id) {
+    const { error } = await supabase.from('notes').delete().eq('id', id)
+    if (error) throw error
+    setNotes((prev) => prev.filter((n) => n.id !== id))
+  }
+
+  /**
+   * Creates a task from a note's parsed topic+bullets (topic becomes the
+   * task title, bullets become the task's `notes` field as a "- " list),
+   * then marks the source note as converted and links it to the new task
+   * via converted_task_id — the note is NOT deleted, so it stays visible
+   * as a record of what was already acted on (see migration 003's comment
+   * on why converted_task_id uses ON DELETE SET NULL rather than CASCADE).
+   * New tasks land in the tray (no date/start_time) — same as anything
+   * else added without explicit scheduling — so the normal drag/tap flow
+   * still applies to give it a time block.
+   * @param {object} note - a row from the `notes` state array.
+   * @returns {Promise<object>} the newly created task.
+   */
+  async function convertNoteToTask(note) {
+    const { topic, bullets } = parseNoteDisplay(note.content)
+    const newTask = await addTask({
+      title: topic || note.content.slice(0, 80),
+      notes: bullets.length ? bullets.map((b) => `- ${b}`).join('\n') : null,
+      type: 'todo',
+      category: 'personal',
+      pinned: false,
+    })
+    await updateNote(note.id, { converted: true, converted_task_id: newTask.id })
+    return newTask
+  }
+
   return {
     loading,
     tasks,
     completions,
     routines,
     routineItems,
+    notes,
     refetch,
     addTask,
     addTasksBulk,
@@ -212,5 +287,9 @@ export function useDayForgeData() {
     addRoutineItem,
     deleteRoutineItem,
     applyRoutineToDate,
+    addNotesBulk,
+    updateNote,
+    deleteNote,
+    convertNoteToTask,
   }
 }

@@ -94,3 +94,25 @@ create policy "own voice note objects insert" on storage.objects for insert
 
 create policy "own voice note objects delete" on storage.objects for delete
   using (bucket_id = 'voice-notes' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- =============================================================================
+-- Notes / notepad (added in migrations/003_notes.sql for already-deployed
+-- projects; included here too so a FRESH install gets the same schema in one
+-- pass). See that migration file's comments for the full explanation.
+-- =============================================================================
+create table if not exists notes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  content text not null,
+  converted boolean not null default false,
+  converted_task_id uuid references tasks(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table notes enable row level security;
+
+create policy "own notes" on notes for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists notes_user_created_idx on notes (user_id, created_at desc);
