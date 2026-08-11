@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/Dashboard.jsx
- * VERSION: v6 (previously v1-v5 — see REVISION HISTORY below)
+ * VERSION: v7 (previously v1-v6 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The main authenticated screen: header (branding, actions, account menu),
@@ -76,6 +76,10 @@
  *       Routines/Export/+New task buttons hard to tap accurately on some
  *       smaller phones (buttons sat flush against the screen edge/notch
  *       area with no breathing room).
+ *   v7 (this version) — passed setEditingTask through to PinnedReminders as
+ *       its new onEdit prop, so pinned items can be tapped open to the full
+ *       edit modal — previously the only place in the app without this
+ *       (Timeline and UnscheduledTray items already supported it).
  * =============================================================================
  */
 
@@ -391,6 +395,7 @@ export default function Dashboard() {
             onToggle={(t) => data.updateTask(t.id, { completed: !t.completed })}
             onDelete={data.deleteTask}
             onClearAll={handleClearPinned}
+            onEdit={setEditingTask}
           />
         </div>
 

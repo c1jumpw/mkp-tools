@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/lib/voiceNotes.js
- * VERSION: v1 (new file)
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Supabase Storage helpers for voice note audio files. Tasks store only a
@@ -36,6 +36,13 @@
  *   life of the page. This module does not track/auto-revoke URLs it hands
  *   out, since it doesn't know when the caller is done with them — see
  *   VoiceNoteRecorder.jsx for the revoke-on-unmount/re-record pattern.
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — upload/download-as-url/delete.
+ *   v2 (this version) — extracted fetchVoiceNoteBlob() as its own exported
+ *       function (fetchVoiceNoteObjectUrl now just wraps it) so download
+ *       flows can get the raw Blob directly for WAV conversion (see
+ *       lib/wavEncoder.js and TaskModal.jsx's handleDownloadVoiceNote).
  * =============================================================================
  */
 
@@ -78,6 +85,20 @@ export async function uploadVoiceNote(userId, taskId, blob) {
 }
 
 /**
+ * Downloads a stored voice note's raw audio Blob (the original recorded
+ * format — webm/opus, mp4/aac, etc — NOT converted). Used both by
+ * fetchVoiceNoteObjectUrl() below (for in-app playback) and directly by
+ * download flows that need to convert the blob (see lib/wavEncoder.js).
+ * @param {string} path - voice_note_path from the task row.
+ * @returns {Promise<Blob>}
+ */
+export async function fetchVoiceNoteBlob(path) {
+  const { data, error } = await supabase.storage.from(BUCKET).download(path)
+  if (error) throw error
+  return data
+}
+
+/**
  * Downloads a stored voice note and returns a browser object URL for
  * playback. See CALLER RESPONSIBILITY note above — the caller must
  * URL.revokeObjectURL() the result when done with it.
@@ -85,9 +106,8 @@ export async function uploadVoiceNote(userId, taskId, blob) {
  * @returns {Promise<string>} an object URL (blob:...).
  */
 export async function fetchVoiceNoteObjectUrl(path) {
-  const { data, error } = await supabase.storage.from(BUCKET).download(path)
-  if (error) throw error
-  return URL.createObjectURL(data)
+  const blob = await fetchVoiceNoteBlob(path)
+  return URL.createObjectURL(blob)
 }
 
 /**

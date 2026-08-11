@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/TaskModal.jsx
- * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
+ * VERSION: v5 (previously v1-v4 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Full create/edit form for a single task: title, notes, voice note, type,
@@ -78,13 +78,20 @@
  *   saved out as a file) — this was already true for a just-recorded,
  *   not-yet-saved clip via VoiceNoteRecorder v2, and is now true for
  *   already-saved voice notes too.
+ *
+ * REVISION HISTORY (v5, this version)
+ *   handleDownloadVoiceNote now fetches the raw stored Blob and converts it
+ *   to WAV before saving (see lib/wavEncoder.js) — fixes downloaded audio
+ *   being opened as a VIDEO file by the OS (a WebM-container quirk), same
+ *   fix applied to VoiceNoteRecorder's in-review download in that file's v3.
  * =============================================================================
  */
 
 import { useEffect, useState } from 'react'
 import { timeToMinutes, minutesToTime } from '../lib/recurrence'
 import { useAuth } from '../context/AuthContext'
-import { uploadVoiceNote, deleteVoiceNoteFile, fetchVoiceNoteObjectUrl } from '../lib/voiceNotes'
+import { uploadVoiceNote, deleteVoiceNoteFile, fetchVoiceNoteObjectUrl, fetchVoiceNoteBlob } from '../lib/voiceNotes'
+import { convertToWav } from '../lib/wavEncoder'
 import VoiceNoteRecorder from './VoiceNoteRecorder'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -286,30 +293,40 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
     }
   }
 
-  // Triggers a real file-save of the saved recording, reusing the playback
-  // object URL if it's already been fetched (e.g. the user hit Play first)
-  // rather than downloading the file twice.
+  // Fetches the raw stored blob (regardless of whether playback has already
+  // loaded it as an object URL — WAV conversion needs the actual Blob, not
+  // just a URL to it) and converts it to WAV before saving, for the same
+  // OS/player-compatibility reason as VoiceNoteRecorder's download action
+  // (see lib/wavEncoder.js header comment).
   async function handleDownloadVoiceNote() {
     setVoiceNoteError('')
-    let url = playbackUrl
-    if (!url) {
-      setPlaybackLoading(true)
+    setPlaybackLoading(true)
+    try {
+      const originalBlob = await fetchVoiceNoteBlob(voiceNotePath)
+      let url, filename
       try {
-        url = await fetchVoiceNoteObjectUrl(voiceNotePath)
-        setPlaybackUrl(url)
-      } catch (err) {
-        setVoiceNoteError('Could not load the recording: ' + (err.message || 'unknown error'))
-        setPlaybackLoading(false)
-        return
+        const wavBlob = await convertToWav(originalBlob)
+        url = URL.createObjectURL(wavBlob)
+        filename = `dayforge-voice-note-${task.id}.wav`
+      } catch {
+        // Conversion failed — fall back to the original format rather than
+        // blocking the download entirely.
+        url = URL.createObjectURL(originalBlob)
+        filename = `dayforge-voice-note-${task.id}.${voiceNotePath.split('.').pop()}`
+        setVoiceNoteError('Could not convert to WAV — downloaded in the original recording format instead.')
       }
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setVoiceNoteError('Could not load the recording: ' + (err.message || 'unknown error'))
+    } finally {
       setPlaybackLoading(false)
     }
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `dayforge-voice-note-${task.id}.${voiceNotePath.split('.').pop()}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
   }
 
   // Copies the saved transcript to the clipboard — same "get it out of the
@@ -396,7 +413,7 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
                     disabled={playbackLoading}
                     className="text-xs text-[var(--color-steel)] hover:brightness-110 disabled:opacity-40"
                   >
-                    Download audio
+                    {playbackLoading ? 'Converting…' : 'Download audio (.wav)'}
                   </button>
                   {voiceNoteTranscript && (
                     <button

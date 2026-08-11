@@ -1,12 +1,13 @@
 /**
  * =============================================================================
  * FILE: src/components/PinnedReminders.jsx
- * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * VERSION: v3 (previously v1-v2 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Always-visible pinned reminders (no time slot). Quick-add form at the
- *   bottom, list of pinned items above with a toggle-complete checkbox and a
- *   remove button on each.
+ *   bottom, list of pinned items above with a toggle-complete checkbox, a
+ *   remove button, and (v3) a click-to-expand row opening the same TaskModal
+ *   used by the Timeline and UnscheduledTray.
  *
  * PROPS
  *   tasks       {array}    Full task list; this component filters to pinned ones.
@@ -14,6 +15,7 @@
  *   onToggle    {function} (task) -> Promise; flips completed on/off.
  *   onDelete    {function} (id) -> Promise; deletes one pinned item.
  *   onClearAll  {function} () -> Promise; deletes ALL pinned items at once.
+ *   onEdit      {function} (task) -> void; opens TaskModal for this item.
  *
  * REVISION HISTORY
  *   v1 (initial build) — the per-item remove button used
@@ -27,12 +29,17 @@
  *       visually with the title, but it's tappable on any device).
  *     - Added a "Clear all" action (with a window.confirm guard, since it's
  *       destructive and irreversible) to quickly empty the pinned list.
+ *   v3 (this version) — pinned items were the only place in the app you
+ *       couldn't tap a task to open its full edit modal (Timeline and
+ *       UnscheduledTray items already supported this via TaskBlock). Added
+ *       the same click-to-expand behavior for consistency — tapping a
+ *       pinned item's title now opens TaskModal, same as everywhere else.
  * =============================================================================
  */
 
 import { useState } from 'react'
 
-export default function PinnedReminders({ tasks, onAdd, onToggle, onDelete, onClearAll }) {
+export default function PinnedReminders({ tasks, onAdd, onToggle, onDelete, onClearAll, onEdit }) {
   const [text, setText] = useState('')
   const pinned = tasks.filter((t) => t.pinned)
 
@@ -77,7 +84,10 @@ export default function PinnedReminders({ tasks, onAdd, onToggle, onDelete, onCl
                 (t.completed ? 'bg-[var(--color-good)] border-[var(--color-good)]' : 'border-[var(--color-line)]')
               }
             />
-            <span className={'text-sm flex-1 ' + (t.completed ? 'line-through text-[var(--color-muted)]' : '')}>
+            <span
+              onClick={() => onEdit(t)}
+              className={'text-sm flex-1 cursor-pointer ' + (t.completed ? 'line-through text-[var(--color-muted)]' : '')}
+            >
               {t.title}
             </span>
             {/* Always visible (not hover-gated) so it works on touch devices. */}

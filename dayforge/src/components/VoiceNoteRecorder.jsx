@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/VoiceNoteRecorder.jsx
- * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * VERSION: v3 (previously v1-v2 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Self-contained recording widget: captures microphone audio via
@@ -70,10 +70,28 @@
  *       transcript WAS captured are both easy to get out of the app
  *       immediately, independent of whether the user chooses to keep a
  *       permanent copy attached to the task (see TaskModal.jsx v4).
+ *   v3 (this version), per continued mobile feedback:
+ *     - The transcript box was still empty on mobile with NO error message
+ *       at all — traced to a failure mode v2 didn't cover: some browsers
+ *       accept recognition.start() without throwing AND never fire
+ *       onerror, but also never produce a single onresult (a true silent
+ *       no-op). Added a 6-second grace-period timeout that checks whether
+ *       any result has arrived yet; if not, shows a plain "not detected,
+ *       may not be supported on this device" message instead of leaving
+ *       the box empty with no explanation.
+ *     - "Download audio" now converts the recording to WAV before saving
+ *       (via lib/wavEncoder.js), fixing the reported issue where
+ *       downloaded .webm files were opened as VIDEO files by the OS (a
+ *       real WebM-container file-association quirk) even though the
+ *       content is audio-only. WAV is universally recognized as audio by
+ *       every OS/player, at the cost of a larger file — an acceptable
+ *       trade-off since this only affects the explicit download action,
+ *       not what's stored in Supabase or played back in-app.
  * =============================================================================
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { convertToWav } from '../lib/wavEncoder'
 
 // Feature detection, computed once at module load (these don't change
 // during the page's lifetime).
@@ -116,6 +134,7 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
   const [error, setError] = useState('')
   const [transcriptionNote, setTranscriptionNote] = useState('') // best-effort status/error for the SpeechRecognition side specifically
   const [copyStatus, setCopyStatus] = useState('') // '' | 'copied' — transient button feedback
+  const [downloadBusy, setDownloadBusy] = useState(false)
 
   const mediaRecorderRef = useRef(null)
   const streamRef = useRef(null)
@@ -125,12 +144,15 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
   const startTimeRef = useRef(null)
   const tickIntervalRef = useRef(null)
   const mimeTypeRef = useRef('')
+  const hasReceivedResultRef = useRef(false) // did recognition.onresult ever fire this session?
+  const silentCheckTimeoutRef = useRef(null)
 
   useEffect(() => {
     return () => {
       stopMediaTracks()
       if (recognitionRef.current) recognitionRef.current.stop()
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current)
+      if (silentCheckTimeoutRef.current) clearTimeout(silentCheckTimeoutRef.current)
       if (reviewUrl) URL.revokeObjectURL(reviewUrl)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,6 +195,7 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
       // above. See WHY THE WEB SPEECH API in the file header for why this
       // is treated as best-effort rather than guaranteed.
       finalTranscriptRef.current = ''
+      hasReceivedResultRef.current = false
       setLiveTranscript('')
       if (SpeechRecognitionCtor) {
         const recognition = new SpeechRecognitionCtor()
@@ -180,6 +203,7 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
         recognition.interimResults = true
         recognition.lang = navigator.language || 'en-US'
         recognition.onresult = (event) => {
+          hasReceivedResultRef.current = true
           let interim = ''
           for (let i = event.resultIndex; i < event.results.length; i++) {
             const res = event.results[i]
@@ -216,6 +240,21 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
         try {
           recognition.start()
           recognitionRef.current = recognition
+          // v2 fix for the "transcript box just stays empty, no error at
+          // all" report: some browsers (notably several mobile Safari
+          // versions) accept recognition.start() without throwing AND never
+          // fire onerror, but also never produce a single onresult — a
+          // silent do-nothing failure mode neither try/catch nor onerror
+          // can detect on their own. After a grace period, if nothing has
+          // come through yet, tell the user plainly instead of leaving them
+          // staring at an empty box wondering if it's working.
+          silentCheckTimeoutRef.current = setTimeout(() => {
+            if (!hasReceivedResultRef.current && mediaRecorderRef.current?.state === 'recording') {
+              setTranscriptionNote(
+                'No speech detected yet by this browser\'s transcription — it may not be supported on this device. The recording itself continues normally; you can type the transcript after stopping.'
+              )
+            }
+          }, 6000)
         } catch (err) {
           // Some browsers (notably several iOS Safari versions) throw
           // synchronously here rather than firing onerror.
@@ -252,6 +291,10 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
       clearInterval(tickIntervalRef.current)
       tickIntervalRef.current = null
     }
+    if (silentCheckTimeoutRef.current) {
+      clearTimeout(silentCheckTimeoutRef.current)
+      silentCheckTimeoutRef.current = null
+    }
   }
 
   function discardAndReset() {
@@ -270,6 +313,37 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
     setReviewBlob(null)
     setElapsedSeconds(0)
     setStatus('idle')
+  }
+
+  // Converts the just-recorded blob to WAV for maximum OS/player
+  // compatibility, then triggers a real file-save. See lib/wavEncoder.js
+  // for why this conversion happens (webm downloads were being opened as
+  // video files by the OS) and why it's WAV specifically, not another
+  // compressed format.
+  async function downloadRecording() {
+    setDownloadBusy(true)
+    setError('')
+    let url
+    let filename
+    try {
+      const wavBlob = await convertToWav(reviewBlob)
+      url = URL.createObjectURL(wavBlob)
+      filename = `dayforge-voice-note-${Date.now()}.wav`
+    } catch {
+      // Conversion failed (rare — an undecodable source) — fall back to the
+      // original recording rather than blocking the download entirely.
+      url = reviewUrl
+      filename = `dayforge-voice-note-${Date.now()}.${extensionForMimeType(mimeTypeRef.current)}`
+      setError('Could not convert to WAV — downloaded in the original recording format instead.')
+    }
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    if (url !== reviewUrl) URL.revokeObjectURL(url)
+    setDownloadBusy(false)
   }
 
   // Copies whatever transcript text exists (even if partial/empty) to the
@@ -366,10 +440,10 @@ export default function VoiceNoteRecorder({ onRecorded, disabled }) {
             </button>
             <a
               href={reviewUrl}
-              download={`dayforge-voice-note-${Date.now()}.${extensionForMimeType(mimeTypeRef.current)}`}
-              className="text-xs text-[var(--color-steel)] hover:brightness-110"
+              onClick={(e) => { e.preventDefault(); downloadRecording() }}
+              className={'text-xs text-[var(--color-steel)] hover:brightness-110 ' + (downloadBusy ? 'opacity-40 pointer-events-none' : '')}
             >
-              Download audio
+              {downloadBusy ? 'Converting…' : 'Download audio (.wav)'}
             </a>
           </div>
           <div className="flex justify-end gap-2">
