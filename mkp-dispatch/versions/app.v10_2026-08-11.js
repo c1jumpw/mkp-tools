@@ -195,27 +195,6 @@
  *                    form: schema fields → Associated Account →
  *                    destination toggle (was toggle-first, before
  *                    Account Type had even been picked).
- *   v11 2026-08-11  Two fixes, one urgent:
- *                    (1) Removed the v10 structured-custom-field
- *                        attempt for associatedAccount entirely. A
- *                        real submission confirmed the guessed value
- *                        format was wrong for the actual field type,
- *                        which caused ClickUp to reject the WHOLE task
- *                        creation — worse than the field simply not
- *                        resolving. The plain-text description line
- *                        (clickup.js buildTaskPayload) is now the sole
- *                        mechanism for this field.
- *                    (2) Fixed silent-failure handling in
- *                        submitCapture()/processQueue(): a real API
- *                        rejection (err.status set, from clickup.js's
- *                        apiError()) is now surfaced as a visible
- *                        error instead of being silently queued
- *                        forever alongside genuine connectivity
- *                        failures — this is exactly what made the
- *                        associatedAccount bug above invisible until
- *                        directly investigated. processQueue() also no
- *                        longer lets one rejected entry block every
- *                        other queued entry behind it.
  * =========================================================================
  */
 
@@ -759,11 +738,11 @@ const App = (() => {
   function getAccountFieldMapping(listId) {
     if (!accountFieldMappingCache[listId]) {
       accountFieldMappingCache[listId] = ClickUp.getListFields(listId).then(fields => {
-        // Returns {id, type} rather than just the id. Type isn't
-        // currently used (associatedAccount, the one field that would
-        // have needed it, is no longer attempted as a structured
-        // write — see submitCapture()'s NOTE) but kept in the shape
-        // in case a future field needs it again.
+        // Returns {id, type} rather than just the id — type matters
+        // for associatedAccount specifically, since a Relationship/
+        // Tasks-type ClickUp custom field needs a different value
+        // shape than a plain text field (see submitCapture()'s
+        // customFields-building step).
         const find = (...keywords) => {
           const match = fields.find(f => keywords.some(k => f.name.toLowerCase().includes(k)));
           return match ? { id: match.id, type: match.type } : undefined;
@@ -772,7 +751,8 @@ const App = (() => {
           adminUsername: find('admin username', 'username'),
           adminEmail: find('admin email', 'email'),
           password: find('registered password', 'password'),
-          title: find('tool/software', 'tool / software', 'software/act', 'tool')
+          title: find('tool/software', 'tool / software', 'software/act', 'tool'),
+          associatedAccount: find('associated account', 'associated client', 'client account', 'account id')
         };
       }).catch(err => {
         delete accountFieldMappingCache[listId]; // don't cache a failure — allow retry
@@ -1305,17 +1285,6 @@ const App = (() => {
     // building the task payload — but a failure here doesn't block
     // sending: buildTaskPayload() falls back to plain description
     // text for whichever fields didn't resolve.
-    //
-    // NOTE: associatedAccount is deliberately NOT attempted as a
-    // structured custom field here (it was, briefly — see v10 in the
-    // version history above). A real submission confirmed the
-    // guessed value format for that field was wrong, which caused
-    // ClickUp to reject the ENTIRE task creation, not just that one
-    // field — a much worse outcome than the field simply not
-    // resolving. buildTaskPayload() in clickup.js already always
-    // writes a plain-text "Associated Client Account" line in the
-    // description regardless, which is the sole mechanism for this
-    // field now — reliable, if less structured.
     let customFields = [];
     let customFieldKeys = [];
     if (action === 'task' && type.schema === 'account') {
@@ -1325,12 +1294,29 @@ const App = (() => {
           adminUsername: fields.adminUsername,
           adminEmail: fields.adminEmail,
           password: fields.password,
-          title: fields.title
+          title: fields.title,
+          // Not a form field — comes from the Associated Account
+          // autocomplete (renderAssociatedAccountBlock), stored on
+          // `state` rather than `fields` since it isn't part of
+          // FIELD_SCHEMAS.account.
+          associatedAccount: state.associatedAccountId
         };
         Object.keys(candidates).forEach(key => {
           const match = mapping[key];
           if (!match || !candidates[key]) return;
-          customFields.push({ id: match.id, value: candidates[key] });
+          // ClickUp's Relationship/Tasks-type custom fields expect
+          // {add: [taskId], rem: []} rather than a plain value — best
+          // guess based on the field's reported `type` containing
+          // "task" or "relat"; genuinely uncertain without having seen
+          // this exact field, which is why buildTaskPayload() in
+          // clickup.js ALSO always writes a plain-text description
+          // line for associatedAccount regardless of whether this
+          // structured attempt actually takes.
+          const isRelationshipType = match.type && /task|relat/i.test(match.type);
+          const value = key === 'associatedAccount' && isRelationshipType
+            ? { add: [candidates[key]], rem: [] }
+            : candidates[key];
+          customFields.push({ id: match.id, value });
           customFieldKeys.push(key);
         });
       } catch (err) {
@@ -1384,23 +1370,6 @@ const App = (() => {
       Storage.addRecent(sanitizeForRecent(entry));
       showSuccess();
     } catch (err) {
-      if (err.status) {
-        // A real HTTP response came back (err.status is only set by
-        // clickup.js's apiError() — see its callers), meaning ClickUp
-        // or the Worker actively rejected this request. Retrying the
-        // identical payload would just fail the same way again, so
-        // surface it instead of silently queuing forever — this is
-        // exactly what went wrong once already (a malformed custom
-        // field caused a submission to disappear into the queue with
-        // no visible error, retrying invisibly and never succeeding).
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send to ClickUp';
-        alert(`ClickUp rejected this submission (error ${err.status}). Nothing was sent or queued \u2014 check the details and try again.\n\n${err.message || ''}`);
-        return;
-      }
-      // No .status means a genuine connectivity problem (offline, or
-      // the Worker itself unreachable) rather than a rejection — safe
-      // to queue and retry automatically once back online.
       await queueForRetry(entry);
       showSuccess(true);
     }
@@ -1573,24 +1542,6 @@ const App = (() => {
     return new File([arr], name, { type });
   }
 
-  /**
-   * processQueue
-   * Retries every entry currently in the offline queue. Distinguishes
-   * two failure kinds the same way submitCapture() does (see its
-   * comment for the fuller "why this matters" story):
-   *   - A real API rejection (err.status set) means this exact
-   *     payload will never succeed no matter how many times it's
-   *     retried — remove it and tell the user, then keep going with
-   *     the rest of the queue rather than getting stuck on one bad
-   *     entry forever.
-   *   - A connectivity failure (no err.status) means everything is
-   *     probably still unreachable — stop for now rather than burning
-   *     through the whole queue against a dead connection; the next
-   *     'online' event or app open will try again from the top.
-   * @param {boolean} manual - true when triggered by the "Retry now"
-   *   button (shows an alert on a connectivity failure); false for
-   *   the automatic background checks, which stay silent.
-   */
   async function processQueue(manual) {
     const settings = Storage.getSettings();
     if (!settings.proxyUrl || !navigator.onLine) return;
@@ -1604,11 +1555,6 @@ const App = (() => {
         Storage.removeFromQueue(entry.id);
         Storage.addRecent(sanitizeForRecent(entry));
       } catch (e) {
-        if (e.status) {
-          Storage.removeFromQueue(entry.id);
-          alert(`A queued capture ("${entry.title}") was rejected by ClickUp and has been removed from the queue \u2014 you\u2019ll need to redo it.\n\n${e.message || ''}`);
-          continue;
-        }
         if (manual) alert('Still can\u2019t reach ClickUp. Will keep retrying automatically.');
         break;
       }
