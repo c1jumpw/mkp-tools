@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * VERSION: v3 (previously v1-v2 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -53,11 +53,34 @@
  *       (two hyphens), matching how the user actually types it — the
  *       parsing logic itself (lib/notesParsing.js) already accepted this
  *       literal form; only the guidance text shown here was misleading.
+ *   v3 (this version) — added created/edited timestamps to each note card
+ *       (formatTimestamp helper). The database has tracked created_at/
+ *       updated_at since the notes table was first created (updateNote in
+ *       useDayForgeData.js already refreshes updated_at on every edit) —
+ *       this was purely a missing display, not a missing data point.
+ *       "Edited" only shows once it's more than a second after creation,
+ *       so a never-edited note doesn't show a redundant near-identical
+ *       second timestamp.
  * =============================================================================
  */
 
 import { useState } from 'react'
 import { splitIntoTopics, parseNoteDisplay } from '../lib/notesParsing'
+
+// Formats an ISO timestamp for display, e.g. "Aug 11, 3:42 PM" — omits the
+// year when it's the current year (the common case) to keep it compact,
+// includes it otherwise so an old note's date is still unambiguous.
+function formatTimestamp(iso) {
+  const d = new Date(iso)
+  const includeYear = d.getFullYear() !== new Date().getFullYear()
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: includeYear ? 'numeric' : undefined,
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 
 export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onConvert, onClose }) {
   const [draft, setDraft] = useState('')
@@ -228,6 +251,17 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                         Delete
                       </button>
                     </div>
+                    {/* Created/edited timestamps — "edited" only shown once
+                        it's meaningfully different from creation (more than
+                        a second apart), since both columns default to the
+                        same insert-time value and would otherwise always
+                        show "Edited" immediately after creation due to
+                        trivial timestamp-serialization differences. */}
+                    <p className="text-[10px] text-[var(--color-muted)] mt-1.5">
+                      {formatTimestamp(note.created_at)}
+                      {new Date(note.updated_at).getTime() - new Date(note.created_at).getTime() > 1000 &&
+                        ` · Edited ${formatTimestamp(note.updated_at)}`}
+                    </p>
                   </>
                 )}
               </div>
