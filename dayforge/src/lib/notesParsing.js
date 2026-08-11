@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/lib/notesParsing.js
- * VERSION: v1 (new file)
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Parses the raw text of a notepad entry (see NotesPanel.jsx) into a
@@ -22,24 +22,34 @@
  *   - splitIntoTopics(): runs ONCE, when a note is first captured, to turn
  *     one big multi-topic paste into several separate note ROWS (matching
  *     how the user described writing — one continuous stream covering
- *     several unrelated topics, marked off with "—)").
+ *     several unrelated topics, marked off with "--)").
  *   - parseNoteDisplay(): runs on EVERY render of an already-saved note, to
  *     turn its (now single-topic) content into a heading + bullet list for
  *     display. A saved note is expected to already be single-topic by the
  *     time this runs (splitIntoTopics happened at capture time), but this
  *     function doesn't assume that — if a note somehow still contains a
- *     "—)" marker (e.g. pasted directly via an edit rather than the normal
+ *     "--)" marker (e.g. pasted directly via an edit rather than the normal
  *     capture flow), it simply renders the whole thing as one topic's lines;
  *     it does not re-split on this function's own initiative, since editing
  *     an existing note should not silently multiply it into several notes.
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — displayed/documented the em-dash "—)" as the
+ *       primary separator, though the regex always accepted the literal
+ *       "--)" too.
+ *   v2 (this version) — corrected per user feedback: "--)" (literal two
+ *       hyphens) is how they actually type it, not an em-dash. This was
+ *       purely a documentation/UI-copy correction — the underlying regex
+ *       already matched "--)" correctly before this change; only the
+ *       displayed guidance text (here and in NotesPanel.jsx) was misleading.
  * =============================================================================
  */
 
-// Matches the topic-separator convention: two hyphens or an em/en-dash,
-// followed by a close-paren — e.g. "—)" or "--)" or "–)". Multiple variants
-// are matched because mobile keyboards/autocorrect often convert a typed
-// "--" into an em-dash automatically, so the SAME intended separator can
-// arrive as different literal characters depending on the device.
+// Matches the topic-separator convention: literal "--)" (two hyphens, the
+// primary way this is typed) or an em/en-dash variant "—)" / "–)" —
+// included because some keyboards/autocorrect convert a typed "--"
+// into an em-dash automatically, so the SAME intended marker can arrive as
+// different literal characters depending on the device.
 const TOPIC_SEPARATOR_REGEX = /(?:--|—|–)\)/g
 
 // Recognizes a leading bullet marker ("-", "•", or "*", each optionally
@@ -50,7 +60,7 @@ const LEADING_BULLET_REGEX = /^[-•*]\s*/
 
 /**
  * Splits one raw capture into an array of separate note content strings,
- * one per "—)"-delimited topic. If no separator is present, returns a
+ * one per "--)"-delimited topic. If no separator is present, returns a
  * single-element array containing the trimmed original text unchanged.
  * Empty segments (e.g. from a trailing separator) are dropped.
  * @param {string} rawText

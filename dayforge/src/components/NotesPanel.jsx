@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v1 (new file)
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -39,6 +39,20 @@
  *   earlier in this app's development — a notepad that can accumulate a
  *   real backlog (Keep-style) fits better as its own dedicated panel,
  *   opened from the header, same pattern as Routines/Export.
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — capture, list, convert/edit/delete, showed the
+ *       em-dash "—)" as the documented separator, and errors from any
+ *       action (add/convert/edit/delete) were silently swallowed — a
+ *       failure (e.g. the notes table migration not yet run) looked
+ *       identical to the button simply not working, with no explanation.
+ *   v2 (this version), per user feedback:
+ *     - All actions now catch and display errors instead of failing
+ *       silently, so a real failure is distinguishable from "nothing to do".
+ *     - Corrected the documented/displayed separator to the literal "--)"
+ *       (two hyphens), matching how the user actually types it — the
+ *       parsing logic itself (lib/notesParsing.js) already accepted this
+ *       literal form; only the guidance text shown here was misleading.
  * =============================================================================
  */
 
@@ -51,17 +65,24 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   const [showConverted, setShowConverted] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState('')
+  const [error, setError] = useState('')
 
   const visibleNotes = showConverted ? notes : notes.filter((n) => !n.converted)
   const convertedCount = notes.filter((n) => n.converted).length
 
   async function handleCapture() {
     if (!draft.trim()) return
+    setError('')
     setBusy(true)
     try {
       const topics = splitIntoTopics(draft)
       if (topics.length) await onAddBulk(topics)
       setDraft('')
+    } catch (err) {
+      // Surfaced rather than silently failing — if you've just added this
+      // feature and haven't run the notes table migration yet in Supabase,
+      // this is exactly the kind of error that would show up here.
+      setError('Could not save: ' + (err.message || 'unknown error'))
     } finally {
       setBusy(false)
     }
@@ -70,26 +91,37 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   function startEdit(note) {
     setEditingId(note.id)
     setEditText(note.content)
+    setError('')
   }
 
   async function saveEdit(id) {
     if (!editText.trim()) return
-    await onUpdate(id, { content: editText.trim() })
-    setEditingId(null)
+    try {
+      await onUpdate(id, { content: editText.trim() })
+      setEditingId(null)
+    } catch (err) {
+      setError('Could not save edit: ' + (err.message || 'unknown error'))
+    }
   }
 
   async function handleConvert(note) {
+    setError('')
     setBusy(true)
     try {
       await onConvert(note)
+    } catch (err) {
+      setError('Could not convert to task: ' + (err.message || 'unknown error'))
     } finally {
       setBusy(false)
     }
   }
 
-  function handleDelete(note) {
-    if (window.confirm('Delete this note? This can\'t be undone.')) {
-      onDelete(note.id)
+  async function handleDelete(note) {
+    if (!window.confirm('Delete this note? This can\'t be undone.')) return
+    try {
+      await onDelete(note.id)
+    } catch (err) {
+      setError('Could not delete: ' + (err.message || 'unknown error'))
     }
   }
 
@@ -101,18 +133,24 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-paper)]">✕</button>
         </div>
 
+        {error && <p className="text-xs text-[var(--color-ember)] mb-3">{error}</p>}
+
         {/* Capture box — see file header for why this lives here rather
-            than as a persistent dashboard widget. */}
+            than as a persistent dashboard widget. Marker shown as the
+            literal "--)" (two hyphens), matching how the user actually
+            types it — earlier UI copy showed an em-dash "—)" instead, which
+            is a different character and doesn't match what most keyboards
+            produce for a typed "--" without autocorrect converting it. */}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={4}
-          placeholder={'Jot anything… start a new topic mid-thought with —)\n\nGroceries\n- milk\n- eggs —) Doctor appt\n- follow up with insurance'}
+          placeholder={'Jot anything… start a new topic mid-thought with --)\n\nGroceries\n- milk\n- eggs --) Doctor appt\n- follow up with insurance'}
           className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-2 text-sm mb-2 resize-none focus:border-[var(--color-ember)] outline-none"
         />
         <div className="flex items-center justify-between mb-4">
           <p className="text-[10px] text-[var(--color-muted)]">
-            Tip: separate unrelated topics with <span className="[font-family:var(--font-mono)]">—)</span> — each becomes its own note.
+            Tip: separate unrelated topics with <span className="[font-family:var(--font-mono)]">--)</span> — each becomes its own note.
           </p>
           <button
             onClick={handleCapture}
