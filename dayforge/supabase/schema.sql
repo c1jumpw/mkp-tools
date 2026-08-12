@@ -116,3 +116,54 @@ create policy "own notes" on notes for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create index if not exists notes_user_created_idx on notes (user_id, created_at desc);
+
+-- =============================================================================
+-- Labeled image attachments for tasks and notes (added in
+-- migrations/004_entry_images.sql for already-deployed projects; included
+-- here too so a FRESH install gets the same schema in one pass). See that
+-- migration file's comments for the full explanation.
+-- =============================================================================
+create table if not exists task_images (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  task_id uuid not null references tasks(id) on delete cascade,
+  storage_path text not null,
+  label text,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists note_images (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  note_id uuid not null references notes(id) on delete cascade,
+  storage_path text not null,
+  label text,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table task_images enable row level security;
+alter table note_images enable row level security;
+
+create policy "own task images" on task_images for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "own note images" on note_images for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists task_images_task_idx on task_images (task_id, sort_order);
+create index if not exists note_images_note_idx on note_images (note_id, sort_order);
+
+insert into storage.buckets (id, name, public)
+values ('entry-images', 'entry-images', false)
+on conflict (id) do nothing;
+
+create policy "own entry image objects select" on storage.objects for select
+  using (bucket_id = 'entry-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "own entry image objects insert" on storage.objects for insert
+  with check (bucket_id = 'entry-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "own entry image objects delete" on storage.objects for delete
+  using (bucket_id = 'entry-images' and (storage.foldername(name))[1] = auth.uid()::text);

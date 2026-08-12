@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/TaskModal.jsx
- * VERSION: v5 (previously v1-v4 — see REVISION HISTORY below)
+ * VERSION: v6 (previously v1-v5 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Full create/edit form for a single task: title, notes, voice note, type,
@@ -84,6 +84,11 @@
  *   to WAV before saving (see lib/wavEncoder.js) — fixes downloaded audio
  *   being opened as a VIDEO file by the OS (a WebM-container quirk), same
  *   fix applied to VoiceNoteRecorder's in-review download in that file's v3.
+ *
+ * REVISION HISTORY (v6, this version)
+ *   Added an Images section (ImageAttachments.jsx, shared with NotesPanel)
+ *   for labeled photo attachments, same isNew restriction as voice notes
+ *   (image storage paths are built from the task's id).
  * =============================================================================
  */
 
@@ -93,6 +98,7 @@ import { useAuth } from '../context/AuthContext'
 import { uploadVoiceNote, deleteVoiceNoteFile, fetchVoiceNoteObjectUrl, fetchVoiceNoteBlob } from '../lib/voiceNotes'
 import { convertToWav } from '../lib/wavEncoder'
 import VoiceNoteRecorder from './VoiceNoteRecorder'
+import ImageAttachments from './ImageAttachments'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MIN_DURATION_MINUTES = 5
@@ -456,6 +462,19 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
             ) : (
               <VoiceNoteRecorder onRecorded={handleVoiceRecorded} disabled={voiceNoteBusy} />
             )}
+          </div>
+        )}
+
+        {/* Images — see ImageAttachments.jsx (shared with NotesPanel). Same
+            isNew restriction as voice notes, for the same reason: image
+            storage paths are built from the task's id, which a brand-new
+            task doesn't have until it's saved once. */}
+        <label className="blueprint-tick uppercase block mb-1">Images</label>
+        {isNew ? (
+          <p className="text-xs text-[var(--color-muted)] mb-3">Save the task first, then reopen it to add images.</p>
+        ) : (
+          <div className="mb-3">
+            <ImageAttachments kind="task" entryId={task.id} />
           </div>
         )}
 

@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v3 (previously v1-v2 — see REVISION HISTORY below)
+ * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -61,11 +61,16 @@
  *       "Edited" only shows once it's more than a second after creation,
  *       so a never-edited note doesn't show a redundant near-identical
  *       second timestamp.
+ *   v4 (this version) — added a per-note "Photos ▾" toggle mounting
+ *       ImageAttachments.jsx (shared with TaskModal) — lazily, only once
+ *       expanded, so opening the panel doesn't fetch images for every note
+ *       in the list at once (see useEntryImages.js for the reasoning).
  * =============================================================================
  */
 
 import { useState } from 'react'
 import { splitIntoTopics, parseNoteDisplay } from '../lib/notesParsing'
+import ImageAttachments from './ImageAttachments'
 
 // Formats an ISO timestamp for display, e.g. "Aug 11, 3:42 PM" — omits the
 // year when it's the current year (the common case) to keep it compact,
@@ -89,6 +94,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState('')
   const [error, setError] = useState('')
+  const [expandedPhotosId, setExpandedPhotosId] = useState(null) // note id whose Photos section is expanded, if any
 
   const visibleNotes = showConverted ? notes : notes.filter((n) => !n.converted)
   const convertedCount = notes.filter((n) => n.converted).length
@@ -250,7 +256,21 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                       <button onClick={() => handleDelete(note)} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-ember)]">
                         Delete
                       </button>
+                      <button
+                        onClick={() => setExpandedPhotosId(expandedPhotosId === note.id ? null : note.id)}
+                        className="text-xs text-[var(--color-muted)] hover:text-[var(--color-paper)]"
+                      >
+                        {expandedPhotosId === note.id ? 'Hide photos ▴' : 'Photos ▾'}
+                      </button>
                     </div>
+                    {/* ImageAttachments (and its data fetch) only mounts
+                        once expanded — see useEntryImages.js for why this
+                        matters when there could be many notes in the list. */}
+                    {expandedPhotosId === note.id && (
+                      <div className="mt-2">
+                        <ImageAttachments kind="note" entryId={note.id} />
+                      </div>
+                    )}
                     {/* Created/edited timestamps — "edited" only shown once
                         it's meaningfully different from creation (more than
                         a second apart), since both columns default to the
