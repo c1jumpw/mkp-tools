@@ -227,24 +227,6 @@
  *                    submitCapture()'s candidates entirely — no data
  *                    lost, since the title still becomes the task's
  *                    own Name field regardless (unrelated code path).
- *   v13 2026-08-12  Re-added associatedAccount to getAccountFieldMapping
- *                    /submitCapture's candidates, now correctly
- *                    targeting the confirmed real field name "Related
- *                    Account ID" (distinct from "Assc. Account", a
- *                    separate column not targeted). This time gated
- *                    behind TEXT_LIKE_FIELD_TYPES — only attempted as
- *                    a structured write when the field's reported
- *                    type is confidently text-like, learned directly
- *                    from the v12 failure (an unrecognized type is now
- *                    treated as unsafe and skipped, falling back to
- *                    the description-line text, rather than assumed
- *                    safe and attempted anyway). Deliberately scoped
- *                    to associatedAccount only — adminUsername/
- *                    adminEmail/password stay ungated since they're
- *                    already confirmed working via a real production
- *                    submission, and gating them too would risk a
- *                    regression if the guessed allowlist type strings
- *                    don't exactly match ClickUp's real ones.
  * =========================================================================
  */
 
@@ -487,19 +469,6 @@ const App = (() => {
   // that ceiling rather than let someone attach a big file and only
   // discover the failure after tapping Send.
   const MAX_ATTACHMENT_BYTES = 90 * 1024 * 1024; // 90MB, leaving headroom for the rest of the multipart payload
-
-  // ClickUp custom field `type` strings confidently safe to write a
-  // plain string value to. Learned the hard way (2026-08-11): a field
-  // named "Tool/Software/Act" looked text-like by name alone but was
-  // actually a Dropdown expecting an option uuid, and sending it a
-  // plain string got the ENTIRE task creation rejected — not just
-  // that field. This allowlist is deliberately conservative: an
-  // unrecognized type is treated as unsafe (skip the structured
-  // write, rely on the description-line fallback) rather than assumed
-  // safe. Used by submitCapture()'s customFields resolution for
-  // "Add to Accounts" fields matched by name rather than known ahead
-  // of time — see getAccountFieldMapping().
-  const TEXT_LIKE_FIELD_TYPES = new Set(['text', 'short_text', 'email', 'phone', 'url', 'location', 'number']);
 
   function renderForm(entityId, typeId) {
     const entity = ENTITIES.find(e => e.id === entityId);
@@ -801,15 +770,11 @@ const App = (() => {
   function getAccountFieldMapping(listId) {
     if (!accountFieldMappingCache[listId]) {
       accountFieldMappingCache[listId] = ClickUp.getListFields(listId).then(fields => {
-        // Returns {id, type} rather than just the id. `type` matters
-        // for associatedAccount specifically — see TEXT_LIKE_FIELD_TYPES
-        // and its use in submitCapture() below, added after a real
-        // submission proved a *different* field ("Tool/Software/Act")
-        // was a Dropdown type expecting an option uuid rather than
-        // free text, which rejected the whole task. Only attempt a
-        // structured write when the field's reported type is
-        // confidently text-like; otherwise rely on the guaranteed
-        // description-line fallback (clickup.js buildTaskPayload).
+        // Returns {id, type} rather than just the id. Type isn't
+        // currently used (associatedAccount, the one field that would
+        // have needed it, is no longer attempted as a structured
+        // write — see submitCapture()'s NOTE) but kept in the shape
+        // in case a future field needs it again.
         const find = (...keywords) => {
           const match = fields.find(f => keywords.some(k => f.name.toLowerCase().includes(k)));
           return match ? { id: match.id, type: match.type } : undefined;
@@ -817,12 +782,7 @@ const App = (() => {
         return {
           adminUsername: find('admin username', 'username'),
           adminEmail: find('admin email', 'email'),
-          password: find('registered password', 'password'),
-          // "Related Account ID" — confirmed as the actual field name
-          // (distinct from "Assc. Account", a separate column that
-          // isn't targeted here). Stores the linked company's own
-          // ClickUp task ID.
-          associatedAccount: find('related account id', 'related account', 'account id')
+          password: find('registered password', 'password')
           // Deliberately no "title" / Tool-Software-Act mapping — see
           // v11 in version history: that field turned out to be a
           // Dropdown/Label type (ClickUp error: "Value must be an
@@ -1383,25 +1343,11 @@ const App = (() => {
         const candidates = {
           adminUsername: fields.adminUsername,
           adminEmail: fields.adminEmail,
-          password: fields.password,
-          // Not a form field — comes from the Associated Account
-          // autocomplete (renderAssociatedAccountBlock), stored on
-          // `state` rather than `fields` since it isn't part of
-          // FIELD_SCHEMAS.account. Targets "Related Account ID".
-          associatedAccount: state.associatedAccountId
+          password: fields.password
         };
         Object.keys(candidates).forEach(key => {
           const match = mapping[key];
           if (!match || !candidates[key]) return;
-          // Gate ONLY the newly-reintroduced associatedAccount write
-          // behind the type-safety check — see TEXT_LIKE_FIELD_TYPES's
-          // doc comment for why it exists. adminUsername/adminEmail/
-          // password are deliberately left ungated: they're already
-          // confirmed working via a real production submission, and
-          // adding an unproven type-string check to them risks a
-          // regression if the guessed allowlist strings don't exactly
-          // match whatever ClickUp actually calls their real types.
-          if (key === 'associatedAccount' && !TEXT_LIKE_FIELD_TYPES.has((match.type || '').toLowerCase())) return;
           customFields.push({ id: match.id, value: candidates[key] });
           customFieldKeys.push(key);
         });
