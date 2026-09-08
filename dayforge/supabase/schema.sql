@@ -118,42 +118,50 @@ create policy "own notes" on notes for all
 create index if not exists notes_user_created_idx on notes (user_id, created_at desc);
 
 -- =============================================================================
--- Labeled image attachments for tasks and notes (added in
--- migrations/004_entry_images.sql for already-deployed projects; included
--- here too so a FRESH install gets the same schema in one pass). See that
--- migration file's comments for the full explanation.
+-- Labeled file attachments for tasks and notes — any file type, not just
+-- images (added across migrations/004_entry_images.sql and
+-- migrations/005_generic_attachments.sql for already-deployed projects;
+-- included here in its FINAL form so a fresh install gets it in one pass,
+-- without needing the create-then-rename history those migrations show).
+-- The bucket is still named 'entry-images' for historical reasons (see
+-- migration 005's note on why it wasn't renamed) even though it holds any
+-- file type — an internal technical name, not shown to users.
 -- =============================================================================
-create table if not exists task_images (
+create table if not exists task_attachments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   task_id uuid not null references tasks(id) on delete cascade,
   storage_path text not null,
   label text,
+  mime_type text,
+  original_filename text,
   sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
 
-create table if not exists note_images (
+create table if not exists note_attachments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   note_id uuid not null references notes(id) on delete cascade,
   storage_path text not null,
   label text,
+  mime_type text,
+  original_filename text,
   sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
 
-alter table task_images enable row level security;
-alter table note_images enable row level security;
+alter table task_attachments enable row level security;
+alter table note_attachments enable row level security;
 
-create policy "own task images" on task_images for all
+create policy "own task attachments" on task_attachments for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create policy "own note images" on note_images for all
+create policy "own note attachments" on note_attachments for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create index if not exists task_images_task_idx on task_images (task_id, sort_order);
-create index if not exists note_images_note_idx on note_images (note_id, sort_order);
+create index if not exists task_attachments_task_idx on task_attachments (task_id, sort_order);
+create index if not exists note_attachments_note_idx on note_attachments (note_id, sort_order);
 
 insert into storage.buckets (id, name, public)
 values ('entry-images', 'entry-images', false)

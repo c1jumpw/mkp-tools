@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
+ * VERSION: v5 (previously v1-v4 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -61,16 +61,34 @@
  *       "Edited" only shows once it's more than a second after creation,
  *       so a never-edited note doesn't show a redundant near-identical
  *       second timestamp.
- *   v4 (this version) — added a per-note "Photos ▾" toggle mounting
- *       ImageAttachments.jsx (shared with TaskModal) — lazily, only once
- *       expanded, so opening the panel doesn't fetch images for every note
- *       in the list at once (see useEntryImages.js for the reasoning).
+ *   v4 — added a per-note "Photos ▾" toggle mounting ImageAttachments.jsx
+ *       (shared with TaskModal) — lazily, only once expanded, so opening
+ *       the panel doesn't fetch images for every note in the list at once
+ *       (see useEntryImages.js for the reasoning).
+ *   v5 (this version):
+ *     - The Photos toggle now reads "Files ▾" and mounts the renamed/
+ *       broadened FileAttachments.jsx (any file type, not just images —
+ *       see that file's header). Functionally identical, just accurate
+ *       naming for the wider scope.
+ *     - Capture textarea, when EMPTY, now auto-fills today's date as the
+ *       first line on focus (see handleCaptureFocus) — per user request
+ *       to skip manually typing the date for a dated note; anything typed
+ *       or pasted afterward just continues from there, and the date can be
+ *       deleted if not wanted for a given note.
+ *     - Modal is now full-screen on mobile (see TaskModal.jsx v7's
+ *       matching change for the shared rationale).
  * =============================================================================
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { splitIntoTopics, parseNoteDisplay } from '../lib/notesParsing'
-import ImageAttachments from './ImageAttachments'
+import FileAttachments from './FileAttachments'
+
+// Today's date as a compact label for the auto-filled capture line, e.g.
+// "Aug 11, 2026" — matches the format used elsewhere for note timestamps.
+function todayDateLabel() {
+  return new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 // Formats an ISO timestamp for display, e.g. "Aug 11, 3:42 PM" — omits the
 // year when it's the current year (the common case) to keep it compact,
@@ -89,6 +107,7 @@ function formatTimestamp(iso) {
 
 export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onConvert, onClose }) {
   const [draft, setDraft] = useState('')
+  const draftRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [showConverted, setShowConverted] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -98,6 +117,26 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
 
   const visibleNotes = showConverted ? notes : notes.filter((n) => !n.converted)
   const convertedCount = notes.filter((n) => n.converted).length
+
+  /**
+   * Auto-fills today's date as the first line, but ONLY when the box is
+   * still empty — so this never overwrites anything already typed, and
+   * only fires once per capture (not on every re-focus after typing has
+   * started). Cursor is moved to the end of the inserted text via
+   * requestAnimationFrame, since the textarea's value update from setDraft
+   * is asynchronous — setting selectionStart/End immediately would still
+   * see the OLD (empty) value.
+   */
+  function handleCaptureFocus() {
+    if (draft) return
+    const label = todayDateLabel() + '\n'
+    setDraft(label)
+    requestAnimationFrame(() => {
+      if (draftRef.current) {
+        draftRef.current.selectionStart = draftRef.current.selectionEnd = label.length
+      }
+    })
+  }
 
   async function handleCapture() {
     if (!draft.trim()) return
@@ -155,8 +194,8 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="plate rounded-lg w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 rise-in" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
+      <div className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[85vh] overflow-y-auto p-5 rise-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="[font-family:var(--font-display)] uppercase tracking-wide text-xl">Notes</h2>
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-paper)]">✕</button>
@@ -171,8 +210,10 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
             is a different character and doesn't match what most keyboards
             produce for a typed "--" without autocorrect converting it. */}
         <textarea
+          ref={draftRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onFocus={handleCaptureFocus}
           rows={4}
           placeholder={'Jot anything… start a new topic mid-thought with --)\n\nGroceries\n- milk\n- eggs --) Doctor appt\n- follow up with insurance'}
           className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-2 text-sm mb-2 resize-none focus:border-[var(--color-ember)] outline-none"
@@ -260,15 +301,15 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                         onClick={() => setExpandedPhotosId(expandedPhotosId === note.id ? null : note.id)}
                         className="text-xs text-[var(--color-muted)] hover:text-[var(--color-paper)]"
                       >
-                        {expandedPhotosId === note.id ? 'Hide photos ▴' : 'Photos ▾'}
+                        {expandedPhotosId === note.id ? 'Hide files ▴' : 'Files ▾'}
                       </button>
                     </div>
-                    {/* ImageAttachments (and its data fetch) only mounts
+                    {/* FileAttachments (and its data fetch) only mounts
                         once expanded — see useEntryImages.js for why this
                         matters when there could be many notes in the list. */}
                     {expandedPhotosId === note.id && (
                       <div className="mt-2">
-                        <ImageAttachments kind="note" entryId={note.id} />
+                        <FileAttachments kind="note" entryId={note.id} />
                       </div>
                     )}
                     {/* Created/edited timestamps — "edited" only shown once

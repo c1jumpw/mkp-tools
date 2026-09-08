@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/TaskModal.jsx
- * VERSION: v6 (previously v1-v5 — see REVISION HISTORY below)
+ * VERSION: v7 (previously v1-v6 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Full create/edit form for a single task: title, notes, voice note, type,
@@ -89,16 +89,38 @@
  *   Added an Images section (ImageAttachments.jsx, shared with NotesPanel)
  *   for labeled photo attachments, same isNew restriction as voice notes
  *   (image storage paths are built from the task's id).
+ *
+ * REVISION HISTORY (v7, this version)
+ *   - Renamed the Images section to Attachments, now backed by
+ *     FileAttachments.jsx (any file type, not just images — see that
+ *     file's header for the full rename/broadening story).
+ *   - Added autosave (hooks/useAutosave.js) for existing tasks: edits to
+ *     title/notes/schedule/etc. now persist automatically a short pause
+ *     after typing stops, Google-Docs-style, instead of requiring an
+ *     explicit Save click. A small "Saving…"/"Saved" indicator next to the
+ *     title reflects this. Every "leave the modal" action now flushes any
+ *     pending autosave first (handleRequestClose) so a very recent edit
+ *     isn't lost to the debounce window on a quick close. New tasks are
+ *     unaffected — autosave only applies once a task actually exists (see
+ *     useAutosave's file header for why), so "Add task" remains the way to
+ *     create one.
+ *   - Modal is now full-screen on mobile (rounded-none, fills the
+ *     viewport) and reverts to the original centered card on sm+ screens —
+ *     per feedback that the previous fixed max-height felt cramped for
+ *     vertical scrolling on small phones. See NotesPanel.jsx/
+ *     RoutinesPanel.jsx/AccountModal.jsx/ExportModal.jsx for the same
+ *     responsive treatment applied consistently across every modal.
  * =============================================================================
  */
 
 import { useEffect, useState } from 'react'
 import { timeToMinutes, minutesToTime } from '../lib/recurrence'
 import { useAuth } from '../context/AuthContext'
+import { useAutosave } from '../hooks/useAutosave'
 import { uploadVoiceNote, deleteVoiceNoteFile, fetchVoiceNoteObjectUrl, fetchVoiceNoteBlob } from '../lib/voiceNotes'
 import { convertToWav } from '../lib/wavEncoder'
 import VoiceNoteRecorder from './VoiceNoteRecorder'
-import ImageAttachments from './ImageAttachments'
+import FileAttachments from './FileAttachments'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MIN_DURATION_MINUTES = 5
@@ -217,6 +239,28 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
     } finally {
       setBusy(false)
     }
+  }
+
+  // --- Autosave (existing tasks only — see hooks/useAutosave.js's "NOT
+  // USED FOR CREATING NEW ENTRIES" note for why new tasks are excluded).
+  // buildFieldsPayload() is called fresh on every render, giving the hook
+  // a new object each time — it compares by JSON content, not reference,
+  // so this is the correct way to feed it a "current value" rather than a
+  // stale snapshot from when the component first mounted.
+  const { status: autosaveStatus, flush: flushAutosave } = useAutosave(
+    buildFieldsPayload(),
+    onSave,
+    { enabled: !isNew }
+  )
+
+  // Used by every "leave the modal" action (Cancel, the X button, backdrop
+  // click) instead of calling onClose directly — flushes any pending
+  // debounced autosave first, so an edit made just before closing isn't
+  // lost to the debounce window. A no-op when autosave is disabled (isNew)
+  // or there's nothing pending (flush() checks internally).
+  async function handleRequestClose() {
+    await flushAutosave()
+    onClose()
   }
 
   async function handleSave() {
@@ -349,15 +393,28 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={handleRequestClose}>
       <div
-        className="plate rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-5 rise-in"
+        className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90vh] overflow-y-auto p-5 rise-in"
         onClick={(e) => e.stopPropagation()}
         style={{ '--accent': category === 'work' ? 'var(--color-steel)' : 'var(--color-ember)' }}
       >
-        <h2 className="[font-family:var(--font-display)] uppercase tracking-wide text-xl mb-4">
-          {isNew ? 'New task' : 'Edit task'}
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="[font-family:var(--font-display)] uppercase tracking-wide text-xl">
+            {isNew ? 'New task' : 'Edit task'}
+          </h2>
+          {/* Autosave status — only meaningful for an existing task (see
+              useAutosave's `enabled: !isNew`). Deliberately understated
+              (small, muted) like Google Docs' equivalent indicator — it's
+              a reassurance, not something that should compete for attention. */}
+          {!isNew && (
+            <span className="text-[10px] text-[var(--color-muted)] uppercase tracking-wide">
+              {autosaveStatus === 'saving' && 'Saving…'}
+              {autosaveStatus === 'saved' && 'Saved'}
+              {autosaveStatus === 'error' && <span className="text-[var(--color-ember)]">Save failed</span>}
+            </span>
+          )}
+        </div>
 
         <label className="blueprint-tick uppercase block mb-1">Title</label>
         <input
@@ -465,16 +522,16 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
           </div>
         )}
 
-        {/* Images — see ImageAttachments.jsx (shared with NotesPanel). Same
+        {/* Attachments — see FileAttachments.jsx (shared with NotesPanel). Same
             isNew restriction as voice notes, for the same reason: image
             storage paths are built from the task's id, which a brand-new
             task doesn't have until it's saved once. */}
-        <label className="blueprint-tick uppercase block mb-1">Images</label>
+        <label className="blueprint-tick uppercase block mb-1">Attachments</label>
         {isNew ? (
-          <p className="text-xs text-[var(--color-muted)] mb-3">Save the task first, then reopen it to add images.</p>
+          <p className="text-xs text-[var(--color-muted)] mb-3">Save the task first, then reopen it to add attachments.</p>
         ) : (
           <div className="mb-3">
-            <ImageAttachments kind="task" entryId={task.id} />
+            <FileAttachments kind="task" entryId={task.id} />
           </div>
         )}
 
@@ -614,7 +671,7 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
               Send to tray
             </button>
           )}
-          <button onClick={onClose} className="text-sm text-[var(--color-muted)] hover:text-[var(--color-paper)] px-3 py-1.5">
+          <button onClick={handleRequestClose} className="text-sm text-[var(--color-muted)] hover:text-[var(--color-paper)] px-3 py-1.5">
             Cancel
           </button>
           <button

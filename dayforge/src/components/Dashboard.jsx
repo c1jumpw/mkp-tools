@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/Dashboard.jsx
- * VERSION: v8 (previously v1-v7 — see REVISION HISTORY below)
+ * VERSION: v9 (previously v1-v8 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The main authenticated screen: header (branding, actions, account menu),
@@ -80,10 +80,15 @@
  *       its new onEdit prop, so pinned items can be tapped open to the full
  *       edit modal — previously the only place in the app without this
  *       (Timeline and UnscheduledTray items already supported it).
- *   v8 (this version) — added the Notes header button (+ un-sorted-count
- *       badge) opening NotesPanel, a new raw-capture "notepad" feature that
- *       sits earlier in the funnel than the tray (Notepad -> Tray ->
- *       Timeline) — see NotesPanel.jsx and useDayForgeData's notes CRUD.
+ *   v8 — added the Notes header button (+ un-sorted-count badge) opening
+ *       NotesPanel, a new raw-capture "notepad" feature that sits earlier
+ *       in the funnel than the tray (Notepad -> Tray -> Timeline) — see
+ *       NotesPanel.jsx and useDayForgeData's notes CRUD.
+ *   v9 (this version) — added handleHardRefresh (see its own doc comment
+ *       for the cache-busting mechanism) as a new "↻ Refresh app" item in
+ *       the account dropdown menu, since mobile browsers — especially a
+ *       site added to the home screen — often have no visible way to force
+ *       a fresh reload after a new deployment goes out.
  * =============================================================================
  */
 
@@ -190,6 +195,32 @@ export default function Dashboard() {
   // the selected day. Confirmation lives in UnscheduledTray.jsx.
   async function handleClearTray() {
     await data.deleteTasksBulk(trayTasks.map((t) => t.id))
+  }
+
+  /**
+   * Forces a genuinely fresh reload of the app, bypassing whatever's
+   * cached — added because mobile browsers (especially a site "Added to
+   * Home Screen", which this app supports via index.html's apple-touch-icon
+   * setup) often have no visible pull-to-refresh or browser reload button,
+   * so there was previously no way to pick up a new deployment without
+   * manually clearing the browser's site data.
+   *
+   * HOW THIS ACTUALLY FORCES FRESHNESS: a plain window.location.reload()
+   * can still be served from cache by the browser/OS depending on how
+   * aggressively it caches the previous response for this exact URL.
+   * Instead, this navigates to the SAME page but with a new, unique query
+   * parameter — from the browser's perspective this is a different URL it
+   * has never cached, so it must fetch a fresh copy of index.html from the
+   * network. Since Vite fingerprints every JS/CSS bundle with a content
+   * hash in its filename, a fresh index.html from a NEW deployment
+   * automatically references the NEW bundle filenames too — old cached
+   * bundles simply become irrelevant rather than needing to be explicitly
+   * invalidated.
+   */
+  function handleHardRefresh() {
+    const url = new URL(window.location.href)
+    url.searchParams.set('_refresh', Date.now().toString())
+    window.location.href = url.toString()
   }
 
   /**
@@ -397,6 +428,12 @@ export default function Dashboard() {
                     className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition"
                   >
                     Account settings
+                  </button>
+                  <button
+                    onClick={handleHardRefresh}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition"
+                  >
+                    ↻ Refresh app
                   </button>
                   <button
                     onClick={signOut}

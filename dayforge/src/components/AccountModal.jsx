@@ -88,8 +88,8 @@ export default function AccountModal({ onClose }) {
   const canSave = (email.trim() || password) && !busy
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="plate rounded-lg w-full max-w-sm p-5 rise-in" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
+      <div className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-sm sm:max-h-[85vh] overflow-y-auto p-5 rise-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="[font-family:var(--font-display)] uppercase tracking-wide text-xl">Account</h2>
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-paper)]">✕</button>
