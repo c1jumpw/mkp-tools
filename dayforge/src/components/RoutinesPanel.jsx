@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * FILE: src/components/RoutinesPanel.jsx
+ * VERSION: v2 (previously v1, undocumented at the time — see REVISION
+ *          HISTORY below)
+ * =============================================================================
+ * PURPOSE
+ *   Manage reusable "routine" templates (e.g. "Morning Routine", "Gym
+ *   Day") — each a named set of items with a time and duration — and apply
+ *   one to the currently-selected day in one click, inserting its items as
+ *   ordinary one-off tasks for that date.
+ *
+ * PROPS
+ *   routines       {array}    All of the user's routine templates.
+ *   routineItems   {array}    All items across all routines (filtered per-
+ *                             routine internally by routine_id).
+ *   onCreateRoutine  {function} (name) -> Promise<routine>.
+ *   onDeleteRoutine  {function} (id) -> Promise.
+ *   onAddItem        {function} (routineId, fields) -> Promise.
+ *   onDeleteItem     {function} (id) -> Promise.
+ *   onApply          {function} (routineId, dateISO) -> Promise; inserts
+ *                               the routine's items as tasks on that date.
+ *   dateISO        {string}   The currently-selected day, applied to.
+ *   onClose        {function} () -> void.
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — create/delete routines, add/delete items, apply
+ *       to a date. Shipped without a header comment at the time; this
+ *       summary reconstructs it retroactively for consistency with the
+ *       rest of the codebase's documentation standard.
+ *   v2 (this version) — fixed the modal's title/close-button row rendering
+ *       clipped under the phone's status bar/notch on some devices (see
+ *       TaskModal.jsx v8's matching fix for the full explanation); no
+ *       functional change otherwise.
+ * =============================================================================
+ */
+
 import { useState } from 'react'
 
 export default function RoutinesPanel({
@@ -31,7 +68,7 @@ export default function RoutinesPanel({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
-      <div className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[85vh] overflow-y-auto p-5 rise-in" onClick={(e) => e.stopPropagation()}>
+      <div className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[85vh] overflow-y-auto px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] rise-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="[font-family:var(--font-display)] uppercase tracking-wide text-xl">Routine templates</h2>
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-paper)]">✕</button>

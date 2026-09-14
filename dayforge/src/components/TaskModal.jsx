@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/TaskModal.jsx
- * VERSION: v7 (previously v1-v6 — see REVISION HISTORY below)
+ * VERSION: v8 (previously v1-v7 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Full create/edit form for a single task: title, notes, voice note, type,
@@ -110,6 +110,18 @@
  *     vertical scrolling on small phones. See NotesPanel.jsx/
  *     RoutinesPanel.jsx/AccountModal.jsx/ExportModal.jsx for the same
  *     responsive treatment applied consistently across every modal.
+ *
+ * REVISION HISTORY (v8, this version)
+ *   Fixed the modal's title/close-button row rendering clipped under the
+ *   phone's status bar/notch on some devices — a real bug spotted from a
+ *   user screenshot of NotesPanel's identical layout. Root cause: v7's
+ *   full-screen container used uniform `p-5` padding, which isn't enough
+ *   top clearance on notch/dynamic-island devices. Now uses
+ *   `pt-[max(1.25rem,env(safe-area-inset-top))]` — 1.25rem is p-5's
+ *   original top value, so this is a no-op visually on devices without a
+ *   notch, and only grows the top padding where the OS actually reserves
+ *   space there. Same fix applied identically to NotesPanel.jsx,
+ *   RoutinesPanel.jsx, AccountModal.jsx, and ExportModal.jsx.
  * =============================================================================
  */
 
@@ -395,7 +407,7 @@ export default function TaskModal({ task, defaultDate, onSave, onDelete, onClose
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={handleRequestClose}>
       <div
-        className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90vh] overflow-y-auto p-5 rise-in"
+        className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90vh] overflow-y-auto px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] rise-in"
         onClick={(e) => e.stopPropagation()}
         style={{ '--accent': category === 'work' ? 'var(--color-steel)' : 'var(--color-ember)' }}
       >

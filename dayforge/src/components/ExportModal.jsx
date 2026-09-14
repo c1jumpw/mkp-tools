@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/ExportModal.jsx
- * VERSION: v1 (new file)
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Lets the user choose exactly what to include before downloading a
@@ -35,6 +35,13 @@
  *     technically valid but almost certainly not what was intended, so we
  *     prevent the confusing "I exported but nothing showed up" outcome
  *     at the source instead of after the fact.
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — range/category/type filter form.
+ *   v2 (this version) — fixed the modal's title/close-button row rendering
+ *       clipped under the phone's status bar/notch on some devices (see
+ *       TaskModal.jsx v8's matching fix for the full explanation); no
+ *       functional change otherwise.
  * =============================================================================
  */
 
@@ -63,7 +70,7 @@ export default function ExportModal({ onExport, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
-      <div className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-sm sm:max-h-[85vh] overflow-y-auto p-5 rise-in" onClick={(e) => e.stopPropagation()}>
+      <div className="plate rounded-none sm:rounded-lg w-full h-full sm:h-auto sm:max-w-sm sm:max-h-[85vh] overflow-y-auto px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] rise-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="[font-family:var(--font-display)] uppercase tracking-wide text-xl">Export to calendar</h2>
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-paper)]">✕</button>
