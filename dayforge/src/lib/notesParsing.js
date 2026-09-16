@@ -32,16 +32,28 @@
  *     capture flow), it simply renders the whole thing as one topic's lines;
  *     it does not re-split on this function's own initiative, since editing
  *     an existing note should not silently multiply it into several notes.
+ *   - applyBulletAutoContinue(): a LIVE TYPING AID (not a parsing function
+ *     at all — grouped in this file since it encodes the same "-"/"*"
+ *     writing convention). Intercepts the Enter key in a note textarea to
+ *     auto-continue the user's own dash/star hierarchy — see its own doc
+ *     comment for the exact rules.
  *
  * REVISION HISTORY
  *   v1 (initial build) — displayed/documented the em-dash "—)" as the
  *       primary separator, though the regex always accepted the literal
  *       "--)" too.
- *   v2 (this version) — corrected per user feedback: "--)" (literal two
- *       hyphens) is how they actually type it, not an em-dash. This was
- *       purely a documentation/UI-copy correction — the underlying regex
- *       already matched "--)" correctly before this change; only the
- *       displayed guidance text (here and in NotesPanel.jsx) was misleading.
+ *   v2 — corrected per user feedback: "--)" (literal two hyphens) is how
+ *       they actually type it, not an em-dash. This was purely a
+ *       documentation/UI-copy correction — the underlying regex already
+ *       matched "--)" correctly before this change; only the displayed
+ *       guidance text (here and in NotesPanel.jsx) was misleading.
+ *   v3 (this version) — added applyBulletAutoContinue(), a typing-shortcut
+ *       feature request: while editing a note, pressing Enter after a line
+ *       already using the user's own "-"/"*" convention auto-continues it,
+ *       and two Enters in a row (an intentionally blank line) starts a
+ *       fresh "-" topic instead of piling up empty bullets. Verified the
+ *       full decision table standalone (title lines, dash lines, star
+ *       lines, blank lines, bare markers with nothing typed after them).
  * =============================================================================
  */
 
@@ -98,4 +110,95 @@ export function parseNoteDisplay(content) {
     topic: stripLeadingBullet(lines[0]),
     bullets: lines.slice(1).map(stripLeadingBullet),
   }
+}
+
+/**
+ * Pure decision function: given the TRIMMED content of the line the cursor
+ * is currently on (i.e. the line about to be "finished" by pressing
+ * Enter), decides what auto-continuation behavior (if any) applies.
+ * Separated from applyBulletAutoContinue() below so the decision table
+ * itself can be tested without needing a real DOM textarea element.
+ *
+ * RULES (per user's typing-shortcut request, matching the exact writing
+ * convention shown in their example: a "-" line as a topic/sub-task, "*"
+ * lines as supporting details under it, a blank line between groups):
+ *   - Line is blank, or is a BARE marker with nothing typed after it
+ *     ("-" or "*" alone) -> 'reset': the user either intentionally left a
+ *     blank line, or pressed Enter again on an auto-inserted bullet
+ *     without typing anything into it (the "skipped twice" case) — either
+ *     way, start a fresh topic with "- ".
+ *   - Line starts with "*" -> 'continue' with "* " (stay in detail mode).
+ *   - Line starts with "-" -> 'continue' with "* " (a topic line's own
+ *     Enter starts ITS details, per the request: "next line ... should
+ *     automatically write a star").
+ *   - Anything else (e.g. a plain title/date line with no marker at all)
+ *     -> 'default': let Enter behave normally (plain newline, no
+ *     auto-prefix) — this is what lets the user manually type the very
+ *     first "- " to kick off the pattern in the first place.
+ * @param {string} trimmedLine
+ * @returns {{action: 'default'} | {action: 'continue'|'reset', prefix: string}}
+ */
+export function decideBulletAction(trimmedLine) {
+  if (trimmedLine === '' || trimmedLine === '-' || trimmedLine === '*') {
+    return { action: 'reset', prefix: '- ' }
+  }
+  if (trimmedLine.startsWith('*')) return { action: 'continue', prefix: '* ' }
+  if (trimmedLine.startsWith('-')) return { action: 'continue', prefix: '* ' }
+  return { action: 'default' }
+}
+
+/**
+ * Textarea onKeyDown handler implementing the typing shortcut: call this
+ * directly as `onKeyDown={(e) => applyBulletAutoContinue(e, setMyText)}` on
+ * any note-content textarea (used by both NotesPanel's capture box and its
+ * full-screen note editor overlay).
+ *
+ * WHY THIS NEEDS TO PREVENT DEFAULT AND MANUALLY REBUILD THE VALUE
+ *   A textarea's default Enter behavior just inserts a bare "\n". To insert
+ *   "\n* " or "\n- " instead — or, for the 'reset' case, to erase a
+ *   dangling bare marker on the current line before adding the new one —
+ *   the default insertion must be prevented and the new value constructed
+ *   by hand from the textarea's current value and cursor position.
+ * WHY THE CURSOR POSITION IS RESTORED VIA requestAnimationFrame
+ *   This is a controlled React textarea — calling the setValue callback
+ *   doesn't immediately update `el.value`; React re-renders first. Setting
+ *   selectionStart/selectionEnd synchronously here would still act on the
+ *   OLD value's length. Deferring to the next animation frame guarantees
+ *   the DOM has the new value by the time the cursor is repositioned. Same
+ *   pattern already used for the capture box's date auto-fill.
+ *
+ * @param {React.KeyboardEvent} e - must be from a <textarea>.
+ * @param {(newValue: string) => void} setValue - the controlling state setter.
+ */
+export function applyBulletAutoContinue(e, setValue) {
+  if (e.key !== 'Enter') return
+
+  const el = e.target
+  const cursor = el.selectionStart
+  const value = el.value
+  const beforeCursor = value.slice(0, cursor)
+  const afterCursor = value.slice(cursor)
+  const lineStart = beforeCursor.lastIndexOf('\n') + 1
+  const currentLine = beforeCursor.slice(lineStart)
+  const decision = decideBulletAction(currentLine.trim())
+
+  if (decision.action === 'default') return // let the browser insert a plain "\n"
+
+  e.preventDefault()
+
+  let newValue, newCursor
+  if (decision.action === 'reset') {
+    // Erase whatever's on the current line (blank already, or a dangling
+    // bare "-"/"*" the user didn't fill in) and start the new topic fresh.
+    newValue = value.slice(0, lineStart) + '\n' + decision.prefix + afterCursor
+    newCursor = lineStart + 1 + decision.prefix.length
+  } else {
+    newValue = beforeCursor + '\n' + decision.prefix + afterCursor
+    newCursor = beforeCursor.length + 1 + decision.prefix.length
+  }
+
+  setValue(newValue)
+  requestAnimationFrame(() => {
+    el.selectionStart = el.selectionEnd = newCursor
+  })
 }

@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v6 (previously v1-v5 — see REVISION HISTORY below)
+ * VERSION: v7 (previously v1-v6 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -69,11 +69,18 @@
  *       screen container now uses `pt-[max(1.25rem,env(safe-area-inset-
  *       top))]` instead of uniform padding, matching the same fix already
  *       applied to the Dashboard's own header.
+ *   v7 (this version) — added applyBulletAutoContinue (lib/notesParsing.js)
+ *       as an onKeyDown handler on both the capture textarea and the
+ *       full-screen editor's textarea: pressing Enter after a "-" or "*"
+ *       line auto-continues with "* ", and a blank line (or an unfilled
+ *       bullet marker left empty) starts a fresh "- " topic — a direct
+ *       typing-shortcut request matching the exact convention visible in
+ *       the user's own note-taking screenshots.
  * =============================================================================
  */
 
 import { useRef, useState } from 'react'
-import { splitIntoTopics, parseNoteDisplay } from '../lib/notesParsing'
+import { splitIntoTopics, parseNoteDisplay, applyBulletAutoContinue } from '../lib/notesParsing'
 import { useAutosave } from '../hooks/useAutosave'
 import FileAttachments from './FileAttachments'
 
@@ -203,6 +210,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={handleCaptureFocus}
+          onKeyDown={(e) => applyBulletAutoContinue(e, setDraft)}
           rows={4}
           placeholder={'Jot anything… start a new topic mid-thought with --)\n\nGroceries\n- milk\n- eggs --) Doctor appt\n- follow up with insurance'}
           className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-2 text-sm mb-2 resize-none focus:border-[var(--color-ember)] outline-none"
@@ -210,6 +218,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
         <div className="flex items-center justify-between mb-4">
           <p className="text-[10px] text-[var(--color-muted)]">
             Tip: separate unrelated topics with <span className="[font-family:var(--font-mono)]">--)</span> — each becomes its own note.
+            Press Enter after a <span className="[font-family:var(--font-mono)]">-</span> line to auto-add <span className="[font-family:var(--font-mono)]">*</span> details; a blank line starts a new <span className="[font-family:var(--font-mono)]">-</span>.
           </p>
           <button
             onClick={handleCapture}
@@ -328,6 +337,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={(e) => applyBulletAutoContinue(e, setEditText)}
             autoFocus
             className="flex-1 w-full bg-[var(--color-ink)] text-[var(--color-paper)] p-4 text-base resize-none outline-none"
           />
