@@ -106,6 +106,7 @@ create table if not exists notes (
   content text not null,
   converted boolean not null default false,
   converted_task_id uuid references tasks(id) on delete set null,
+  color text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

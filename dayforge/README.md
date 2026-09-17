@@ -13,7 +13,7 @@ Your data is stored in a real database (Supabase), not browser localStorage — 
 - **Personal / Work tagging** on every task
 - **Recurring tasks** — daily, or weekly on chosen days, with per-day completion tracking
 - **Routine templates** — build a reusable set of items (e.g. a morning routine) and apply it to any day in one click
-- **Notes (notepad)** — a raw, unstructured quick-capture space that sits before the tray: jot freely, separate multiple topics in one paste with `--)`, then convert any note into a task when you're ready to act on it
+- **Notes (notepad)** — a raw, unstructured quick-capture space that sits before the tray: jot freely, separate multiple topics in one paste with `--)`, then convert any note into a task when you're ready to act on it. Color-code notes, search across them, and use the dash/star typing shortcut for topic + supporting detail lines
 - **File attachments** — attach multiple labeled files (photos, PDFs, documents — any type) to any task or note; images get automatic client-side compression before upload
 - **Voice notes** — record audio on a task, with best-effort live transcription in supported browsers, playback, and download
 - **Autosave** — editing an existing task saves automatically a short pause after you stop typing, no explicit Save required (new tasks still need "Add task" to be created)

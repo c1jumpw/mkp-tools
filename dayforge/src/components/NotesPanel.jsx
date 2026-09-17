@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v7 (previously v1-v6 — see REVISION HISTORY below)
+ * VERSION: v8 (previously v1-v7 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -76,11 +76,17 @@
  *       bullet marker left empty) starts a fresh "- " topic — a direct
  *       typing-shortcut request matching the exact convention visible in
  *       the user's own note-taking screenshots.
+ *   v8 (this version) — added note colors (lib/noteColors.js — a "Color"
+ *       toggle per note revealing a swatch picker, applied to the same
+ *       stripe-accent visual language used everywhere else in the app, not
+ *       a full colored-card background) and a plain client-side search box
+ *       filtering notes by raw content substring match.
  * =============================================================================
  */
 
 import { useRef, useState } from 'react'
 import { splitIntoTopics, parseNoteDisplay, applyBulletAutoContinue } from '../lib/notesParsing'
+import { NOTE_COLORS, getNoteColorHex } from '../lib/noteColors'
 import { useAutosave } from '../hooks/useAutosave'
 import FileAttachments from './FileAttachments'
 
@@ -116,9 +122,30 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   const [editText, setEditText] = useState('')
   const [error, setError] = useState('')
   const [expandedFilesId, setExpandedFilesId] = useState(null) // note id whose Files section is expanded, if any
+  const [colorPickerId, setColorPickerId] = useState(null) // note id whose color swatch picker is open
+  const [search, setSearch] = useState('')
 
-  const visibleNotes = showConverted ? notes : notes.filter((n) => !n.converted)
+  // Search applies first (against the raw content — matches whatever the
+  // user actually typed, not just the parsed topic), then the
+  // showConverted toggle narrows further. convertedCount below is
+  // deliberately computed from the FULL notes list (unaffected by an
+  // active search), so the "Show N converted" toggle's count stays stable
+  // while someone is searching rather than jumping around as they type.
+  const searchLower = search.trim().toLowerCase()
+  const searchMatched = searchLower
+    ? notes.filter((n) => n.content.toLowerCase().includes(searchLower))
+    : notes
+  const visibleNotes = showConverted ? searchMatched : searchMatched.filter((n) => !n.converted)
   const convertedCount = notes.filter((n) => n.converted).length
+
+  async function handleSetColor(note, colorKey) {
+    setColorPickerId(null)
+    try {
+      await onUpdate(note.id, { color: colorKey === 'default' ? null : colorKey })
+    } catch (err) {
+      setError('Could not set color: ' + (err.message || 'unknown error'))
+    }
+  }
 
   /**
    * Auto-fills today's date as the first line, but ONLY when the box is
@@ -229,6 +256,20 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           </button>
         </div>
 
+        {/* Search — plain client-side substring match against each note's
+            raw content (not just the parsed topic), since the notes list
+            is always already fully loaded for this user (no separate
+            server-side search needed at this scale). */}
+        {notes.length > 0 && (
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search notes…"
+            className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-1.5 text-sm mb-3 focus:border-[var(--color-ember)] outline-none"
+          />
+        )}
+
         {convertedCount > 0 && (
           <label className="flex items-center gap-2 mb-3 text-xs text-[var(--color-muted)]">
             <input type="checkbox" checked={showConverted} onChange={(e) => setShowConverted(e.target.checked)} />
@@ -239,7 +280,11 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
         <div className="space-y-2">
           {visibleNotes.length === 0 && (
             <p className="text-sm text-[var(--color-muted)]">
-              {notes.length === 0 ? 'Nothing jotted yet.' : 'Nothing left to sort — everything visible has been converted.'}
+              {searchLower
+                ? `No notes match "${search.trim()}".`
+                : notes.length === 0
+                ? 'Nothing jotted yet.'
+                : 'Nothing left to sort — everything visible has been converted.'}
             </p>
           )}
           {visibleNotes.map((note) => {
@@ -247,11 +292,16 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
             // Compact preview: cap the visible bullets, note how many are hidden.
             const previewBullets = bullets.slice(0, MAX_PREVIEW_BULLETS)
             const hiddenCount = bullets.length - previewBullets.length
+            // A user-chosen color always wins over the converted/default
+            // accent — converted status is still communicated via the
+            // "✓ Converted to task" text below, not solely via stripe color.
+            const chosenColorHex = getNoteColorHex(note.color)
+            const accent = chosenColorHex || (note.converted ? 'var(--color-good)' : 'var(--color-steel)')
             return (
               <div
                 key={note.id}
                 className={'plate rounded-md p-3 ' + (note.converted ? 'opacity-60' : '')}
-                style={{ '--accent': note.converted ? 'var(--color-good)' : 'var(--color-steel)' }}
+                style={{ '--accent': accent }}
               >
                 {/* Tapping the preview itself opens the editor — same
                     "tap to expand" affordance as tasks elsewhere in the
@@ -292,7 +342,39 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                   >
                     {expandedFilesId === note.id ? 'Hide files ▴' : 'Files ▾'}
                   </button>
+                  <button
+                    onClick={() => setColorPickerId(colorPickerId === note.id ? null : note.id)}
+                    className="flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-paper)]"
+                  >
+                    <span
+                      className="w-3 h-3 rounded-full border border-[var(--color-line)] inline-block"
+                      style={{ backgroundColor: chosenColorHex || 'transparent' }}
+                    />
+                    Color
+                  </button>
                 </div>
+
+                {colorPickerId === note.id && (
+                  <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-[var(--color-line)]">
+                    {NOTE_COLORS.map((c) => {
+                      const isSelected = (note.color || 'default') === c.key
+                      return (
+                        <button
+                          key={c.key}
+                          type="button"
+                          onClick={() => handleSetColor(note, c.key)}
+                          title={c.label}
+                          aria-label={c.label}
+                          className="w-6 h-6 rounded-full flex-shrink-0"
+                          style={{
+                            backgroundColor: c.hex || 'var(--color-surface-raised)',
+                            border: isSelected ? '2px solid var(--color-paper)' : '2px solid var(--color-line)',
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
                 {expandedFilesId === note.id && (
                   <div className="mt-2">
                     <FileAttachments kind="note" entryId={note.id} />
