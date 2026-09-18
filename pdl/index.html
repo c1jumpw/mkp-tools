@@ -88,7 +88,7 @@
   .controls{display:flex; gap:8px; margin-bottom:16px;}
   .search{
     flex:1; background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:10px 13px; color:var(--text); font-size:13.5px; outline:none;
+    padding:10px 13px; color:var(--text); font-size:16px; outline:none;
   }
   .search:focus{border-color:var(--brass);}
   .filters{display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap;}
@@ -101,6 +101,16 @@
   /* collections bar */
   .collections-bar{display:none; gap:6px; flex-wrap:wrap; margin-bottom:16px;}
   .collections-bar.show{display:flex;}
+
+  /* vault bar */
+  .vault-bar{display:none; gap:6px; flex-wrap:wrap; margin-bottom:16px; align-items:center;}
+  .vault-bar.show{display:flex;}
+  .vault-new-btn{margin-left:0 !important;}
+  .vault-sort-chip{
+    padding:7px 13px; border-radius:20px; border:1px solid var(--line); background:var(--panel);
+    color:var(--text-dim); font-size:12px; font-weight:600; cursor:pointer; user-select:none;
+  }
+  .vault-sort-chip.active{background:var(--brass-dim); border-color:var(--brass); color:var(--brass);}
 
   /* folder breadcrumb */
   .crumbs{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); margin-bottom:12px; flex-wrap:wrap;}
@@ -150,6 +160,7 @@
     width:100%; text-align:center; font-size:26px; letter-spacing:14px; background:var(--bg-2);
     border:1px solid var(--line); color:var(--text); border-radius:10px; padding:14px 14px 14px 26px;
     margin:18px 0 0; font-family:var(--sans); box-sizing:border-box;
+    -webkit-text-security:disc; text-security:disc;
   }
   .lock-card input:focus{outline:none; border-color:var(--brass);}
   .lock-card button{
@@ -248,7 +259,7 @@
   .te-empty{font-size:12px; color:var(--text-dim); text-align:center; padding:14px 0;}
   #tePasteArea{
     width:100%; min-height:160px; background:var(--bg-2); border:1px solid var(--line); color:var(--text);
-    border-radius:10px; padding:12px; font-size:13px; font-family:var(--sans); resize:vertical; box-sizing:border-box;
+    border-radius:10px; padding:12px; font-size:16px; font-family:var(--sans); resize:vertical; box-sizing:border-box;
   }
   .te-hint{font-size:11px; color:var(--text-dim); margin-top:6px; line-height:1.5;}
   .te-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px;}
@@ -292,7 +303,7 @@
   .tag-row input{width:16px; height:16px; accent-color:var(--brass);}
   .tag-empty{font-size:12.5px; color:var(--text-dim);}
   .tag-new-row{display:flex; gap:7px; margin-bottom:16px;}
-  .tag-new-row input{flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px 10px; border-radius:8px; font-size:13px;}
+  .tag-new-row input{flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:8px 10px; border-radius:8px; font-size:16px;}
   .tag-new-row button{padding:8px 12px; border-radius:8px; border:none; background:var(--bg-2); color:var(--brass); border:1px solid var(--brass-dim); font-weight:700; font-size:12px; cursor:pointer;}
   .tag-modal-actions{display:flex; gap:8px; justify-content:flex-end;}
   .tag-modal-actions button{padding:9px 16px; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; border:none;}
@@ -300,8 +311,69 @@
   .tag-save{background:var(--brass); color:#221a0e;}
 
   .rename-row{display:flex; gap:6px; align-items:center; margin-top:8px;}
-  .rename-row input{flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:7px 9px; border-radius:7px; font-size:12.5px;}
+  .rename-row input{flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:7px 9px; border-radius:7px; font-size:16px;}
   .rename-row button{padding:7px 10px; border-radius:7px; border:none; background:var(--brass); color:#221a0e; font-weight:700; font-size:11.5px; cursor:pointer;}
+
+  /* vault entries */
+  .vault-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 15px; margin-bottom:10px; cursor:pointer;}
+  .vault-card-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  .vault-term{font-family:var(--serif); font-size:17px; font-weight:500;}
+  .vault-date{font-size:10.5px; color:var(--text-dim); flex-shrink:0; white-space:nowrap;}
+  .vault-subject{
+    display:inline-block; font-size:10.5px; font-weight:700; color:var(--brass); background:var(--brass-soft);
+    padding:2px 9px; border-radius:10px; margin:6px 0 8px;
+  }
+  .vault-def{font-size:12.5px; color:var(--text-dim); line-height:1.5;}
+  .vault-source{display:flex; align-items:center; gap:5px; font-size:11px; color:var(--brass); margin-top:8px; font-weight:600;}
+  .vault-detail{margin-top:10px; padding-top:10px; border-top:1px solid var(--line); font-size:12.5px; line-height:1.6;}
+  .vault-detail-label{font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-top:10px;}
+  .vault-detail-label:first-child{margin-top:0;}
+  .vault-detail-text{color:var(--text); margin-top:3px; white-space:pre-wrap;}
+  .vault-actions{display:flex; gap:8px; margin-top:12px;}
+  .vault-actions button{
+    padding:7px 13px; border-radius:8px; font-size:11.5px; font-weight:700; cursor:pointer; border:1px solid var(--line);
+    background:var(--bg-2); color:var(--text);
+  }
+  .vault-actions .vault-delete{color:var(--err); border-color:transparent;}
+
+  /* vault editor */
+  .ve-overlay{
+    position:fixed; inset:0; background:rgba(10,8,6,0.8); z-index:80; display:none;
+    align-items:flex-end; justify-content:center;
+  }
+  .ve-overlay.show{display:flex;}
+  .ve-card{
+    background:var(--panel); border-top:1px solid var(--line); border-radius:18px 18px 0 0;
+    padding:18px 18px calc(18px + env(safe-area-inset-bottom)); width:100%; max-width:480px; max-height:90vh; overflow-y:auto;
+  }
+  .ve-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+  .ve-title{font-family:var(--serif); font-size:18px;}
+  .ve-close{background:none; border:none; color:var(--text-dim); font-size:18px; cursor:pointer; padding:4px;}
+  .ve-row{display:flex; gap:8px; margin-bottom:12px;}
+  .ve-row input, .ve-row select{
+    background:var(--bg-2); border:1px solid var(--line); color:var(--text); border-radius:9px;
+    padding:11px 12px; font-size:16px; flex:1;
+  }
+  .ve-lookup-btn{background:var(--brass); color:#221a0e; border:none; border-radius:9px; padding:0 16px; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap;}
+  .ve-lookup-btn:disabled{opacity:.5; cursor:not-allowed;}
+  .ve-field-label{font-size:11px; font-weight:700; color:var(--text-dim); margin:12px 0 5px;}
+  .ve-field-label:first-of-type{margin-top:0;}
+  .ve-field textarea, .ve-field input{
+    width:100%; background:var(--bg-2); border:1px solid var(--line); color:var(--text); border-radius:9px;
+    padding:11px 12px; font-size:16px; font-family:var(--sans); box-sizing:border-box; resize:vertical;
+  }
+  .ve-language-badge{display:inline-block; font-size:11px; font-weight:700; color:var(--brass); background:var(--brass-soft); padding:3px 10px; border-radius:10px; margin-bottom:10px;}
+  .ve-source-chip{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--brass-soft); color:var(--brass);
+    font-size:12px; font-weight:600; padding:9px 12px; border-radius:9px; margin-bottom:12px;
+  }
+  .ve-source-chip span.remove{cursor:pointer; opacity:.8;}
+  .ve-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px;}
+  .ve-actions button{padding:10px 18px; border-radius:9px; font-weight:700; font-size:13px; cursor:pointer; border:none;}
+  .ve-cancel-btn{background:var(--bg-2); color:var(--text); border:1px solid var(--line) !important;}
+  .ve-save-btn{background:var(--brass); color:#221a0e;}
+  .ve-save-btn:disabled{opacity:.5; cursor:not-allowed;}
+  .ve-hint{font-size:11px; color:var(--text-dim); margin-top:5px; line-height:1.5;}
 </style>
 </head>
 <body>
@@ -310,7 +382,7 @@
   <div class="lock-card">
     <span class="eyebrow">Personal Development Library</span>
     <h1>Enter passcode</h1>
-    <input type="password" id="lockInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••">
+    <input type="tel" id="lockInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••">
     <button id="lockSubmit">Unlock</button>
     <div class="lock-error" id="lockError">Incorrect passcode — try again.</div>
   </div>
@@ -348,6 +420,7 @@
   <div class="view-toggle">
     <div class="view-tab active" data-view="browse">Browse</div>
     <div class="view-tab" data-view="collections">Collections</div>
+    <div class="view-tab" data-view="vault">Vault</div>
   </div>
 
   <div class="controls">
@@ -361,6 +434,12 @@
   </div>
 
   <div class="collections-bar" id="collectionsBar"></div>
+  <div class="vault-bar" id="vaultBar">
+    <button class="pill-btn vault-new-btn" id="vaultNewBtn">+ New term</button>
+    <div class="vault-sort-chip active" data-sort="created_at.desc">Newest</div>
+    <div class="vault-sort-chip" data-sort="term.asc">A–Z</div>
+    <div class="vault-sort-chip" data-sort="subject.asc">By subject</div>
+  </div>
   <div class="crumbs" id="crumbs"></div>
 
   <div id="listing"><div class="loading">Loading your library…</div></div>
@@ -452,6 +531,41 @@
     <div class="te-actions">
       <button class="te-cancel-btn" id="teCancel" type="button">Cancel</button>
       <button class="te-save-btn" id="teSave" type="button">Save transcript</button>
+    </div>
+  </div>
+</div>
+
+<div class="ve-overlay" id="veOverlay">
+  <div class="ve-card">
+    <div class="ve-header">
+      <div class="ve-title" id="veTitle">New term</div>
+      <button class="ve-close" id="veClose">✕</button>
+    </div>
+
+    <div class="ve-row">
+      <input type="text" id="veTermInput" placeholder="Word or phrase, any language…">
+      <button class="ve-lookup-btn" id="veLookupBtn" type="button">Look it up</button>
+    </div>
+    <div id="veLanguageBadge"></div>
+
+    <div id="veSourceChipHolder"></div>
+
+    <div class="ve-field-label">Definition</div>
+    <div class="ve-field"><textarea id="veDefinition" rows="2" placeholder="What it means…"></textarea></div>
+
+    <div class="ve-field-label">Example</div>
+    <div class="ve-field"><textarea id="veExample" rows="2" placeholder="Used in a sentence…"></textarea></div>
+
+    <div class="ve-field-label">Subject</div>
+    <div class="ve-field"><input type="text" id="veSubject" list="veSubjectList" placeholder="e.g. Sales, AI, Mindset…"></div>
+    <datalist id="veSubjectList"></datalist>
+
+    <div class="ve-field-label">Your notes</div>
+    <div class="ve-field"><textarea id="veNotes" rows="3" placeholder="Why this stuck out — the context, your own thoughts…"></textarea></div>
+
+    <div class="ve-actions">
+      <button class="ve-cancel-btn" id="veCancel" type="button">Cancel</button>
+      <button class="ve-save-btn" id="veSave" type="button">Save to vault</button>
     </div>
   </div>
 </div>
@@ -563,6 +677,12 @@
   let selectedCollectionId = null;
   let collectionsData = { collections: [], assignments: {} };
   let currentTagEntry = null;
+
+  let vaultEntries = [];
+  let vaultSort = "created_at.desc";
+  let vaultEditingId = null;
+  let pendingSourceLink = null;
+  let expandedVaultId = null;
 
   async function fetchFolder(path){
     const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
@@ -762,7 +882,9 @@
         paths = all.map(e => e.path);
         localStorage.setItem(LS_PRACTICE_CACHE, JSON.stringify({ date: todayStr(), paths }));
       }
-      const dayIndex = Math.floor(Date.now() / 86400000);
+      const now = new Date();
+      const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const dayIndex = Math.floor(localMidnight / 86400000);
       const pick = { name: paths[dayIndex % paths.length].split("/").pop(), path: paths[dayIndex % paths.length] };
       el("practiceTitle").textContent = niceName(pick.name);
       el("practiceSub").textContent = "Repeated today, from your library.";
@@ -1132,6 +1254,216 @@
     });
   }
 
+  // ---------- Vault (vocabulary / concepts) ----------
+  function fmtVaultDate(iso){
+    try{
+      return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    } catch(e){ return ""; }
+  }
+
+  async function loadVaultEntries(search){
+    const box = el("listing");
+    box.innerHTML = '<div class="loading">Loading your vault…</div>';
+    try{
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      params.set("sort", vaultSort);
+      const res = await relayFetch(`/vault?${params.toString()}`, { method: "GET" });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      vaultEntries = await res.json();
+      renderVaultList();
+    } catch(err){
+      box.innerHTML = `<div class="empty">${err.message}</div>`;
+    }
+  }
+
+  function renderVaultList(){
+    const box = el("listing");
+    box.innerHTML = "";
+    if (!vaultEntries.length){
+      box.innerHTML = '<div class="empty">Nothing saved yet. Tap "+ New term" whenever a word or idea is worth keeping.</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    vaultEntries.forEach(rec => frag.appendChild(renderVaultCard(rec)));
+    box.appendChild(frag);
+  }
+
+  function renderVaultCard(rec){
+    const card = document.createElement("div");
+    card.className = "vault-card";
+    const expanded = expandedVaultId === rec.id;
+    card.innerHTML = `
+      <div class="vault-card-top">
+        <div class="vault-term">${rec.term}</div>
+        <div class="vault-date">${fmtVaultDate(rec.created_at)}</div>
+      </div>
+      ${rec.subject ? `<div class="vault-subject">${rec.subject}</div>` : ""}
+      <div class="vault-def">${(rec.definition || "").slice(0, expanded ? undefined : 120)}${!expanded && rec.definition && rec.definition.length > 120 ? "…" : ""}</div>
+      ${rec.source_path ? `<div class="vault-source">▶ ${niceName(rec.source_path.split("/").pop())}${rec.source_timestamp != null ? " · " + formatTime(rec.source_timestamp) : ""}</div>` : ""}
+    `;
+    if (expanded){
+      const detail = document.createElement("div");
+      detail.className = "vault-detail";
+      detail.innerHTML = `
+        ${rec.example_sentence ? `<div class="vault-detail-label">Example</div><div class="vault-detail-text">${rec.example_sentence}</div>` : ""}
+        ${rec.personal_notes ? `<div class="vault-detail-label">Your notes</div><div class="vault-detail-text">${rec.personal_notes}</div>` : ""}
+        <div class="vault-actions">
+          ${rec.source_path ? '<button class="vault-jump">▶ Jump to source</button>' : ""}
+          <button class="vault-edit">✎ Edit</button>
+          <button class="vault-delete">🗑 Delete</button>
+        </div>
+      `;
+      card.appendChild(detail);
+      detail.querySelector(".vault-edit")?.addEventListener("click", (e) => { e.stopPropagation(); openVaultEditor(rec); });
+      detail.querySelector(".vault-delete")?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${rec.term}" from your vault?`)) return;
+        try{
+          const res = await relayFetch(`/vault/${rec.id}`, { method: "DELETE" });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+          loadVaultEntries(el("search").value.trim());
+        } catch(err){ alert("Couldn't delete: " + err.message); }
+      });
+      detail.querySelector(".vault-jump")?.addEventListener("click", (e) => { e.stopPropagation(); jumpToVaultSource(rec); });
+    }
+    card.addEventListener("click", () => {
+      expandedVaultId = expanded ? null : rec.id;
+      renderVaultList();
+    });
+    return card;
+  }
+
+  function jumpToVaultSource(rec){
+    const name = rec.source_path.split("/").pop();
+    const entry = { name, path: rec.source_path };
+    const kind = kindOf(name);
+    const seekTo = rec.source_timestamp || 0;
+    function seekOnceReady(){
+      audioEl.currentTime = seekTo;
+      audioEl.removeEventListener("loadedmetadata", seekOnceReady);
+    }
+    const isChunked = name.endsWith(CHUNK_SUFFIX), isPointer = name.endsWith(POINTER_SUFFIX);
+    if (kind === "audio") audioEl.addEventListener("loadedmetadata", seekOnceReady);
+    if (kind === "audio"){
+      if (isChunked) playChunkedAudio(entry);
+      else if (isPointer) playPointerAudio(entry);
+      else playAudio(entry);
+    } else if (kind === "video"){
+      const after = () => { const v = el("modalContent").querySelector("video"); if (v) v.addEventListener("loadedmetadata", () => { v.currentTime = seekTo; }, { once: true }); };
+      (isChunked ? playChunkedVideo(entry) : isPointer ? playPointerVideo(entry) : Promise.resolve(playVideo(entry))).then(after);
+    } else {
+      isChunked ? openChunkedDoc(entry) : isPointer ? openPointerDoc(entry) : openDoc(entry);
+    }
+  }
+
+  // ---------- vault editor ----------
+  function openVaultEditor(existingRecord){
+    vaultEditingId = existingRecord ? existingRecord.id : null;
+    el("veTitle").textContent = existingRecord ? "Edit term" : "New term";
+    el("veTermInput").value = existingRecord ? existingRecord.term : "";
+    el("veDefinition").value = existingRecord ? (existingRecord.definition || "") : "";
+    el("veExample").value = existingRecord ? (existingRecord.example_sentence || "") : "";
+    el("veSubject").value = existingRecord ? (existingRecord.subject || "") : "";
+    el("veNotes").value = existingRecord ? (existingRecord.personal_notes || "") : "";
+    el("veLanguageBadge").innerHTML = (existingRecord && existingRecord.language) ? `<span class="ve-language-badge">${existingRecord.language}</span>` : "";
+
+    if (existingRecord && existingRecord.source_path){
+      pendingSourceLink = { path: existingRecord.source_path, timestamp: existingRecord.source_timestamp };
+    } else if (!existingRecord && currentAudioEntry){
+      pendingSourceLink = { path: currentAudioEntry.path, timestamp: audioEl.currentTime };
+    } else {
+      pendingSourceLink = null;
+    }
+    renderSourceChip();
+
+    const subjects = [...new Set(vaultEntries.map(r => r.subject).filter(Boolean))];
+    el("veSubjectList").innerHTML = subjects.map(s => `<option value="${s}">`).join("");
+
+    el("veOverlay").classList.add("show");
+  }
+  function renderSourceChip(){
+    const box = el("veSourceChipHolder");
+    if (!pendingSourceLink){ box.innerHTML = ""; return; }
+    const name = niceName(pendingSourceLink.path.split("/").pop());
+    const time = pendingSourceLink.timestamp != null ? formatTime(pendingSourceLink.timestamp) : "0:00";
+    box.innerHTML = `<div class="ve-source-chip"><span>▶ Linked to "${name}" at ${time}</span><span class="remove">✕</span></div>`;
+    box.querySelector(".remove").addEventListener("click", () => { pendingSourceLink = null; renderSourceChip(); });
+  }
+  function closeVaultEditor(){
+    el("veOverlay").classList.remove("show");
+    vaultEditingId = null;
+    pendingSourceLink = null;
+  }
+  el("veClose").addEventListener("click", closeVaultEditor);
+  el("veCancel").addEventListener("click", closeVaultEditor);
+
+  el("veLookupBtn").addEventListener("click", async () => {
+    const term = el("veTermInput").value.trim();
+    if (!term){ alert("Type a word or phrase first."); return; }
+    el("veLookupBtn").disabled = true;
+    el("veLookupBtn").textContent = "Looking up…";
+    try{
+      const res = await relayFetch("/define", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ term })
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.definition) el("veDefinition").value = data.definition;
+      if (data.example) el("veExample").value = data.example;
+      if (data.language) el("veLanguageBadge").innerHTML = `<span class="ve-language-badge">${data.language}</span>`;
+    } catch(err){
+      alert("Couldn't look that up: " + err.message);
+    } finally {
+      el("veLookupBtn").disabled = false;
+      el("veLookupBtn").textContent = "Look it up";
+    }
+  });
+
+  el("veSave").addEventListener("click", async () => {
+    const term = el("veTermInput").value.trim();
+    if (!term){ alert("Enter a word or phrase first."); return; }
+    const record = {
+      term,
+      language: (el("veLanguageBadge").textContent || "").trim() || null,
+      definition: el("veDefinition").value.trim() || null,
+      example_sentence: el("veExample").value.trim() || null,
+      subject: el("veSubject").value.trim() || null,
+      personal_notes: el("veNotes").value.trim() || null,
+      source_path: pendingSourceLink ? pendingSourceLink.path : null,
+      source_timestamp: pendingSourceLink ? pendingSourceLink.timestamp : null
+    };
+    el("veSave").disabled = true;
+    el("veSave").textContent = "Saving…";
+    try{
+      let res;
+      if (vaultEditingId){
+        res = await relayFetch(`/vault/${vaultEditingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
+      } else {
+        res = await relayFetch("/vault", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
+      }
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      closeVaultEditor();
+      loadVaultEntries(el("search").value.trim());
+    } catch(err){
+      alert("Couldn't save: " + err.message);
+    } finally {
+      el("veSave").disabled = false;
+      el("veSave").textContent = "Save to vault";
+    }
+  });
+
+  el("vaultNewBtn").addEventListener("click", () => openVaultEditor(null));
+
   // ---------- view toggle ----------
   document.querySelectorAll(".view-tab").forEach(tab => {
     tab.addEventListener("click", () => {
@@ -1140,7 +1472,12 @@
       currentView = tab.dataset.view;
       el("crumbs").style.display = currentView === "browse" ? "flex" : "none";
       el("collectionsBar").classList.toggle("show", currentView === "collections");
-      if (currentView === "collections") renderCollectionsView(); else loadCurrentFolder();
+      el("vaultBar").classList.toggle("show", currentView === "vault");
+      document.querySelector(".filters").style.display = currentView === "vault" ? "none" : "flex";
+      el("search").placeholder = currentView === "vault" ? "Search your vault…" : "Search your library…";
+      if (currentView === "collections") renderCollectionsView();
+      else if (currentView === "vault") loadVaultEntries();
+      else loadCurrentFolder();
     });
   });
 
@@ -1153,7 +1490,21 @@
       if (currentView === "collections") renderCollectionsView(); else renderListing();
     });
   });
+  document.querySelectorAll(".vault-sort-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".vault-sort-chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      vaultSort = chip.dataset.sort;
+      loadVaultEntries();
+    });
+  });
+  let vaultSearchDebounce = null;
   el("search").addEventListener("input", e => {
+    if (currentView === "vault"){
+      clearTimeout(vaultSearchDebounce);
+      vaultSearchDebounce = setTimeout(() => loadVaultEntries(e.target.value.trim()), 300);
+      return;
+    }
     searchTerm = e.target.value.toLowerCase();
     if (currentView === "collections") renderCollectionsView(); else renderListing();
   });
