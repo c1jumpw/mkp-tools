@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Personal Development Library</title>
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAACxklEQVRYhe2Xy08TURSHvzOdSovA8CgCgeHRAjEocSMS0GiikEg0unLByj/BnYm6M7rRGHcuXbgzGhOjOzSExBAfCyMKQWurUBrelAGhlbZz3QgppiWBImz4NjeZc+f8vrmZxx0hhfrq8qakra4g0iFQBexje4gJ/AD1zGnr94fD4dnVgqyOdWbZNUFuAo5tCs3EDKK6g6OTr9YE6syy64Lc/s/BqayIzdlAeKJX6qvLm2zFAP//yv9lUstZaXQY+ftviUjLDocD5NlJfUlDpGMXwgEQuKT9vdt3CdWok+FRO9NSSYNZRF6uE90hzFoxZuZj+EcthkbmsJNq3XzNITTVFNNQbeApdFFiuEgkFb+W4/hDEV5/CKeLcemZ3LraawmMWQx8nyGRUHgKXVSW7qez1cSpa7z7MsXzviAicOGkl9bDB4gnbIaCc0xFogTGFtB1wVdp0NVem0mAjAIA/QPjfPLPrjumieCrMuhsNbl35TgAbwcnuPPoI4ExC1utX5kjDcv4qoyMGRsKpMNWCn9oHn9oHqcuKODB0y+bbbN1gVTmFn5nczoAWtYd9gT2BPYE9gSyZMM34emjVbQ1V+BY+xpG8YcsRsYX086vqcinwTTwFLopMVwkkwp3zsYbLfGa5Spd4fyJGjyGm8VoHNu2KS5wU1rk5mB1IdbyCv0D4+TlOgFYisZpa67AyN3H8Og805EocwtRNE0j3+1kxory8s1IuhiVUSATTl2j2VdC5zGTQ74iAAYDEXreh/gcmCWesDfTbvMCqVw8VQvA876fW22hxGuWRwHXVjtkSUwD/LsUDkhIE3iyewKqR7zeIoN4zlegbIfT49iOw1owGLHEphtY2cl0UdwIhsPfNIBAeKIXUeeA6R3IjoviamBs4i6k/A9GrKVgWb7xMCHqt4AHKCDLPWMKMZAfwGNsx+VgePzFauEPYeL1XwDmt0EAAAAASUVORK5CYII=">
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,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">
 <style>
   :root{
     --bg:#171310;
@@ -319,9 +321,10 @@
   .vault-card-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
   .vault-term{font-family:var(--serif); font-size:17px; font-weight:500;}
   .vault-date{font-size:10.5px; color:var(--text-dim); flex-shrink:0; white-space:nowrap;}
+  .vault-subject-row{display:flex; flex-wrap:wrap; gap:5px; margin:6px 0 8px;}
   .vault-subject{
     display:inline-block; font-size:10.5px; font-weight:700; color:var(--brass); background:var(--brass-soft);
-    padding:2px 9px; border-radius:10px; margin:6px 0 8px;
+    padding:2px 9px; border-radius:10px;
   }
   .vault-def{font-size:12.5px; color:var(--text-dim); line-height:1.5;}
   .vault-source{display:flex; align-items:center; gap:5px; font-size:11px; color:var(--brass); margin-top:8px; font-weight:600;}
@@ -329,6 +332,8 @@
   .vault-detail-label{font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-top:10px;}
   .vault-detail-label:first-child{margin-top:0;}
   .vault-detail-text{color:var(--text); margin-top:3px; white-space:pre-wrap;}
+  .vault-attachment-link{color:var(--brass); font-weight:600; margin-top:3px; cursor:pointer;}
+  .vault-attachment-link:hover{text-decoration:underline;}
   .vault-actions{display:flex; gap:8px; margin-top:12px;}
   .vault-actions button{
     padding:7px 13px; border-radius:8px; font-size:11.5px; font-weight:700; cursor:pointer; border:1px solid var(--line);
@@ -363,6 +368,19 @@
     padding:11px 12px; font-size:16px; font-family:var(--sans); box-sizing:border-box; resize:vertical;
   }
   .ve-language-badge{display:inline-block; font-size:11px; font-weight:700; color:var(--brass); background:var(--brass-soft); padding:3px 10px; border-radius:10px; margin-bottom:10px;}
+  .ve-chip-input{
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center; width:100%; background:var(--bg-2);
+    border:1px solid var(--line); border-radius:9px; padding:8px 10px; box-sizing:border-box;
+  }
+  .ve-subject-chip{
+    display:flex; align-items:center; gap:6px; background:var(--brass-soft); color:var(--brass);
+    font-size:12px; font-weight:700; padding:5px 6px 5px 11px; border-radius:14px; white-space:nowrap;
+  }
+  .ve-subject-chip .remove{cursor:pointer; opacity:.75; padding:2px 4px;}
+  .ve-chip-input input{
+    flex:1; min-width:120px; border:none; background:none; color:var(--text); font-size:16px;
+    font-family:var(--sans); padding:5px 2px; outline:none;
+  }
   .ve-source-chip{
     display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--brass-soft); color:var(--brass);
     font-size:12px; font-weight:600; padding:9px 12px; border-radius:9px; margin-bottom:12px;
@@ -370,6 +388,16 @@
   .ve-source-chip span.remove{cursor:pointer; opacity:.8;}
   .ve-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px;}
   .ve-actions button{padding:10px 18px; border-radius:9px; font-weight:700; font-size:13px; cursor:pointer; border:none;}
+  .ve-attach-btn{
+    background:var(--bg-2); border:1px solid var(--brass-dim); color:var(--brass); font-size:12px; font-weight:700;
+    padding:9px 14px; border-radius:9px; cursor:pointer; margin-top:6px;
+  }
+  .ve-attach-btn:disabled{opacity:.5; cursor:not-allowed;}
+  .ve-attachment-chip{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--bg-2); border:1px solid var(--line);
+    color:var(--text); font-size:12px; font-weight:600; padding:9px 12px; border-radius:9px; margin-top:6px;
+  }
+  .ve-attachment-chip .remove{cursor:pointer; color:var(--text-dim); padding:2px 4px;}
   .ve-cancel-btn{background:var(--bg-2); color:var(--text); border:1px solid var(--line) !important;}
   .ve-save-btn{background:var(--brass); color:#221a0e;}
   .ve-save-btn:disabled{opacity:.5; cursor:not-allowed;}
@@ -418,9 +446,9 @@
   </div>
 
   <div class="view-toggle">
-    <div class="view-tab active" data-view="browse">Browse</div>
-    <div class="view-tab" data-view="collections">Collections</div>
-    <div class="view-tab" data-view="vault">Vault</div>
+    <div class="view-tab active" data-view="browse">📁 Browse</div>
+    <div class="view-tab" data-view="collections">🏷 Collections</div>
+    <div class="view-tab" data-view="vault">🔐 Vault</div>
   </div>
 
   <div class="controls">
@@ -557,11 +585,19 @@
     <div class="ve-field"><textarea id="veExample" rows="2" placeholder="Used in a sentence…"></textarea></div>
 
     <div class="ve-field-label">Subject</div>
-    <div class="ve-field"><input type="text" id="veSubject" list="veSubjectList" placeholder="e.g. Sales, AI, Mindset…"></div>
+    <div class="ve-field">
+      <div class="ve-chip-input" id="veSubjectChips">
+        <input type="text" id="veSubjectInput" list="veSubjectList" placeholder="Type a subject, press comma or Enter…">
+      </div>
+    </div>
     <datalist id="veSubjectList"></datalist>
 
     <div class="ve-field-label">Your notes</div>
     <div class="ve-field"><textarea id="veNotes" rows="3" placeholder="Why this stuck out — the context, your own thoughts…"></textarea></div>
+
+    <div id="veAttachmentHolder"></div>
+    <button class="ve-attach-btn" id="veAttachBtn" type="button">📎 Attach a file</button>
+    <input type="file" id="veAttachInput" style="display:none;">
 
     <div class="ve-actions">
       <button class="ve-cancel-btn" id="veCancel" type="button">Cancel</button>
@@ -1301,7 +1337,7 @@
         <div class="vault-term">${rec.term}</div>
         <div class="vault-date">${fmtVaultDate(rec.created_at)}</div>
       </div>
-      ${rec.subject ? `<div class="vault-subject">${rec.subject}</div>` : ""}
+      ${rec.subject ? `<div class="vault-subject-row">${rec.subject.split(",").map(s => s.trim()).filter(Boolean).map(s => `<span class="vault-subject">${s}</span>`).join("")}</div>` : ""}
       <div class="vault-def">${(rec.definition || "").slice(0, expanded ? undefined : 120)}${!expanded && rec.definition && rec.definition.length > 120 ? "…" : ""}</div>
       ${rec.source_path ? `<div class="vault-source">▶ ${niceName(rec.source_path.split("/").pop())}${rec.source_timestamp != null ? " · " + formatTime(rec.source_timestamp) : ""}</div>` : ""}
     `;
@@ -1311,6 +1347,7 @@
       detail.innerHTML = `
         ${rec.example_sentence ? `<div class="vault-detail-label">Example</div><div class="vault-detail-text">${rec.example_sentence}</div>` : ""}
         ${rec.personal_notes ? `<div class="vault-detail-label">Your notes</div><div class="vault-detail-text">${rec.personal_notes}</div>` : ""}
+        ${rec.attachment_path ? `<div class="vault-detail-label">Attachment</div><div class="vault-attachment-link">📎 ${rec.attachment_name || "file"}</div>` : ""}
         <div class="vault-actions">
           ${rec.source_path ? '<button class="vault-jump">▶ Jump to source</button>' : ""}
           <button class="vault-edit">✎ Edit</button>
@@ -1329,6 +1366,7 @@
         } catch(err){ alert("Couldn't delete: " + err.message); }
       });
       detail.querySelector(".vault-jump")?.addEventListener("click", (e) => { e.stopPropagation(); jumpToVaultSource(rec); });
+      detail.querySelector(".vault-attachment-link")?.addEventListener("click", (e) => { e.stopPropagation(); openVaultAttachment(rec.attachment_path); });
     }
     card.addEventListener("click", () => {
       expandedVaultId = expanded ? null : rec.id;
@@ -1361,14 +1399,103 @@
   }
 
   // ---------- vault editor ----------
+  let pendingAttachment = null;
+
+  function renderAttachmentChip(){
+    const box = el("veAttachmentHolder");
+    if (!pendingAttachment){ box.innerHTML = ""; return; }
+    box.innerHTML = `<div class="ve-attachment-chip"><span>📎 ${pendingAttachment.name}</span><span class="remove">✕</span></div>`;
+    box.querySelector(".remove").addEventListener("click", () => { pendingAttachment = null; renderAttachmentChip(); });
+  }
+  el("veAttachBtn").addEventListener("click", () => el("veAttachInput").click());
+  el("veAttachInput").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    el("veAttachBtn").disabled = true;
+    el("veAttachBtn").textContent = "Uploading…";
+    try{
+      const res = await relayFetch(`/vault-attachment?name=${encodeURIComponent(file.name)}`, {
+        method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      pendingAttachment = await res.json();
+      renderAttachmentChip();
+    } catch(err){
+      alert("Couldn't attach file: " + err.message);
+    } finally {
+      el("veAttachBtn").disabled = false;
+      el("veAttachBtn").textContent = "📎 Attach a file";
+      el("veAttachInput").value = "";
+    }
+  });
+
+  async function openVaultAttachment(path){
+    try{
+      const res = await relayFetch(`/vault-attachment-url/${encodeURIComponent(path)}`, { method: "GET" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+      const data = await res.json();
+      window.open(data.url, "_blank");
+    } catch(err){
+      alert("Couldn't open attachment: " + err.message);
+    }
+  }
+
+  let veSubjectValues = [];
+
+  function renderSubjectChips(){
+    const container = el("veSubjectChips");
+    const input = el("veSubjectInput");
+    container.querySelectorAll(".ve-subject-chip").forEach(c => c.remove());
+    veSubjectValues.forEach((s, i) => {
+      const chip = document.createElement("span");
+      chip.className = "ve-subject-chip";
+      chip.innerHTML = `${s}<span class="remove" data-i="${i}">✕</span>`;
+      chip.querySelector(".remove").addEventListener("click", () => {
+        veSubjectValues.splice(i, 1);
+        renderSubjectChips();
+      });
+      container.insertBefore(chip, input);
+    });
+  }
+  function commitSubjectInput(){
+    const input = el("veSubjectInput");
+    const val = input.value.replace(/,/g, "").trim();
+    if (val && !veSubjectValues.some(s => s.toLowerCase() === val.toLowerCase())){
+      veSubjectValues.push(val);
+    }
+    input.value = "";
+    renderSubjectChips();
+  }
+  el("veSubjectInput").addEventListener("keydown", e => {
+    if (e.key === "," || e.key === "Enter"){
+      e.preventDefault();
+      commitSubjectInput();
+    } else if (e.key === "Backspace" && !e.target.value && veSubjectValues.length){
+      veSubjectValues.pop();
+      renderSubjectChips();
+    }
+  });
+  el("veSubjectInput").addEventListener("blur", () => { if (el("veSubjectInput").value.trim()) commitSubjectInput(); });
+
   function openVaultEditor(existingRecord){
     vaultEditingId = existingRecord ? existingRecord.id : null;
     el("veTitle").textContent = existingRecord ? "Edit term" : "New term";
     el("veTermInput").value = existingRecord ? existingRecord.term : "";
     el("veDefinition").value = existingRecord ? (existingRecord.definition || "") : "";
     el("veExample").value = existingRecord ? (existingRecord.example_sentence || "") : "";
-    el("veSubject").value = existingRecord ? (existingRecord.subject || "") : "";
+    veSubjectValues = (existingRecord && existingRecord.subject)
+      ? existingRecord.subject.split(",").map(s => s.trim()).filter(Boolean)
+      : [];
+    el("veSubjectInput").value = "";
+    renderSubjectChips();
     el("veNotes").value = existingRecord ? (existingRecord.personal_notes || "") : "";
+    pendingAttachment = (existingRecord && existingRecord.attachment_path)
+      ? { path: existingRecord.attachment_path, name: existingRecord.attachment_name }
+      : null;
+    renderAttachmentChip();
     el("veLanguageBadge").innerHTML = (existingRecord && existingRecord.language) ? `<span class="ve-language-badge">${existingRecord.language}</span>` : "";
 
     if (existingRecord && existingRecord.source_path){
@@ -1380,8 +1507,11 @@
     }
     renderSourceChip();
 
-    const subjects = [...new Set(vaultEntries.map(r => r.subject).filter(Boolean))];
-    el("veSubjectList").innerHTML = subjects.map(s => `<option value="${s}">`).join("");
+    // Individual subject tokens across all saved entries, for autocomplete — not whole
+    // comma-joined strings, since each entry can now carry several.
+    const allTokens = new Set();
+    vaultEntries.forEach(r => (r.subject || "").split(",").forEach(t => { const v = t.trim(); if (v) allTokens.add(v); }));
+    el("veSubjectList").innerHTML = [...allTokens].map(s => `<option value="${s}">`).join("");
 
     el("veOverlay").classList.add("show");
   }
@@ -1429,15 +1559,18 @@
   el("veSave").addEventListener("click", async () => {
     const term = el("veTermInput").value.trim();
     if (!term){ alert("Enter a word or phrase first."); return; }
+    if (el("veSubjectInput").value.trim()) commitSubjectInput(); // catch a typed-but-not-committed subject
     const record = {
       term,
       language: (el("veLanguageBadge").textContent || "").trim() || null,
       definition: el("veDefinition").value.trim() || null,
       example_sentence: el("veExample").value.trim() || null,
-      subject: el("veSubject").value.trim() || null,
+      subject: veSubjectValues.length ? veSubjectValues.join(", ") : null,
       personal_notes: el("veNotes").value.trim() || null,
       source_path: pendingSourceLink ? pendingSourceLink.path : null,
-      source_timestamp: pendingSourceLink ? pendingSourceLink.timestamp : null
+      source_timestamp: pendingSourceLink ? pendingSourceLink.timestamp : null,
+      attachment_path: pendingAttachment ? pendingAttachment.path : null,
+      attachment_name: pendingAttachment ? pendingAttachment.name : null
     };
     el("veSave").disabled = true;
     el("veSave").textContent = "Saving…";
