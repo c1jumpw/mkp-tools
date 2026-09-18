@@ -363,6 +363,12 @@
   .ve-lookup-btn:disabled{opacity:.5; cursor:not-allowed;}
   .ve-field-label{font-size:11px; font-weight:700; color:var(--text-dim); margin:12px 0 5px;}
   .ve-field-label:first-of-type{margin-top:0;}
+  .ve-field-label-row{display:flex; justify-content:space-between; align-items:center; margin:12px 0 5px;}
+  .ve-field-label-row .ve-field-label{margin:0;}
+  .ve-refresh-btn{
+    background:none; border:none; color:var(--brass); font-size:11px; font-weight:700; cursor:pointer; padding:2px 0;
+  }
+  .ve-refresh-btn:disabled{opacity:.5; cursor:not-allowed;}
   .ve-field textarea, .ve-field input{
     width:100%; background:var(--bg-2); border:1px solid var(--line); color:var(--text); border-radius:9px;
     padding:11px 12px; font-size:16px; font-family:var(--sans); box-sizing:border-box; resize:vertical;
@@ -381,6 +387,13 @@
     flex:1; min-width:120px; border:none; background:none; color:var(--text); font-size:16px;
     font-family:var(--sans); padding:5px 2px; outline:none;
   }
+  .ve-suggested-subjects{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:7px;}
+  .ve-suggest-label{font-size:11px; color:var(--text-dim); font-weight:600;}
+  .ve-suggest-chip{
+    font-size:11.5px; font-weight:700; color:var(--text-dim); border:1px dashed var(--line); background:none;
+    padding:4px 10px; border-radius:12px; cursor:pointer;
+  }
+  .ve-suggest-chip:hover{color:var(--brass); border-color:var(--brass-dim);}
   .ve-source-chip{
     display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--brass-soft); color:var(--brass);
     font-size:12px; font-weight:600; padding:9px 12px; border-radius:9px; margin-bottom:12px;
@@ -581,7 +594,10 @@
     <div class="ve-field-label">Definition</div>
     <div class="ve-field"><textarea id="veDefinition" rows="2" placeholder="What it means…"></textarea></div>
 
-    <div class="ve-field-label">Example</div>
+    <div class="ve-field-label-row">
+      <div class="ve-field-label">Example</div>
+      <button class="ve-refresh-btn" id="veRefreshExampleBtn" type="button">🔄 New example</button>
+    </div>
     <div class="ve-field"><textarea id="veExample" rows="2" placeholder="Used in a sentence…"></textarea></div>
 
     <div class="ve-field-label">Subject</div>
@@ -589,6 +605,7 @@
       <div class="ve-chip-input" id="veSubjectChips">
         <input type="text" id="veSubjectInput" list="veSubjectList" placeholder="Type a subject, press comma or Enter…">
       </div>
+      <div class="ve-suggested-subjects" id="veSuggestedSubjects"></div>
     </div>
     <datalist id="veSubjectList"></datalist>
 
@@ -1460,14 +1477,19 @@
       container.insertBefore(chip, input);
     });
   }
+  function addSubjectChip(val){
+    val = (val || "").trim();
+    if (val && !veSubjectValues.some(s => s.toLowerCase() === val.toLowerCase())){
+      veSubjectValues.push(val);
+      renderSubjectChips();
+    }
+    renderSuggestedSubjects(lastSuggestedSubjects); // drop the one just accepted from the suggestion row
+  }
   function commitSubjectInput(){
     const input = el("veSubjectInput");
     const val = input.value.replace(/,/g, "").trim();
-    if (val && !veSubjectValues.some(s => s.toLowerCase() === val.toLowerCase())){
-      veSubjectValues.push(val);
-    }
+    addSubjectChip(val);
     input.value = "";
-    renderSubjectChips();
   }
   el("veSubjectInput").addEventListener("keydown", e => {
     if (e.key === "," || e.key === "Enter"){
@@ -1480,6 +1502,20 @@
   });
   el("veSubjectInput").addEventListener("blur", () => { if (el("veSubjectInput").value.trim()) commitSubjectInput(); });
 
+  let lastSuggestedSubjects = [];
+  function renderSuggestedSubjects(list){
+    lastSuggestedSubjects = list || [];
+    const box = el("veSuggestedSubjects");
+    const remaining = lastSuggestedSubjects.filter(s => !veSubjectValues.some(v => v.toLowerCase() === s.toLowerCase()));
+    if (!remaining.length){ box.innerHTML = ""; return; }
+    box.innerHTML = `<span class="ve-suggest-label">Suggested:</span>` + remaining.map(s =>
+      `<span class="ve-suggest-chip" data-s="${s}">+ ${s}</span>`
+    ).join("");
+    box.querySelectorAll(".ve-suggest-chip").forEach(chip => {
+      chip.addEventListener("click", () => addSubjectChip(chip.dataset.s));
+    });
+  }
+
   function openVaultEditor(existingRecord){
     vaultEditingId = existingRecord ? existingRecord.id : null;
     el("veTitle").textContent = existingRecord ? "Edit term" : "New term";
@@ -1491,6 +1527,7 @@
       : [];
     el("veSubjectInput").value = "";
     renderSubjectChips();
+    renderSuggestedSubjects([]);
     el("veNotes").value = existingRecord ? (existingRecord.personal_notes || "") : "";
     pendingAttachment = (existingRecord && existingRecord.attachment_path)
       ? { path: existingRecord.attachment_path, name: existingRecord.attachment_name }
@@ -1531,6 +1568,31 @@
   el("veClose").addEventListener("click", closeVaultEditor);
   el("veCancel").addEventListener("click", closeVaultEditor);
 
+  el("veRefreshExampleBtn").addEventListener("click", async () => {
+    const term = el("veTermInput").value.trim();
+    if (!term){ alert("Type a word or phrase first."); return; }
+    const btn = el("veRefreshExampleBtn");
+    btn.disabled = true;
+    btn.textContent = "🔄 Loading…";
+    try{
+      const res = await relayFetch("/define", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ term, refreshExampleOnly: true, avoidExamples: [el("veExample").value.trim()].filter(Boolean) })
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.example) el("veExample").value = data.example;
+    } catch(err){
+      alert("Couldn't get another example: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🔄 New example";
+    }
+  });
+
   el("veLookupBtn").addEventListener("click", async () => {
     const term = el("veTermInput").value.trim();
     if (!term){ alert("Type a word or phrase first."); return; }
@@ -1548,6 +1610,7 @@
       if (data.definition) el("veDefinition").value = data.definition;
       if (data.example) el("veExample").value = data.example;
       if (data.language) el("veLanguageBadge").innerHTML = `<span class="ve-language-badge">${data.language}</span>`;
+      if (Array.isArray(data.suggested_subjects)) renderSuggestedSubjects(data.suggested_subjects);
     } catch(err){
       alert("Couldn't look that up: " + err.message);
     } finally {
