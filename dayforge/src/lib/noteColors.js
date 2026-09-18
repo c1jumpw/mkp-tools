@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/lib/noteColors.js
- * VERSION: v1 (new file)
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Defines the fixed color palette notes can be tagged with (Keep-style
@@ -16,16 +16,27 @@
  *   picker would also risk colors that clash with the app's "forge" theme
  *   or read poorly against its dark background.
  *
- * WHY ONLY THE STRIPE ACCENT, NOT A FULL COLORED CARD BACKGROUND
- *   Google Keep's colored notes recolor the ENTIRE card background. This
- *   app's existing "plate" card style (see index.css) already uses a
- *   colored left-edge stripe (the `--accent` CSS variable) to indicate
- *   category everywhere else in the app (task cards: ember for personal,
- *   steel for work). Reusing that same visual language for note colors —
- *   rather than introducing a second, different "fully-tinted card"
- *   treatment just for notes — keeps the app visually consistent, and
- *   avoids the real risk of a saturated full-card background clashing with
- *   the app's dark theme or hurting text legibility.
+ * WHY A STRIPE ACCENT *AND* A TRANSPARENT BACKGROUND WASH
+ *   v1 of this feature used ONLY the same colored left-edge stripe accent
+ *   (`--accent`) used everywhere else in the app for category color (ember
+ *   for personal tasks, steel for work). Per user feedback, that read as
+ *   too subtle for note color-coding specifically — the point of coloring
+ *   a NOTE is to make it stand out while scanning a list of many notes,
+ *   which a 3px stripe alone doesn't achieve as well as an actual colored
+ *   card does in something like Google Keep. This version adds a
+ *   TRANSPARENT wash of the chosen color across the whole card background
+ *   (via hexToRgba below, layered over the existing beveled gradient — see
+ *   NotesPanel.jsx), while keeping the stripe too: low alpha (not a flat
+ *   opaque fill) keeps text contrast intact and avoids a jarring color
+ *   block, while still being immediately noticeable when scanning the list
+ *   — "noticeable but not overbearing," per the request.
+ *
+ * REVISION HISTORY
+ *   v1 (initial build) — palette + getNoteColorHex(), stripe accent only.
+ *   v2 (this version) — added hexToRgba() for the transparent background
+ *       wash described above; updated this file's own design rationale
+ *       since it previously argued explicitly AGAINST a colored
+ *       background, which the new user request specifically asked for.
  * =============================================================================
  */
 
@@ -45,6 +56,21 @@ export const NOTE_COLORS = [
   { key: 'purple', label: 'Purple', hex: '#9678C9' },
   { key: 'pink', label: 'Pink', hex: '#D97AA6' },
 ]
+
+/**
+ * Converts a '#RRGGBB' hex string to an rgba() string at the given alpha —
+ * used to tint a note card's background with a transparent wash of its
+ * chosen color (see NotesPanel.jsx), rather than a fully opaque fill.
+ * @param {string} hex
+ * @param {number} alpha - 0 to 1.
+ * @returns {string} e.g. 'rgba(217, 83, 79, 0.16)'
+ */
+export function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 /**
  * Resolves a note's stored `color` key to its hex value.

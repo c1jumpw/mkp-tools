@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v8 (previously v1-v7 — see REVISION HISTORY below)
+ * VERSION: v9 (previously v1-v8 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -81,16 +81,23 @@
  *       stripe-accent visual language used everywhere else in the app, not
  *       a full colored-card background) and a plain client-side search box
  *       filtering notes by raw content substring match.
+ *   v9 (this version), per user feedback that the stripe-only accent was
+ *       too subtle — added a transparent background wash of the chosen
+ *       color across the whole card (see lib/noteColors.js's hexToRgba and
+ *       its updated design-rationale header), layered over the existing
+ *       beveled gradient rather than replacing it, so cards keep their
+ *       depth while reading as clearly color-tagged when scanning the list.
  * =============================================================================
  */
 
 import { useRef, useState } from 'react'
 import { splitIntoTopics, parseNoteDisplay, applyBulletAutoContinue } from '../lib/notesParsing'
-import { NOTE_COLORS, getNoteColorHex } from '../lib/noteColors'
+import { NOTE_COLORS, getNoteColorHex, hexToRgba } from '../lib/noteColors'
 import { useAutosave } from '../hooks/useAutosave'
 import FileAttachments from './FileAttachments'
 
 const MAX_PREVIEW_BULLETS = 3 // how many bullet lines a collapsed list card shows before "+N more"
+const NOTE_COLOR_WASH_ALPHA = 0.16 // transparent background tint strength — "noticeable but not overbearing"
 
 // Today's date as a compact label for the auto-filled capture line, e.g.
 // "Aug 11, 2026" — matches the format used elsewhere for note timestamps.
@@ -297,11 +304,22 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
             // "✓ Converted to task" text below, not solely via stripe color.
             const chosenColorHex = getNoteColorHex(note.color)
             const accent = chosenColorHex || (note.converted ? 'var(--color-good)' : 'var(--color-steel)')
+            // Layers a transparent wash of the chosen color OVER the
+            // existing beveled gradient (see index.css's .plate class)
+            // rather than replacing it outright — keeps the card's normal
+            // depth/bevel while still reading as noticeably tinted. Only
+            // set when a color is actually chosen; unset otherwise so the
+            // plain .plate CSS class's own background applies untouched.
+            const cardStyle = { '--accent': accent }
+            if (chosenColorHex) {
+              const wash = hexToRgba(chosenColorHex, NOTE_COLOR_WASH_ALPHA)
+              cardStyle.background = `linear-gradient(${wash}, ${wash}), linear-gradient(180deg, var(--color-surface-raised) 0%, var(--color-surface) 100%)`
+            }
             return (
               <div
                 key={note.id}
                 className={'plate rounded-md p-3 ' + (note.converted ? 'opacity-60' : '')}
-                style={{ '--accent': accent }}
+                style={cardStyle}
               >
                 {/* Tapping the preview itself opens the editor — same
                     "tap to expand" affordance as tasks elsewhere in the
