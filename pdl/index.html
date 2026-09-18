@@ -394,6 +394,34 @@
     padding:4px 10px; border-radius:12px; cursor:pointer;
   }
   .ve-suggest-chip:hover{color:var(--brass); border-color:var(--brass-dim);}
+
+  /* ask-a-follow-up */
+  .ve-ask-section{border:1px dashed var(--line); border-radius:12px; margin-top:14px; overflow:hidden;}
+  .ve-ask-toggle{
+    width:100%; display:flex; align-items:center; justify-content:space-between; background:none; border:none;
+    color:var(--brass); font-size:12.5px; font-weight:700; padding:13px 14px; cursor:pointer; text-align:left; min-height:44px;
+  }
+  .ve-ask-body{display:none; padding:0 14px 14px;}
+  .ve-ask-body.show{display:block;}
+  .ve-ask-thread{max-height:220px; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-bottom:10px; padding-right:2px;}
+  .ve-ask-empty{font-size:12px; color:var(--text-dim); padding:6px 0;}
+  .ve-ask-q{font-size:12.5px; color:var(--text-dim); font-style:italic; margin:10px 0 5px;}
+  .ve-ask-q:first-child{margin-top:0;}
+  .ve-ask-a{background:var(--bg-2); border-radius:9px; padding:10px 12px; font-size:12.5px; color:var(--text); line-height:1.55;}
+  .ve-ask-example{color:var(--text-dim); font-style:italic; margin-top:6px; font-size:12px;}
+  .ve-ask-actions{display:flex; gap:6px; margin-top:8px;}
+  .ve-ask-add, .ve-ask-context-btn{
+    font-size:11px; font-weight:700; color:var(--brass); background:none; border:1px dashed var(--brass-dim);
+    padding:5px 10px; border-radius:12px; cursor:pointer;
+  }
+  .ve-ask-context-btn{display:block; margin-top:4px;}
+  .ve-ask-row{display:flex; gap:8px;}
+  .ve-ask-row input{
+    flex:1; min-width:0; background:var(--bg-2); border:1px solid var(--line); color:var(--text); border-radius:9px;
+    padding:11px 12px; font-size:16px; box-sizing:border-box;
+  }
+  .ve-ask-btn{background:var(--brass); color:#221a0e; border:none; border-radius:9px; padding:0 16px; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap;}
+  .ve-ask-btn:disabled{opacity:.5; cursor:not-allowed;}
   .ve-source-chip{
     display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--brass-soft); color:var(--brass);
     font-size:12px; font-weight:600; padding:9px 12px; border-radius:9px; margin-bottom:12px;
@@ -608,6 +636,17 @@
       <div class="ve-suggested-subjects" id="veSuggestedSubjects"></div>
     </div>
     <datalist id="veSubjectList"></datalist>
+
+    <div class="ve-ask-section">
+      <button class="ve-ask-toggle" id="veAskToggle" type="button">💬 Ask a follow-up question <span id="veAskChevron">▾</span></button>
+      <div class="ve-ask-body" id="veAskBody">
+        <div class="ve-ask-thread" id="veAskThread"></div>
+        <div class="ve-ask-row">
+          <input type="text" id="veAskInput" placeholder="Ask anything about this term…">
+          <button class="ve-ask-btn" id="veAskBtn" type="button">Ask</button>
+        </div>
+      </div>
+    </div>
 
     <div class="ve-field-label">Your notes</div>
     <div class="ve-field"><textarea id="veNotes" rows="3" placeholder="Why this stuck out — the context, your own thoughts…"></textarea></div>
@@ -1528,6 +1567,11 @@
     el("veSubjectInput").value = "";
     renderSubjectChips();
     renderSuggestedSubjects([]);
+    veAskThread = [];
+    el("veAskInput").value = "";
+    el("veAskBody").classList.remove("show");
+    el("veAskChevron").textContent = "▾";
+    renderAskThread();
     el("veNotes").value = existingRecord ? (existingRecord.personal_notes || "") : "";
     pendingAttachment = (existingRecord && existingRecord.attachment_path)
       ? { path: existingRecord.attachment_path, name: existingRecord.attachment_name }
@@ -1592,6 +1636,98 @@
       btn.textContent = "🔄 New example";
     }
   });
+
+  // ---------- ask a follow-up (scoped, ephemeral per editing session) ----------
+  let veAskThread = [];
+
+  el("veAskToggle").addEventListener("click", () => {
+    const body = el("veAskBody");
+    const opening = !body.classList.contains("show");
+    body.classList.toggle("show", opening);
+    el("veAskChevron").textContent = opening ? "▴" : "▾";
+    if (opening) el("veAskInput").focus();
+  });
+
+  function renderAskThread(){
+    const box = el("veAskThread");
+    box.innerHTML = "";
+    if (!veAskThread.length){
+      box.innerHTML = '<div class="ve-ask-empty">Ask anything — the answer uses the term, definition, example, and subject filled in above.</div>';
+      return;
+    }
+    veAskThread.forEach((t, i) => {
+      const q = document.createElement("div");
+      q.className = "ve-ask-q";
+      q.textContent = t.question;
+      box.appendChild(q);
+      const a = document.createElement("div");
+      a.className = "ve-ask-a";
+      a.innerHTML = `${t.answer}${t.example ? `<div class="ve-ask-example">e.g. ${t.example}</div>` : ""}
+        <div class="ve-ask-actions"><button class="ve-ask-add" data-i="${i}">+ Add to notes</button></div>`;
+      a.querySelector(".ve-ask-add").addEventListener("click", () => addAskEntryToNotes(t));
+      box.appendChild(a);
+    });
+    if (veAskThread.length > 1){
+      const ctxBtn = document.createElement("button");
+      ctxBtn.className = "ve-ask-context-btn";
+      ctxBtn.type = "button";
+      ctxBtn.textContent = "+ Add full conversation as context";
+      ctxBtn.addEventListener("click", addFullThreadToNotes);
+      box.appendChild(ctxBtn);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function appendToNotes(text){
+    const existing = el("veNotes").value.trim();
+    el("veNotes").value = existing ? existing + "\n\n" + text : text;
+  }
+  function addAskEntryToNotes(t){
+    appendToNotes(`Q: ${t.question}\nA: ${t.answer}${t.example ? `\nExample: ${t.example}` : ""}`);
+  }
+  function addFullThreadToNotes(){
+    const block = "— Follow-up conversation —\n" + veAskThread.map(t =>
+      `Q: ${t.question}\nA: ${t.answer}${t.example ? `\nExample: ${t.example}` : ""}`
+    ).join("\n\n");
+    appendToNotes(block);
+  }
+
+  el("veAskBtn").addEventListener("click", async () => {
+    const term = el("veTermInput").value.trim();
+    const question = el("veAskInput").value.trim();
+    if (!term){ alert("Enter a word or phrase first."); return; }
+    if (!question) return;
+    el("veAskBtn").disabled = true;
+    el("veAskBtn").textContent = "…";
+    try{
+      const res = await relayFetch("/ask-followup", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          term,
+          definition: el("veDefinition").value.trim(),
+          example: el("veExample").value.trim(),
+          subject: veSubjectValues.join(", "),
+          existingNotes: el("veNotes").value.trim(),
+          thread: veAskThread.map(t => ({ question: t.question, answer: t.answer })),
+          question
+        })
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      veAskThread.push({ question, answer: data.answer || "", example: data.example || "" });
+      el("veAskInput").value = "";
+      renderAskThread();
+    } catch(err){
+      alert("Couldn't get an answer: " + err.message);
+    } finally {
+      el("veAskBtn").disabled = false;
+      el("veAskBtn").textContent = "Ask";
+    }
+  });
+  el("veAskInput").addEventListener("keydown", e => { if (e.key === "Enter") el("veAskBtn").click(); });
 
   el("veLookupBtn").addEventListener("click", async () => {
     const term = el("veTermInput").value.trim();
