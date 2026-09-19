@@ -120,6 +120,14 @@
     color:var(--text-dim); font-size:12px; font-weight:600; cursor:pointer; user-select:none;
   }
   .vault-sort-chip.active{background:var(--brass-dim); border-color:var(--brass); color:var(--brass);}
+  .vault-subject-filter-bar{display:none; flex-wrap:wrap; gap:6px; padding-top:2px;}
+  .vault-subject-filter-bar.show{display:flex;}
+  .subject-filter-chip{
+    padding:7px 13px; border-radius:20px; border:1px solid var(--line); background:var(--panel);
+    color:var(--text-dim); font-size:12px; font-weight:600; cursor:pointer; user-select:none;
+  }
+  .subject-filter-chip.active{background:var(--brass-dim); border-color:var(--brass); color:var(--brass);}
+  .subject-filter-chip.reset-chip{border-style:dashed;}
 
   /* folder breadcrumb */
   .crumbs{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); margin-bottom:12px; flex-wrap:wrap;}
@@ -341,6 +349,13 @@
   .vault-detail-text{color:var(--text); margin-top:3px; white-space:pre-wrap;}
   .idea-no-summary-hint{font-size:11px; color:var(--text-dim); font-style:italic; margin-top:6px;}
   .ve-field-ai textarea{border-style:dashed; border-color:var(--brass-dim);}
+  .upload-list{max-height:50vh; overflow-y:auto; -webkit-overflow-scrolling:touch; margin:4px 0 6px;}
+  .upload-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .upload-row:last-child{border-bottom:none;}
+  .upload-row-name{color:var(--text); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .upload-row-status{color:var(--text-dim); white-space:nowrap; flex-shrink:0; font-size:11.5px;}
+  .upload-row-status.ok{color:#8fb88a;}
+  .upload-row-status.error{color:#c97a6e;}
   .vault-attachment-link{color:var(--brass); font-weight:600; margin-top:3px; cursor:pointer;}
   .vault-attachment-link:hover{text-decoration:underline;}
   .vault-actions{display:flex; gap:8px; margin-top:12px;}
@@ -470,7 +485,7 @@
   <header>
     <div>
       <div class="eyebrow">Personal Development Library</div>
-      <h1>Good morning.</h1>
+      <h1 id="greetingHeader">Good morning.</h1>
       <div class="date" id="todayDate"></div>
     </div>
     <div class="header-actions">
@@ -523,6 +538,7 @@
       <div class="vault-sort-chip" data-sort="term.asc">A–Z</div>
       <div class="vault-sort-chip" data-sort="subject.asc">By subject</div>
     </div>
+    <div class="vault-subject-filter-bar" id="vaultSubjectFilterBar"></div>
   </div>
   <div class="crumbs" id="crumbs"></div>
 
@@ -732,6 +748,20 @@
   </div>
 </div>
 
+<input type="file" id="pdlUploadInput" multiple style="display:none;">
+<div class="ve-overlay" id="uploadOverlay">
+  <div class="ve-card">
+    <div class="ve-header">
+      <div class="ve-title">Uploading to <span id="uploadDestLabel"></span></div>
+      <button class="ve-close" id="uploadOverlayClose">✕</button>
+    </div>
+    <div class="upload-list" id="uploadList"></div>
+    <div class="ve-actions">
+      <button class="ve-save-btn" id="uploadDoneBtn" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -780,6 +810,11 @@
   }
 
   el("todayDate").textContent = new Date().toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" });
+  (function setGreeting(){
+    const h = new Date().getHours();
+    const greeting = h < 12 ? "Good morning." : h < 17 ? "Good day." : "Good evening.";
+    el("greetingHeader").textContent = greeting;
+  })();
 
   const AUDIO_EXT = ["mp3","m4a","wav","aac","flac","ogg"];
   const VIDEO_EXT = ["mp4","mov","m4v","webm"];
@@ -856,6 +891,7 @@
   let ideaSubjectValues = [];
   let lastSuggestedIdeaSubjects = [];
   let ideaAskThread = [];
+  let selectedSubjectFilters = new Set();
 
   async function fetchFolder(path){
     const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
@@ -1090,6 +1126,11 @@
         box.appendChild(sep);
       }
     });
+    const uploadBtn = document.createElement("span");
+    uploadBtn.className = "pill-btn";
+    uploadBtn.textContent = "+ Upload";
+    uploadBtn.addEventListener("click", () => openUploadPicker(currentPath));
+    box.appendChild(uploadBtn);
     if (el("organizeToggle").checked){
       const btn = document.createElement("span");
       btn.className = "pill-btn";
@@ -1349,6 +1390,155 @@
 
   const folderCache = new Map(); // path -> sorted entries, cleared on any write action
 
+  // ---------- in-app media uploader (Browse + Collections) ----------
+  // Same battle-tested blob/tree/commit flow as the standalone Uploader app, adapted to
+  // this app's narrow relay routes (no /repo/:repo/ prefix — always this one repo, and
+  // every write path-checked against ALLOWED_PREFIXES server-side). Files are uploaded
+  // one at a time on purpose: the ref-read → commit → tree → new-commit → ref-update
+  // sequence isn't safe to run concurrently against the same branch.
+  let uploadTargetPath = null;
+
+  function openUploadPicker(destPath){
+    uploadTargetPath = destPath || MEDIA_PATH;
+    el("pdlUploadInput").value = "";
+    el("pdlUploadInput").click();
+  }
+
+  function fileToBase64PDL(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => { const result = reader.result; resolve(result.slice(result.indexOf(",") + 1)); };
+      reader.onerror = () => reject(reader.error || new Error("Could not read file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function pdlWritePointerFile(path, contentObj, message){
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(contentObj))));
+    const blobRes = await relayFetch("/blob", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: b64, encoding: "base64" }) });
+    if (!blobRes.ok) throw new Error((await blobRes.json().catch(() => ({}))).message || "Could not write pointer blob");
+    const blobSha = (await blobRes.json()).sha;
+
+    const refRes = await relayFetch("/ref", { method: "GET" });
+    if (!refRes.ok) throw new Error((await refRes.json().catch(() => ({}))).message || "ref read failed");
+    const parentSha = (await refRes.json()).object.sha;
+    const commitRes = await relayFetch(`/commit/${parentSha}`, { method: "GET" });
+    const baseTree = (await commitRes.json()).tree.sha;
+
+    const treeRes = await relayFetch("/tree", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base_tree: baseTree, tree: [{ path, mode: "100644", type: "blob", sha: blobSha }] }) });
+    if (!treeRes.ok) throw new Error((await treeRes.json().catch(() => ({}))).message || "tree error");
+    const newTreeSha = (await treeRes.json()).sha;
+
+    const commitNewRes = await relayFetch("/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, tree: newTreeSha, parents: [parentSha] }) });
+    if (!commitNewRes.ok) throw new Error((await commitNewRes.json().catch(() => ({}))).message || "commit error");
+    const newCommitSha = (await commitNewRes.json()).sha;
+
+    const updateRes = await relayFetch("/ref", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sha: newCommitSha }) });
+    if (!updateRes.ok) throw new Error((await updateRes.json().catch(() => ({}))).message || "ref update error");
+  }
+
+  async function pdlUploadAsReleaseAsset(file, folder, statusFn){
+    statusFn("Storing as a release asset (large file)…");
+    const res = await relayFetch(`/release-asset?name=${encodeURIComponent(file.name)}`, {
+      method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+    const data = await res.json();
+    const pointerPath = `${folder}/${file.name}.ghrelease.json`;
+    statusFn("Linking file into the folder…");
+    await pdlWritePointerFile(pointerPath, { url: data.browser_download_url, size: file.size }, `Add ${pointerPath}`);
+    return pointerPath;
+  }
+
+  async function pdlUploadOneFile(file, folder, statusFn){
+    statusFn("Reading file…");
+    const b64 = await fileToBase64PDL(file);
+    statusFn("Uploading…");
+    const blobRes = await relayFetch("/blob", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: b64, encoding: "base64" }) });
+    if (!blobRes.ok){
+      const errBody = await blobRes.json().catch(() => ({}));
+      const msg = errBody.message || `HTTP ${blobRes.status}`;
+      if (blobRes.status === 422 && /too large/i.test(msg)) return await pdlUploadAsReleaseAsset(file, folder, statusFn);
+      throw new Error(msg);
+    }
+    const blobSha = (await blobRes.json()).sha;
+    const path = `${folder}/${file.name}`;
+
+    statusFn("Placing in folder…");
+    const refRes = await relayFetch("/ref", { method: "GET" });
+    if (!refRes.ok) throw new Error((await refRes.json().catch(() => ({}))).message || "ref read failed");
+    const parentCommitSha = (await refRes.json()).object.sha;
+    const commitRes = await relayFetch(`/commit/${parentCommitSha}`, { method: "GET" });
+    const baseTreeSha = (await commitRes.json()).tree.sha;
+
+    const treeRes = await relayFetch("/tree", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base_tree: baseTreeSha, tree: [{ path, mode: "100644", type: "blob", sha: blobSha }] }) });
+    if (!treeRes.ok) throw new Error((await treeRes.json().catch(() => ({}))).message || "tree error");
+    const newTreeSha = (await treeRes.json()).sha;
+
+    statusFn("Committing…");
+    const commitNewRes = await relayFetch("/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: `Add ${path}`, tree: newTreeSha, parents: [parentCommitSha] }) });
+    if (!commitNewRes.ok) throw new Error((await commitNewRes.json().catch(() => ({}))).message || "commit error");
+    const newCommitSha = (await commitNewRes.json()).sha;
+
+    const updateRes = await relayFetch("/ref", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sha: newCommitSha }) });
+    if (!updateRes.ok) throw new Error((await updateRes.json().catch(() => ({}))).message || "ref update error");
+    return path;
+  }
+
+  el("pdlUploadInput").addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const dest = uploadTargetPath || currentPath;
+    const relLabel = dest.slice(MEDIA_PATH.length).replace(/^\/+/, "");
+    el("uploadDestLabel").textContent = relLabel || "Library";
+    const listBox = el("uploadList");
+    listBox.innerHTML = "";
+    el("uploadDoneBtn").textContent = "Uploading…";
+    el("uploadDoneBtn").disabled = true;
+    el("uploadOverlay").classList.add("show");
+
+    const rows = files.map(file => {
+      const row = document.createElement("div");
+      row.className = "upload-row";
+      row.innerHTML = `<span class="upload-row-name">${file.name}</span><span class="upload-row-status">Waiting…</span>`;
+      listBox.appendChild(row);
+      return { file, statusEl: row.querySelector(".upload-row-status") };
+    });
+
+    // If this was triggered from Collections with a collection selected, tag each
+    // successful upload straight into it — the point of offering Upload from there
+    // at all is that the file shows up already organized, not just dropped in Browse.
+    const shouldTag = currentView === "collections" && !!selectedCollectionId;
+    let anyOk = false;
+    for (const { file, statusEl } of rows){
+      try{
+        const path = await pdlUploadOneFile(file, dest, msg => { statusEl.textContent = msg; statusEl.className = "upload-row-status"; });
+        statusEl.textContent = "Done";
+        statusEl.className = "upload-row-status ok";
+        anyOk = true;
+        if (shouldTag){
+          const tags = collectionsData.assignments[path] || [];
+          if (!tags.includes(selectedCollectionId)) tags.push(selectedCollectionId);
+          collectionsData.assignments[path] = tags;
+        }
+      } catch(err){
+        statusEl.textContent = err.message;
+        statusEl.className = "upload-row-status error";
+      }
+    }
+    if (shouldTag && anyOk) await saveCollectionsData();
+
+    folderCache.clear();
+    if (currentView === "browse" && currentPath === dest) loadCurrentFolder();
+    else if (currentView === "collections") renderCollectionsView();
+
+    el("uploadDoneBtn").textContent = "Done";
+    el("uploadDoneBtn").disabled = false;
+  });
+  el("uploadOverlayClose").addEventListener("click", () => el("uploadOverlay").classList.remove("show"));
+  el("uploadDoneBtn").addEventListener("click", () => el("uploadOverlay").classList.remove("show"));
+
+
   async function loadCurrentFolder(){
     buildCrumbs();
     const cached = folderCache.get(currentPath);
@@ -1385,10 +1575,15 @@
       chip.addEventListener("click", () => { selectedCollectionId = c.id; renderCollectionsView(); });
       bar.appendChild(chip);
     });
+    const uploadChip = document.createElement("div");
+    uploadChip.className = "pill-btn";
+    uploadChip.style.marginLeft = collectionsData.collections.length ? "4px" : "0";
+    uploadChip.textContent = "+ Upload";
+    uploadChip.addEventListener("click", () => openUploadPicker(currentPath));
+    bar.appendChild(uploadChip);
     if (el("organizeToggle").checked){
       const addChip = document.createElement("div");
       addChip.className = "pill-btn";
-      addChip.style.marginLeft = collectionsData.collections.length ? "4px" : "0";
       addChip.textContent = "+ New collection";
       addChip.addEventListener("click", async () => {
         const name = prompt("Name for the new collection:", "");
@@ -1428,6 +1623,37 @@
   }
 
   // ---------- Vault (vocabulary / concepts) ----------
+  function currentVaultSort(){ return vaultSubTab === "ideas" ? ideaSort : vaultSort; }
+  function currentVaultEntries(){ return vaultSubTab === "ideas" ? ideaEntries : vaultEntries; }
+  function renderSubjectFilterBar(){
+    const bar = el("vaultSubjectFilterBar");
+    const show = currentVaultSort() === "subject.asc";
+    bar.classList.toggle("show", show);
+    if (!show){ bar.innerHTML = ""; return; }
+    const allSubjects = new Set();
+    currentVaultEntries().forEach(r => (r.subject || "").split(",").forEach(t => { const v = t.trim(); if (v) allSubjects.add(v); }));
+    const subjects = [...allSubjects].sort((a, b) => a.localeCompare(b));
+    bar.innerHTML = "";
+    const noneBtn = document.createElement("div");
+    noneBtn.className = "subject-filter-chip reset-chip" + (selectedSubjectFilters.size === 0 ? " active" : "");
+    noneBtn.textContent = "Select none";
+    noneBtn.addEventListener("click", () => {
+      selectedSubjectFilters.clear();
+      vaultSubTab === "ideas" ? renderIdeaList() : renderVaultList();
+    });
+    bar.appendChild(noneBtn);
+    subjects.forEach(s => {
+      const chip = document.createElement("div");
+      chip.className = "subject-filter-chip" + (selectedSubjectFilters.has(s) ? " active" : "");
+      chip.textContent = s;
+      chip.addEventListener("click", () => {
+        if (selectedSubjectFilters.has(s)) selectedSubjectFilters.delete(s); else selectedSubjectFilters.add(s);
+        vaultSubTab === "ideas" ? renderIdeaList() : renderVaultList();
+      });
+      bar.appendChild(chip);
+    });
+  }
+
   function fmtVaultDate(iso){
     try{
       return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -1454,14 +1680,23 @@
   }
 
   function renderVaultList(){
+    renderSubjectFilterBar();
     const box = el("listing");
     box.innerHTML = "";
     if (!vaultEntries.length){
       box.innerHTML = '<div class="empty">Nothing saved yet. Tap "+ New term" whenever a word or idea is worth keeping.</div>';
       return;
     }
+    let list = vaultEntries;
+    if (selectedSubjectFilters.size){
+      list = list.filter(r => (r.subject || "").split(",").map(s => s.trim()).some(s => selectedSubjectFilters.has(s)));
+    }
+    if (!list.length){
+      box.innerHTML = '<div class="empty">No terms tagged with the selected subject(s).</div>';
+      return;
+    }
     const frag = document.createDocumentFragment();
-    vaultEntries.forEach(rec => frag.appendChild(renderVaultCard(rec)));
+    list.forEach(rec => frag.appendChild(renderVaultCard(rec)));
     box.appendChild(frag);
   }
 
@@ -1890,6 +2125,7 @@
     // reset sort UI to Newest whenever switching, so the active chip always matches the field it will actually sort
     document.querySelectorAll(".vault-sort-chip").forEach(c => c.classList.remove("active"));
     document.querySelector('.vault-sort-chip[data-sort="created_at.desc"]').classList.add("active");
+    selectedSubjectFilters.clear();
     if (tab === "ideas"){ ideaSort = "created_at.desc"; loadIdeaEntries(); }
     else { vaultSort = "created_at.desc"; loadVaultEntries(); }
   }
@@ -1917,14 +2153,23 @@
   }
 
   function renderIdeaList(){
+    renderSubjectFilterBar();
     const box = el("listing");
     box.innerHTML = "";
     if (!ideaEntries.length){
       box.innerHTML = '<div class="empty">Nothing captured yet. Tap "+ New idea" whenever something\'s worth thinking through further.</div>';
       return;
     }
+    let list = ideaEntries;
+    if (selectedSubjectFilters.size){
+      list = list.filter(r => (r.subject || "").split(",").map(s => s.trim()).some(s => selectedSubjectFilters.has(s)));
+    }
+    if (!list.length){
+      box.innerHTML = '<div class="empty">No ideas tagged with the selected subject(s).</div>';
+      return;
+    }
     const frag = document.createDocumentFragment();
-    ideaEntries.forEach(rec => frag.appendChild(renderIdeaCard(rec)));
+    list.forEach(rec => frag.appendChild(renderIdeaCard(rec)));
     box.appendChild(frag);
   }
 
@@ -1939,8 +2184,7 @@
         <div class="vault-date">${fmtVaultDate(rec.created_at)}</div>
       </div>
       ${rec.subject ? `<div class="vault-subject-row">${rec.subject.split(",").map(s => s.trim()).filter(Boolean).map(s => `<span class="vault-subject">${s}</span>`).join("")}</div>` : ""}
-      <div class="vault-def">${previewText.slice(0, expanded ? undefined : 120)}${!expanded && previewText.length > 120 ? "…" : ""}</div>
-      ${!rec.summary ? '<div class="idea-no-summary-hint">✨ No summary yet</div>' : ""}
+      ${!expanded ? `<div class="vault-def">${previewText.slice(0, 120)}${previewText.length > 120 ? "…" : ""}</div>${!rec.summary ? '<div class="idea-no-summary-hint">✨ No summary yet</div>' : ""}` : ""}
       ${rec.source_path ? `<div class="vault-source">▶ ${niceName(rec.source_path.split("/").pop())}${rec.source_timestamp != null ? " · " + formatTime(rec.source_timestamp) : ""}</div>` : ""}
     `;
     if (expanded){
@@ -2134,6 +2378,7 @@
       }
       const data = await res.json();
       if (data.summary) el("ideaSummary").value = data.summary;
+      if (data.suggested_title && !el("ideaTitleInput").value.trim()) el("ideaTitleInput").value = data.suggested_title;
       if (Array.isArray(data.suggested_subjects)) renderSuggestedIdeaSubjects(data.suggested_subjects);
     } catch(err){
       alert("Couldn't summarize: " + err.message);
