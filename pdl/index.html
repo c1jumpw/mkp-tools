@@ -785,7 +785,7 @@
 
   // Warms up the DNS/TLS handshake for these origins before the first real request —
   // shaves a meaningful chunk off first-request latency, especially on mobile networks.
-  ["https://api.github.com", "https://raw.githubusercontent.com"].forEach(origin => {
+  ["https://api.github.com", "https://raw.githubusercontent.com", "https://cdn.jsdelivr.net"].forEach(origin => {
     const l = document.createElement("link");
     l.rel = "preconnect"; l.href = origin; l.crossOrigin = "anonymous";
     document.head.appendChild(l);
@@ -903,6 +903,34 @@
 
   function rawUrl(path){
     return `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+  // jsDelivr fronts the same repo through a real multi-PoP CDN (GitHub's raw endpoint is
+  // explicitly not meant to be used this way, and has no strong caching guarantees). It
+  // can lag a few minutes behind a brand-new commit, though, so every media element that
+  // uses it also gets a one-shot fallback wired up to the raw URL if it 404s — meaning a
+  // file uploaded moments ago still plays instantly, just without the CDN speed boost
+  // until jsDelivr catches up on its own.
+  function jsDelivrUrl(path){
+    return `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+  function setMediaSrcWithFallback(mediaEl, path){
+    let fellBack = false;
+    function onError(){
+      if (fellBack) return;
+      fellBack = true;
+      mediaEl.removeEventListener("error", onError);
+      mediaEl.src = rawUrl(path);
+      mediaEl.play().catch(() => {}); // ignore — a paused fallback the user can tap is fine, a thrown promise rejection isn't
+    }
+    mediaEl.addEventListener("error", onError);
+    mediaEl.src = jsDelivrUrl(path);
+  }
+  // Best-effort: ask jsDelivr to refresh its cache for a path right after we change it,
+  // so by the time the file is actually revisited it's already fast. Never blocks or
+  // throws — a failed purge just means jsDelivr catches up on its own schedule instead.
+  function purgeJsDelivr(path){
+    const url = `https://purge.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/${path.split("/").map(encodeURIComponent).join("/")}`;
+    fetch(url).catch(() => {});
   }
   function blobUrl(path){
     return `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/${path.split("/").map(encodeURIComponent).join("/")}`;
@@ -1482,6 +1510,7 @@
 
     const updateRes = await relayFetch("/ref", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sha: newCommitSha }) });
     if (!updateRes.ok) throw new Error((await updateRes.json().catch(() => ({}))).message || "ref update error");
+    purgeJsDelivr(path);
     return path;
   }
 
@@ -2589,7 +2618,7 @@
 
   function playAudio(entry){
     currentAudioEntry = entry;
-    audioEl.src = rawUrl(entry.path);
+    setMediaSrcWithFallback(audioEl, entry.path);
     audioEl.playbackRate = SPEEDS[speedIndex];
     audioEl.play();
     el("miniTitle").textContent = niceName(entry.name);
@@ -2937,8 +2966,9 @@
     setSpeedLabel();
   });
   function playVideo(entry){
-    el("modalContent").innerHTML = `<video src="${rawUrl(entry.path)}" controls autoplay playsinline></video>`;
+    el("modalContent").innerHTML = `<video controls autoplay playsinline></video>`;
     el("modalOverlay").classList.add("show");
+    setMediaSrcWithFallback(el("modalContent").querySelector("video"), entry.path);
     wireVideoSpeed();
   }
   function openDoc(entry){
