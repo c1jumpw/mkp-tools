@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v9 (previously v1-v8 — see REVISION HISTORY below)
+ * VERSION: v10 (previously v1-v9 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -87,12 +87,19 @@
  *       its updated design-rationale header), layered over the existing
  *       beveled gradient rather than replacing it, so cards keep their
  *       depth while reading as clearly color-tagged when scanning the list.
+ *   v10 (this version) — topic and bullet text in the list preview now run
+ *       through lib/linkify.jsx, rendering any URL as a real clickable
+ *       link (opens in a new tab). Only applies to this READ-ONLY preview,
+ *       not the full-screen editor's textarea, which is inherently plain
+ *       text while actively editing — links become clickable once you're
+ *       viewing the note again.
  * =============================================================================
  */
 
 import { useRef, useState } from 'react'
 import { splitIntoTopics, parseNoteDisplay, applyBulletAutoContinue } from '../lib/notesParsing'
 import { NOTE_COLORS, getNoteColorHex, hexToRgba } from '../lib/noteColors'
+import { linkifyText } from '../lib/linkify'
 import { useAutosave } from '../hooks/useAutosave'
 import FileAttachments from './FileAttachments'
 
@@ -325,10 +332,10 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                     "tap to expand" affordance as tasks elsewhere in the
                     app, in addition to the explicit Edit button below. */}
                 <div className="cursor-pointer" onClick={() => startEdit(note)}>
-                  <p className="text-sm font-medium mb-1">{topic}</p>
+                  <p className="text-sm font-medium mb-1">{linkifyText(topic)}</p>
                   {previewBullets.length > 0 && (
                     <ul className="list-disc list-inside text-sm text-[var(--color-muted)] space-y-0.5 mb-1">
-                      {previewBullets.map((b, i) => <li key={i} className="truncate">{b}</li>)}
+                      {previewBullets.map((b, i) => <li key={i} className="truncate">{linkifyText(b)}</li>)}
                     </ul>
                   )}
                   {hiddenCount > 0 && (

@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/PinnedReminders.jsx
- * VERSION: v3 (previously v1-v2 — see REVISION HISTORY below)
+ * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Always-visible pinned reminders (no time slot). Quick-add form at the
@@ -29,15 +29,17 @@
  *       visually with the title, but it's tappable on any device).
  *     - Added a "Clear all" action (with a window.confirm guard, since it's
  *       destructive and irreversible) to quickly empty the pinned list.
- *   v3 (this version) — pinned items were the only place in the app you
- *       couldn't tap a task to open its full edit modal (Timeline and
- *       UnscheduledTray items already supported this via TaskBlock). Added
- *       the same click-to-expand behavior for consistency — tapping a
- *       pinned item's title now opens TaskModal, same as everywhere else.
+ *   v3 — pinned items were the only place in the app you couldn't tap a
+ *       task to open its full edit modal. Added the same click-to-expand
+ *       behavior for consistency with Timeline/UnscheduledTray items.
+ *   v4 (this version) — reminder titles now run through lib/linkify.jsx,
+ *       so a URL typed/pasted into a pinned reminder renders as a real
+ *       clickable link (opens in a new tab) instead of plain text.
  * =============================================================================
  */
 
 import { useState } from 'react'
+import { linkifyText } from '../lib/linkify'
 
 export default function PinnedReminders({ tasks, onAdd, onToggle, onDelete, onClearAll, onEdit }) {
   const [text, setText] = useState('')
@@ -88,7 +90,7 @@ export default function PinnedReminders({ tasks, onAdd, onToggle, onDelete, onCl
               onClick={() => onEdit(t)}
               className={'text-sm flex-1 cursor-pointer ' + (t.completed ? 'line-through text-[var(--color-muted)]' : '')}
             >
-              {t.title}
+              {linkifyText(t.title)}
             </span>
             {/* Always visible (not hover-gated) so it works on touch devices. */}
             <button
