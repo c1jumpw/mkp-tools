@@ -530,6 +530,7 @@
   <div class="vault-bar" id="vaultBar">
     <div class="vault-subtabs">
       <button class="vault-subtab active" id="vaultSubtabTerms" data-subtab="terms" type="button">🔤 Terms</button>
+      <button class="vault-subtab" id="vaultSubtabTopics" data-subtab="topics" type="button">📚 Topics</button>
       <button class="vault-subtab" id="vaultSubtabIdeas" data-subtab="ideas" type="button">💡 Ideas</button>
     </div>
     <div class="vault-bar-row">
@@ -689,6 +690,64 @@
     <div class="ve-actions">
       <button class="ve-cancel-btn" id="veCancel" type="button">Cancel</button>
       <button class="ve-save-btn" id="veSave" type="button">Save to vault</button>
+    </div>
+  </div>
+</div>
+
+<div class="ve-overlay" id="topicOverlay">
+  <div class="ve-card">
+    <div class="ve-header">
+      <div class="ve-title" id="topicTitleHeader">New topic</div>
+      <button class="ve-close" id="topicClose">✕</button>
+    </div>
+
+    <div class="ve-field-label">Topic</div>
+    <div class="ve-field"><input type="text" id="topicNameInput" placeholder="The concept you want to understand more deeply…"></div>
+
+    <div id="topicSourceChipHolder"></div>
+
+    <div class="ve-field-label-row">
+      <div class="ve-field-label">Simple explanation</div>
+      <button class="ve-refresh-btn" id="topicExplainSimpleBtn" type="button">✨ Explain simply</button>
+    </div>
+    <div class="ve-field ve-field-ai"><textarea id="topicSimple" rows="3" placeholder="Tap Explain simply for a plain-language, first-pass explanation…"></textarea></div>
+
+    <div class="ve-field-label-row">
+      <div class="ve-field-label">Full explanation</div>
+      <button class="ve-refresh-btn" id="topicExplainFullBtn" type="button">📖 Expand into full explainer</button>
+    </div>
+    <div class="ve-field ve-field-ai"><textarea id="topicFull" rows="7" placeholder="Once you have a simple explanation above, expand it into the fuller, page-length version — examples and applications included."></textarea></div>
+
+    <div class="ve-field-label">Subject</div>
+    <div class="ve-field">
+      <div class="ve-chip-input" id="topicSubjectChips">
+        <input type="text" id="topicSubjectInput" list="topicSubjectList" placeholder="Type a subject, press comma or Enter…">
+      </div>
+      <div class="ve-suggested-subjects" id="topicSuggestedSubjects"></div>
+    </div>
+    <datalist id="topicSubjectList"></datalist>
+
+    <div class="ve-ask-section">
+      <button class="ve-ask-toggle" id="topicAskToggle" type="button">💬 Ask a follow-up question <span id="topicAskChevron">▾</span></button>
+      <div class="ve-ask-body" id="topicAskBody">
+        <div class="ve-ask-thread" id="topicAskThread"></div>
+        <div class="ve-ask-row">
+          <input type="text" id="topicAskInput" placeholder="Ask anything about this topic…">
+          <button class="ve-ask-btn" id="topicAskBtn" type="button">Ask</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ve-field-label">Your notes</div>
+    <div class="ve-field"><textarea id="topicNotes" rows="3" placeholder="Your own thoughts, questions, or where this connects to other things…"></textarea></div>
+
+    <div id="topicAttachmentHolder"></div>
+    <button class="ve-attach-btn" id="topicAttachBtn" type="button">📎 Attach a file</button>
+    <input type="file" id="topicAttachInput" style="display:none;">
+
+    <div class="ve-actions">
+      <button class="ve-cancel-btn" id="topicCancel" type="button">Cancel</button>
+      <button class="ve-save-btn" id="topicSave" type="button">Save topic</button>
     </div>
   </div>
 </div>
@@ -882,6 +941,16 @@
   let expandedVaultId = null;
 
   let vaultSubTab = "terms";
+  let topicEntries = [];
+  let topicSort = "created_at.desc";
+  let topicEditingId = null;
+  let pendingTopicSourceLink = null;
+  let pendingTopicAttachment = null;
+  let expandedTopicId = null;
+  let topicSubjectValues = [];
+  let lastSuggestedTopicSubjects = [];
+  let topicAskThread = [];
+
   let ideaEntries = [];
   let ideaSort = "created_at.desc";
   let ideaEditingId = null;
@@ -1652,8 +1721,8 @@
   }
 
   // ---------- Vault (vocabulary / concepts) ----------
-  function currentVaultSort(){ return vaultSubTab === "ideas" ? ideaSort : vaultSort; }
-  function currentVaultEntries(){ return vaultSubTab === "ideas" ? ideaEntries : vaultEntries; }
+  function currentVaultSort(){ return vaultSubTab === "ideas" ? ideaSort : vaultSubTab === "topics" ? topicSort : vaultSort; }
+  function currentVaultEntries(){ return vaultSubTab === "ideas" ? ideaEntries : vaultSubTab === "topics" ? topicEntries : vaultEntries; }
   function renderSubjectFilterBar(){
     const bar = el("vaultSubjectFilterBar");
     const show = currentVaultSort() === "subject.asc";
@@ -2141,25 +2210,435 @@
 
   el("vaultNewBtn").addEventListener("click", () => {
     if (vaultSubTab === "ideas") openIdeaEditor(null);
+    else if (vaultSubTab === "topics") openTopicEditor(null);
     else openVaultEditor(null);
   });
 
-  // ---------- vault subtabs (Terms / Ideas) ----------
+  // ---------- vault subtabs (Terms / Topics / Ideas) ----------
   function setVaultSubTab(tab){
     vaultSubTab = tab;
     el("vaultSubtabTerms").classList.toggle("active", tab === "terms");
+    el("vaultSubtabTopics").classList.toggle("active", tab === "topics");
     el("vaultSubtabIdeas").classList.toggle("active", tab === "ideas");
-    el("vaultNewBtn").textContent = tab === "ideas" ? "+ New idea" : "+ New term";
-    el("search").placeholder = tab === "ideas" ? "Search your ideas…" : "Search your vault…";
+    el("vaultNewBtn").textContent = tab === "ideas" ? "+ New idea" : tab === "topics" ? "+ New topic" : "+ New term";
+    el("search").placeholder = tab === "ideas" ? "Search your ideas…" : tab === "topics" ? "Search your topics…" : "Search your vault…";
     // reset sort UI to Newest whenever switching, so the active chip always matches the field it will actually sort
     document.querySelectorAll(".vault-sort-chip").forEach(c => c.classList.remove("active"));
     document.querySelector('.vault-sort-chip[data-sort="created_at.desc"]').classList.add("active");
     selectedSubjectFilters.clear();
     if (tab === "ideas"){ ideaSort = "created_at.desc"; loadIdeaEntries(); }
+    else if (tab === "topics"){ topicSort = "created_at.desc"; loadTopicEntries(); }
     else { vaultSort = "created_at.desc"; loadVaultEntries(); }
   }
   el("vaultSubtabTerms").addEventListener("click", () => setVaultSubTab("terms"));
+  el("vaultSubtabTopics").addEventListener("click", () => setVaultSubTab("topics"));
   el("vaultSubtabIdeas").addEventListener("click", () => setVaultSubTab("ideas"));
+
+  // ---------- topics (deeper than a term; simple explanation first, full explainer on request) ----------
+  async function loadTopicEntries(search){
+    const box = el("listing");
+    box.innerHTML = '<div class="loading">Loading your topics…</div>';
+    try{
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      params.set("sort", topicSort);
+      const res = await relayFetch(`/topics?${params.toString()}`, { method: "GET" });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      topicEntries = await res.json();
+      renderTopicList();
+    } catch(err){
+      box.innerHTML = `<div class="empty">${err.message}</div>`;
+    }
+  }
+
+  function renderTopicList(){
+    renderSubjectFilterBar();
+    const box = el("listing");
+    box.innerHTML = "";
+    if (!topicEntries.length){
+      box.innerHTML = '<div class="empty">Nothing here yet. Tap "+ New topic" whenever there\'s a concept worth going deeper on.</div>';
+      return;
+    }
+    let list = topicEntries;
+    if (selectedSubjectFilters.size){
+      list = list.filter(r => (r.subject || "").split(",").map(s => s.trim()).some(s => selectedSubjectFilters.has(s)));
+    }
+    if (!list.length){
+      box.innerHTML = '<div class="empty">No topics tagged with the selected subject(s).</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    list.forEach(rec => frag.appendChild(renderTopicCard(rec)));
+    box.appendChild(frag);
+  }
+
+  function renderTopicCard(rec){
+    const card = document.createElement("div");
+    card.className = "vault-card";
+    const expanded = expandedTopicId === rec.id;
+    const previewText = rec.simple_explanation || "";
+    card.innerHTML = `
+      <div class="vault-card-top">
+        <div class="vault-term">${rec.topic}</div>
+        <div class="vault-date">${fmtVaultDate(rec.created_at)}</div>
+      </div>
+      ${rec.subject ? `<div class="vault-subject-row">${rec.subject.split(",").map(s => s.trim()).filter(Boolean).map(s => `<span class="vault-subject">${s}</span>`).join("")}</div>` : ""}
+      ${!expanded ? `<div class="vault-def">${previewText.slice(0, 120)}${previewText.length > 120 ? "…" : ""}</div>${!rec.simple_explanation ? '<div class="idea-no-summary-hint">✨ No explanation yet</div>' : ""}` : ""}
+      ${rec.source_path ? `<div class="vault-source">▶ ${niceName(rec.source_path.split("/").pop())}${rec.source_timestamp != null ? " · " + formatTime(rec.source_timestamp) : ""}</div>` : ""}
+    `;
+    if (expanded){
+      const detail = document.createElement("div");
+      detail.className = "vault-detail";
+      detail.innerHTML = `
+        ${rec.simple_explanation ? `<div class="vault-detail-label">Simple explanation</div><div class="vault-detail-text">${rec.simple_explanation}</div>` : ""}
+        ${rec.full_explanation ? `<div class="vault-detail-label">Full explanation</div><div class="vault-detail-text">${rec.full_explanation}</div>` : ""}
+        ${rec.personal_notes ? `<div class="vault-detail-label">Your notes</div><div class="vault-detail-text">${rec.personal_notes}</div>` : ""}
+        ${rec.attachment_path ? `<div class="vault-detail-label">Attachment</div><div class="vault-attachment-link">📎 ${rec.attachment_name || "file"}</div>` : ""}
+        <div class="vault-actions">
+          ${rec.source_path ? '<button class="vault-jump">▶ Jump to source</button>' : ""}
+          <button class="vault-edit">✎ Edit</button>
+          <button class="vault-delete">🗑 Delete</button>
+        </div>
+      `;
+      card.appendChild(detail);
+      detail.querySelector(".vault-edit")?.addEventListener("click", (e) => { e.stopPropagation(); openTopicEditor(rec); });
+      detail.querySelector(".vault-delete")?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${rec.topic}"?`)) return;
+        try{
+          const res = await relayFetch(`/topics/${rec.id}`, { method: "DELETE" });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+          loadTopicEntries(el("search").value.trim());
+        } catch(err){ alert("Couldn't delete: " + err.message); }
+      });
+      detail.querySelector(".vault-jump")?.addEventListener("click", (e) => { e.stopPropagation(); jumpToVaultSource(rec); });
+      detail.querySelector(".vault-attachment-link")?.addEventListener("click", (e) => { e.stopPropagation(); openVaultAttachment(rec.attachment_path); });
+    }
+    card.addEventListener("click", () => {
+      expandedTopicId = expanded ? null : rec.id;
+      renderTopicList();
+    });
+    return card;
+  }
+
+  function renderTopicAttachmentChip(){
+    const box = el("topicAttachmentHolder");
+    if (!pendingTopicAttachment){ box.innerHTML = ""; return; }
+    box.innerHTML = `<div class="ve-attachment-chip"><span>📎 ${pendingTopicAttachment.name}</span><span class="remove">✕</span></div>`;
+    box.querySelector(".remove").addEventListener("click", () => { pendingTopicAttachment = null; renderTopicAttachmentChip(); });
+  }
+  el("topicAttachBtn").addEventListener("click", () => el("topicAttachInput").click());
+  el("topicAttachInput").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    el("topicAttachBtn").disabled = true;
+    el("topicAttachBtn").textContent = "Uploading…";
+    try{
+      const res = await relayFetch(`/vault-attachment?name=${encodeURIComponent(file.name)}`, {
+        method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      pendingTopicAttachment = await res.json();
+      renderTopicAttachmentChip();
+    } catch(err){
+      alert("Couldn't attach file: " + err.message);
+    } finally {
+      el("topicAttachBtn").disabled = false;
+      el("topicAttachBtn").textContent = "📎 Attach a file";
+      el("topicAttachInput").value = "";
+    }
+  });
+
+  function renderTopicSubjectChips(){
+    const container = el("topicSubjectChips");
+    const input = el("topicSubjectInput");
+    container.querySelectorAll(".ve-subject-chip").forEach(c => c.remove());
+    topicSubjectValues.forEach((s, i) => {
+      const chip = document.createElement("span");
+      chip.className = "ve-subject-chip";
+      chip.innerHTML = `${s}<span class="remove" data-i="${i}">✕</span>`;
+      chip.querySelector(".remove").addEventListener("click", () => {
+        topicSubjectValues.splice(i, 1);
+        renderTopicSubjectChips();
+      });
+      container.insertBefore(chip, input);
+    });
+  }
+  function addTopicSubjectChip(val){
+    val = (val || "").trim();
+    if (val && !topicSubjectValues.some(s => s.toLowerCase() === val.toLowerCase())){
+      topicSubjectValues.push(val);
+      renderTopicSubjectChips();
+    }
+    renderSuggestedTopicSubjects(lastSuggestedTopicSubjects);
+  }
+  function commitTopicSubjectInput(){
+    const input = el("topicSubjectInput");
+    const val = input.value.replace(/,/g, "").trim();
+    addTopicSubjectChip(val);
+    input.value = "";
+  }
+  el("topicSubjectInput").addEventListener("keydown", e => {
+    if (e.key === "," || e.key === "Enter"){
+      e.preventDefault();
+      commitTopicSubjectInput();
+    } else if (e.key === "Backspace" && !e.target.value && topicSubjectValues.length){
+      topicSubjectValues.pop();
+      renderTopicSubjectChips();
+    }
+  });
+  el("topicSubjectInput").addEventListener("blur", () => { if (el("topicSubjectInput").value.trim()) commitTopicSubjectInput(); });
+
+  function renderSuggestedTopicSubjects(list){
+    lastSuggestedTopicSubjects = list || [];
+    const box = el("topicSuggestedSubjects");
+    const remaining = lastSuggestedTopicSubjects.filter(s => !topicSubjectValues.some(v => v.toLowerCase() === s.toLowerCase()));
+    if (!remaining.length){ box.innerHTML = ""; return; }
+    box.innerHTML = `<span class="ve-suggest-label">Suggested:</span>` + remaining.map(s =>
+      `<span class="ve-suggest-chip" data-s="${s}">+ ${s}</span>`
+    ).join("");
+    box.querySelectorAll(".ve-suggest-chip").forEach(chip => {
+      chip.addEventListener("click", () => addTopicSubjectChip(chip.dataset.s));
+    });
+  }
+
+  function renderTopicSourceChip(){
+    const box = el("topicSourceChipHolder");
+    if (!pendingTopicSourceLink){ box.innerHTML = ""; return; }
+    const name = niceName(pendingTopicSourceLink.path.split("/").pop());
+    const time = pendingTopicSourceLink.timestamp != null ? formatTime(pendingTopicSourceLink.timestamp) : "0:00";
+    box.innerHTML = `<div class="ve-source-chip"><span>▶ Linked to "${name}" at ${time}</span><span class="remove">✕</span></div>`;
+    box.querySelector(".remove").addEventListener("click", () => { pendingTopicSourceLink = null; renderTopicSourceChip(); });
+  }
+
+  function openTopicEditor(existingRecord){
+    topicEditingId = existingRecord ? existingRecord.id : null;
+    el("topicTitleHeader").textContent = existingRecord ? "Edit topic" : "New topic";
+    el("topicNameInput").value = existingRecord ? existingRecord.topic : "";
+    el("topicSimple").value = existingRecord ? (existingRecord.simple_explanation || "") : "";
+    el("topicFull").value = existingRecord ? (existingRecord.full_explanation || "") : "";
+    el("topicNotes").value = existingRecord ? (existingRecord.personal_notes || "") : "";
+    topicSubjectValues = (existingRecord && existingRecord.subject)
+      ? existingRecord.subject.split(",").map(s => s.trim()).filter(Boolean)
+      : [];
+    el("topicSubjectInput").value = "";
+    renderTopicSubjectChips();
+    renderSuggestedTopicSubjects([]);
+    topicAskThread = [];
+    el("topicAskInput").value = "";
+    el("topicAskBody").classList.remove("show");
+    el("topicAskChevron").textContent = "▾";
+    renderTopicAskThread();
+    pendingTopicAttachment = (existingRecord && existingRecord.attachment_path)
+      ? { path: existingRecord.attachment_path, name: existingRecord.attachment_name }
+      : null;
+    renderTopicAttachmentChip();
+
+    if (existingRecord && existingRecord.source_path){
+      pendingTopicSourceLink = { path: existingRecord.source_path, timestamp: existingRecord.source_timestamp };
+    } else if (!existingRecord && currentAudioEntry){
+      pendingTopicSourceLink = { path: currentAudioEntry.path, timestamp: audioEl.currentTime };
+    } else {
+      pendingTopicSourceLink = null;
+    }
+    renderTopicSourceChip();
+
+    const allTokens = new Set();
+    topicEntries.forEach(r => (r.subject || "").split(",").forEach(t => { const v = t.trim(); if (v) allTokens.add(v); }));
+    el("topicSubjectList").innerHTML = [...allTokens].map(s => `<option value="${s}">`).join("");
+
+    el("topicOverlay").classList.add("show");
+  }
+  function closeTopicEditor(){
+    el("topicOverlay").classList.remove("show");
+    topicEditingId = null;
+    pendingTopicSourceLink = null;
+  }
+  el("topicClose").addEventListener("click", closeTopicEditor);
+  el("topicCancel").addEventListener("click", closeTopicEditor);
+
+  el("topicExplainSimpleBtn").addEventListener("click", async () => {
+    const topic = el("topicNameInput").value.trim();
+    if (!topic){ alert("Name the topic first."); return; }
+    const btn = el("topicExplainSimpleBtn");
+    btn.disabled = true;
+    btn.textContent = "✨ Explaining…";
+    try{
+      const res = await relayFetch("/explain-topic-simple", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic })
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.simple_explanation) el("topicSimple").value = data.simple_explanation;
+      if (Array.isArray(data.suggested_subjects)) renderSuggestedTopicSubjects(data.suggested_subjects);
+    } catch(err){
+      alert("Couldn't explain this: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "✨ Explain simply";
+    }
+  });
+
+  el("topicExplainFullBtn").addEventListener("click", async () => {
+    const topic = el("topicNameInput").value.trim();
+    const simple = el("topicSimple").value.trim();
+    if (!topic){ alert("Name the topic first."); return; }
+    if (!simple){ alert("Add or generate a simple explanation first — the full explainer builds on it."); return; }
+    const btn = el("topicExplainFullBtn");
+    btn.disabled = true;
+    btn.textContent = "📖 Expanding…";
+    try{
+      const res = await relayFetch("/explain-topic-full", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, simple_explanation: simple })
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.full_explanation) el("topicFull").value = data.full_explanation;
+    } catch(err){
+      alert("Couldn't expand this: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "📖 Expand into full explainer";
+    }
+  });
+
+  // ---------- ask a follow-up, on a topic (mirrors the term/idea version) ----------
+  el("topicAskToggle").addEventListener("click", () => {
+    const body = el("topicAskBody");
+    const opening = !body.classList.contains("show");
+    body.classList.toggle("show", opening);
+    el("topicAskChevron").textContent = opening ? "▴" : "▾";
+    if (opening) el("topicAskInput").focus();
+  });
+
+  function renderTopicAskThread(){
+    const box = el("topicAskThread");
+    box.innerHTML = "";
+    if (!topicAskThread.length){
+      box.innerHTML = '<div class="ve-ask-empty">Ask anything — the answer uses the topic\'s simple and full explanations above.</div>';
+      return;
+    }
+    topicAskThread.forEach((t, i) => {
+      const q = document.createElement("div");
+      q.className = "ve-ask-q";
+      q.textContent = t.question;
+      box.appendChild(q);
+      const a = document.createElement("div");
+      a.className = "ve-ask-a";
+      a.innerHTML = `${t.answer}${t.example ? `<div class="ve-ask-example">e.g. ${t.example}</div>` : ""}
+        <div class="ve-ask-actions"><button class="ve-ask-add" data-i="${i}">+ Add to notes</button></div>`;
+      a.querySelector(".ve-ask-add").addEventListener("click", () => addTopicAskEntryToNotes(t));
+      box.appendChild(a);
+    });
+    if (topicAskThread.length > 1){
+      const ctxBtn = document.createElement("button");
+      ctxBtn.className = "ve-ask-context-btn";
+      ctxBtn.type = "button";
+      ctxBtn.textContent = "+ Add full conversation as context";
+      ctxBtn.addEventListener("click", addFullTopicThreadToNotes);
+      box.appendChild(ctxBtn);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+  function appendToTopicNotes(text){
+    const existing = el("topicNotes").value.trim();
+    el("topicNotes").value = existing ? existing + "\n\n" + text : text;
+  }
+  function addTopicAskEntryToNotes(t){
+    appendToTopicNotes(`Q: ${t.question}\nA: ${t.answer}${t.example ? `\nExample: ${t.example}` : ""}`);
+  }
+  function addFullTopicThreadToNotes(){
+    const block = "— Follow-up conversation —\n" + topicAskThread.map(t => `Q: ${t.question}\nA: ${t.answer}${t.example ? `\nExample: ${t.example}` : ""}`).join("\n\n");
+    appendToTopicNotes(block);
+  }
+  el("topicAskBtn").addEventListener("click", async () => {
+    const topic = el("topicNameInput").value.trim();
+    const question = el("topicAskInput").value.trim();
+    if (!topic){ alert("Name the topic first."); return; }
+    if (!question) return;
+    el("topicAskBtn").disabled = true;
+    el("topicAskBtn").textContent = "…";
+    try{
+      const res = await relayFetch("/topic-followup", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          simple_explanation: el("topicSimple").value.trim(),
+          full_explanation: el("topicFull").value.trim(),
+          personal_notes: el("topicNotes").value.trim(),
+          subject: topicSubjectValues.join(", "),
+          thread: topicAskThread.map(t => ({ question: t.question, answer: t.answer })),
+          question
+        })
+      });
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      topicAskThread.push({ question, answer: data.answer || "", example: data.example || "" });
+      el("topicAskInput").value = "";
+      renderTopicAskThread();
+    } catch(err){
+      alert("Couldn't get an answer: " + err.message);
+    } finally {
+      el("topicAskBtn").disabled = false;
+      el("topicAskBtn").textContent = "Ask";
+    }
+  });
+  el("topicAskInput").addEventListener("keydown", e => { if (e.key === "Enter") el("topicAskBtn").click(); });
+
+  el("topicSave").addEventListener("click", async () => {
+    const topic = el("topicNameInput").value.trim();
+    if (!topic){ alert("Name the topic first."); return; }
+    if (el("topicSubjectInput").value.trim()) commitTopicSubjectInput();
+    const record = {
+      topic,
+      simple_explanation: el("topicSimple").value.trim() || null,
+      full_explanation: el("topicFull").value.trim() || null,
+      personal_notes: el("topicNotes").value.trim() || null,
+      subject: topicSubjectValues.length ? topicSubjectValues.join(", ") : null,
+      source_path: pendingTopicSourceLink ? pendingTopicSourceLink.path : null,
+      source_timestamp: pendingTopicSourceLink ? pendingTopicSourceLink.timestamp : null,
+      attachment_path: pendingTopicAttachment ? pendingTopicAttachment.path : null,
+      attachment_name: pendingTopicAttachment ? pendingTopicAttachment.name : null
+    };
+    el("topicSave").disabled = true;
+    el("topicSave").textContent = "Saving…";
+    try{
+      let res;
+      if (topicEditingId){
+        res = await relayFetch(`/topics/${topicEditingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
+      } else {
+        res = await relayFetch("/topics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
+      }
+      if (!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+      closeTopicEditor();
+      loadTopicEntries(el("search").value.trim());
+    } catch(err){
+      alert("Couldn't save: " + err.message);
+    } finally {
+      el("topicSave").disabled = false;
+      el("topicSave").textContent = "Save topic";
+    }
+  });
 
   // ---------- ideas journal ----------
   async function loadIdeaEntries(search){
@@ -2551,9 +3030,9 @@
       el("collectionsBar").classList.toggle("show", currentView === "collections");
       el("vaultBar").classList.toggle("show", currentView === "vault");
       document.querySelector(".filters").style.display = currentView === "vault" ? "none" : "flex";
-      el("search").placeholder = currentView === "vault" ? (vaultSubTab === "ideas" ? "Search your ideas…" : "Search your vault…") : "Search your library…";
+      el("search").placeholder = currentView === "vault" ? (vaultSubTab === "ideas" ? "Search your ideas…" : vaultSubTab === "topics" ? "Search your topics…" : "Search your vault…") : "Search your library…";
       if (currentView === "collections") renderCollectionsView();
-      else if (currentView === "vault") { if (vaultSubTab === "ideas") loadIdeaEntries(); else loadVaultEntries(); }
+      else if (currentView === "vault") { if (vaultSubTab === "ideas") loadIdeaEntries(); else if (vaultSubTab === "topics") loadTopicEntries(); else loadVaultEntries(); }
       else loadCurrentFolder();
     });
   });
@@ -2574,6 +3053,9 @@
       if (vaultSubTab === "ideas"){
         ideaSort = chip.dataset.sort === "term.asc" ? "title.asc" : chip.dataset.sort;
         loadIdeaEntries();
+      } else if (vaultSubTab === "topics"){
+        topicSort = chip.dataset.sort === "term.asc" ? "topic.asc" : chip.dataset.sort;
+        loadTopicEntries();
       } else {
         vaultSort = chip.dataset.sort;
         loadVaultEntries();
@@ -2585,7 +3067,11 @@
     if (currentView === "vault"){
       clearTimeout(vaultSearchDebounce);
       const val = e.target.value.trim();
-      vaultSearchDebounce = setTimeout(() => { if (vaultSubTab === "ideas") loadIdeaEntries(val); else loadVaultEntries(val); }, 300);
+      vaultSearchDebounce = setTimeout(() => {
+        if (vaultSubTab === "ideas") loadIdeaEntries(val);
+        else if (vaultSubTab === "topics") loadTopicEntries(val);
+        else loadVaultEntries(val);
+      }, 300);
       return;
     }
     searchTerm = e.target.value.toLowerCase();
