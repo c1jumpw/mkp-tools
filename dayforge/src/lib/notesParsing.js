@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/lib/notesParsing.js
- * VERSION: v2 (previously v1 — see REVISION HISTORY below)
+ * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Parses the raw text of a notepad entry (see NotesPanel.jsx) into a
@@ -47,13 +47,21 @@
  *       documentation/UI-copy correction — the underlying regex already
  *       matched "--)" correctly before this change; only the displayed
  *       guidance text (here and in NotesPanel.jsx) was misleading.
- *   v3 (this version) — added applyBulletAutoContinue(), a typing-shortcut
- *       feature request: while editing a note, pressing Enter after a line
+ *   v3 — added applyBulletAutoContinue(), a typing-shortcut feature
+ *       request: while editing a note, pressing Enter after a line
  *       already using the user's own "-"/"*" convention auto-continues it,
  *       and two Enters in a row (an intentionally blank line) starts a
- *       fresh "-" topic instead of piling up empty bullets. Verified the
- *       full decision table standalone (title lines, dash lines, star
- *       lines, blank lines, bare markers with nothing typed after them).
+ *       fresh "-" topic instead of piling up empty bullets.
+ *       (Note: this file's top VERSION line was left at v2 when this
+ *       change shipped — corrected retroactively in v4 below.)
+ *   v4 (this version) — decideBulletAction() now also recognizes a line
+ *       ENDING in ":" as a title/heading, auto-starting "- " on Enter
+ *       (previously such a line fell through to 'default', a plain
+ *       newline). Paired with NotesPanel.jsx's capture-box date auto-fill
+ *       now producing "Sep 20, 2026:" (trailing colon added) instead of
+ *       "Sep 20, 2026" — the colon both signals "this is the title" to the
+ *       writer and is what triggers this new auto-dash behavior on the
+ *       very next line.
  * =============================================================================
  */
 
@@ -131,10 +139,13 @@ export function parseNoteDisplay(content) {
  *   - Line starts with "-" -> 'continue' with "* " (a topic line's own
  *     Enter starts ITS details, per the request: "next line ... should
  *     automatically write a star").
- *   - Anything else (e.g. a plain title/date line with no marker at all)
- *     -> 'default': let Enter behave normally (plain newline, no
- *     auto-prefix) — this is what lets the user manually type the very
- *     first "- " to kick off the pattern in the first place.
+ *   - Line ends with ":" -> 'continue' with "- " (a title/heading line —
+ *     e.g. the capture box's auto-filled "Sep 20, 2026:" — starts the
+ *     first dash item on Enter, rather than a bare newline).
+ *   - Anything else (plain text with no marker and no trailing colon) ->
+ *     'default': let Enter behave normally (plain newline, no auto-
+ *     prefix) — this is the fallback for ordinary prose that isn't using
+ *     the dash/star/colon convention at all.
  * @param {string} trimmedLine
  * @returns {{action: 'default'} | {action: 'continue'|'reset', prefix: string}}
  */
@@ -144,6 +155,13 @@ export function decideBulletAction(trimmedLine) {
   }
   if (trimmedLine.startsWith('*')) return { action: 'continue', prefix: '* ' }
   if (trimmedLine.startsWith('-')) return { action: 'continue', prefix: '* ' }
+  // A line ending in ':' is treated as a TITLE/TOPIC heading (e.g. the
+  // capture box's auto-filled "Sep 20, 2026:") — pressing Enter after one
+  // starts the first "- " item, rather than leaving a bare newline for the
+  // writer to prefix themselves. This is a general rule, not special-cased
+  // to just the auto-filled date: typing any title ending in ':' (e.g.
+  // "Project X:") gets the same shortcut.
+  if (trimmedLine.endsWith(':')) return { action: 'continue', prefix: '- ' }
   return { action: 'default' }
 }
 
