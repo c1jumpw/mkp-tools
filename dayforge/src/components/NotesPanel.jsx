@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v11 (previously v1-v10 — see REVISION HISTORY below)
+ * VERSION: v12 (previously v1-v11 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -89,13 +89,21 @@
  *       depth while reading as clearly color-tagged when scanning the list.
  *   v10 — topic and bullet text in the list preview now run through
  *       lib/linkify.jsx, rendering any URL as a real clickable link.
- *   v11 (this version) — added note pinning (separate from the unrelated
- *       "pinned reminders" task feature — see migrations/
- *       007_note_pinning.sql for that distinction) and moved Edit from a
- *       text link in the bottom action row to an icon button (✎) in the
- *       card's top-right corner, with a Pin icon (📌) just inside it —
- *       both per the requested layout. Pinned notes sort to the top of the
- *       list (stable sort — recency order within each group is preserved).
+ *   v11 — added note pinning (separate from the unrelated "pinned
+ *       reminders" task feature) and an Edit icon button in the card's
+ *       top-right corner, initially grouped right next to a Pin icon.
+ *   v12 (this version), per follow-up feedback that Pin and Edit felt too
+ *       clustered together: separated them into two independently
+ *       absolutely-positioned elements — Edit stays at the top-right
+ *       corner (top-2 right-2), Pin moves to top-center (top-2,
+ *       left-1/2 -translate-x-1/2), both using .plate's existing
+ *       position:relative as their positioning context. Added pt-10 to
+ *       the topic line below them, since absolutely-positioned elements
+ *       are removed from normal document flow and would otherwise overlap
+ *       the topic text rather than push it down (see that div's own
+ *       comment for the exact clearance math). Icons are also now text-lg
+ *       on mobile (sm:text-base on wider screens) for bigger, easier-to-
+ *       tap targets on a phone.
  * =============================================================================
  */
 
@@ -347,38 +355,56 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                 className={'plate rounded-md p-3 ' + (note.converted ? 'opacity-60' : '')}
                 style={cardStyle}
               >
-                {/* Header row: topic (tap to open the editor, same as
-                    tapping the bullets below) on the left, Pin and Edit as
-                    icon buttons on the right — Edit sits at the outer
-                    corner, Pin just inside it, per the requested layout. */}
-                <div className="flex items-start justify-between gap-2 mb-1">
+                {/* Header: Edit stays absolutely positioned at the card's
+                    top-right corner (unchanged position). Pin is now a
+                    SEPARATE absolutely-positioned element centered
+                    horizontally at the top of the card, rather than
+                    grouped next to Edit — a deliberate, clearly distinct
+                    position rather than "the same corner, slightly further
+                    left". Both use .plate's existing position:relative
+                    (see index.css) as their positioning context, so no
+                    extra wrapper element is needed.
+                    Icon size: text-lg on mobile (bigger, easier to tap
+                    accurately), sm:text-base on wider screens where
+                    precision pointing (mouse/trackpad) doesn't need the
+                    same touch-target generosity. */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleTogglePin(note) }}
+                  aria-label={note.pinned ? 'Unpin note' : 'Pin note to top'}
+                  title={note.pinned ? 'Unpin' : 'Pin to top'}
+                  className={
+                    'absolute top-2 left-1/2 -translate-x-1/2 text-lg sm:text-base leading-none transition p-1 ' +
+                    (note.pinned ? 'text-[var(--color-ember)]' : 'text-[var(--color-muted)] opacity-50 hover:opacity-100')
+                  }
+                >
+                  📌
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); startEdit(note) }}
+                  aria-label="Edit note"
+                  title="Edit"
+                  className="absolute top-2 right-2 text-lg sm:text-base leading-none text-[var(--color-muted)] hover:text-[var(--color-paper)] transition p-1"
+                >
+                  ✎
+                </button>
+
+                <div className="pt-10 mb-1">
+                  {/* pt-10 (2.5rem) reserves vertical space for the
+                      absolutely-positioned Pin/Edit icons above, which —
+                      being taken out of normal document flow — would
+                      otherwise overlap this topic line rather than push it
+                      down. Computed clearance needed: top-2 (0.5rem) +
+                      button height with p-1 padding and leading-none
+                      (1.625rem) = 2.125rem; pt-10 adds a small buffer on
+                      top of that since emoji glyphs can render slightly
+                      taller than their calculated line-height on some
+                      platforms. */}
                   <p
-                    className="text-sm font-medium cursor-pointer flex-1 min-w-0"
+                    className="text-sm font-medium cursor-pointer truncate"
                     onClick={() => startEdit(note)}
                   >
                     {linkifyText(topic)}
                   </p>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleTogglePin(note) }}
-                      aria-label={note.pinned ? 'Unpin note' : 'Pin note to top'}
-                      title={note.pinned ? 'Unpin' : 'Pin to top'}
-                      className={
-                        'text-sm leading-none transition ' +
-                        (note.pinned ? 'text-[var(--color-ember)]' : 'text-[var(--color-muted)] opacity-50 hover:opacity-100')
-                      }
-                    >
-                      📌
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); startEdit(note) }}
-                      aria-label="Edit note"
-                      title="Edit"
-                      className="text-sm leading-none text-[var(--color-muted)] hover:text-[var(--color-paper)] transition"
-                    >
-                      ✎
-                    </button>
-                  </div>
                 </div>
 
                 {/* Tapping the bullet preview also opens the editor — same
