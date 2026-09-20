@@ -107,6 +107,7 @@ create table if not exists notes (
   converted boolean not null default false,
   converted_task_id uuid references tasks(id) on delete set null,
   color text,
+  pinned boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -117,6 +118,7 @@ create policy "own notes" on notes for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create index if not exists notes_user_created_idx on notes (user_id, created_at desc);
+create index if not exists notes_user_pinned_created_idx on notes (user_id, pinned desc, created_at desc);
 
 -- =============================================================================
 -- Labeled file attachments for tasks and notes — any file type, not just

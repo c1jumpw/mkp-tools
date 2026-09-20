@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v10 (previously v1-v9 — see REVISION HISTORY below)
+ * VERSION: v11 (previously v1-v10 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -87,12 +87,15 @@
  *       its updated design-rationale header), layered over the existing
  *       beveled gradient rather than replacing it, so cards keep their
  *       depth while reading as clearly color-tagged when scanning the list.
- *   v10 (this version) — topic and bullet text in the list preview now run
- *       through lib/linkify.jsx, rendering any URL as a real clickable
- *       link (opens in a new tab). Only applies to this READ-ONLY preview,
- *       not the full-screen editor's textarea, which is inherently plain
- *       text while actively editing — links become clickable once you're
- *       viewing the note again.
+ *   v10 — topic and bullet text in the list preview now run through
+ *       lib/linkify.jsx, rendering any URL as a real clickable link.
+ *   v11 (this version) — added note pinning (separate from the unrelated
+ *       "pinned reminders" task feature — see migrations/
+ *       007_note_pinning.sql for that distinction) and moved Edit from a
+ *       text link in the bottom action row to an icon button (✎) in the
+ *       card's top-right corner, with a Pin icon (📌) just inside it —
+ *       both per the requested layout. Pinned notes sort to the top of the
+ *       list (stable sort — recency order within each group is preserved).
  * =============================================================================
  */
 
@@ -150,6 +153,22 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
     ? notes.filter((n) => n.content.toLowerCase().includes(searchLower))
     : notes
   const visibleNotes = showConverted ? searchMatched : searchMatched.filter((n) => !n.converted)
+  // Pinned notes float to the top of the list. Array.prototype.sort is
+  // stable (guaranteed since ES2019, true in every current browser), so
+  // this only reorders by pinned-status and otherwise preserves each
+  // group's existing relative order (already newest-first from the fetch
+  // in useDayForgeData) — i.e. "pinned notes, newest first" then
+  // "everything else, newest first", not a full re-sort that would
+  // scramble recency within each group.
+  const sortedVisibleNotes = [...visibleNotes].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+
+  async function handleTogglePin(note) {
+    try {
+      await onUpdate(note.id, { pinned: !note.pinned })
+    } catch (err) {
+      setError('Could not ' + (note.pinned ? 'unpin' : 'pin') + ': ' + (err.message || 'unknown error'))
+    }
+  }
   const convertedCount = notes.filter((n) => n.converted).length
 
   async function handleSetColor(note, colorKey) {
@@ -292,7 +311,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
         )}
 
         <div className="space-y-2">
-          {visibleNotes.length === 0 && (
+          {sortedVisibleNotes.length === 0 && (
             <p className="text-sm text-[var(--color-muted)]">
               {searchLower
                 ? `No notes match "${search.trim()}".`
@@ -301,7 +320,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                 : 'Nothing left to sort — everything visible has been converted.'}
             </p>
           )}
-          {visibleNotes.map((note) => {
+          {sortedVisibleNotes.map((note) => {
             const { topic, bullets } = parseNoteDisplay(note.content)
             // Compact preview: cap the visible bullets, note how many are hidden.
             const previewBullets = bullets.slice(0, MAX_PREVIEW_BULLETS)
@@ -328,11 +347,43 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                 className={'plate rounded-md p-3 ' + (note.converted ? 'opacity-60' : '')}
                 style={cardStyle}
               >
-                {/* Tapping the preview itself opens the editor — same
-                    "tap to expand" affordance as tasks elsewhere in the
-                    app, in addition to the explicit Edit button below. */}
+                {/* Header row: topic (tap to open the editor, same as
+                    tapping the bullets below) on the left, Pin and Edit as
+                    icon buttons on the right — Edit sits at the outer
+                    corner, Pin just inside it, per the requested layout. */}
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p
+                    className="text-sm font-medium cursor-pointer flex-1 min-w-0"
+                    onClick={() => startEdit(note)}
+                  >
+                    {linkifyText(topic)}
+                  </p>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleTogglePin(note) }}
+                      aria-label={note.pinned ? 'Unpin note' : 'Pin note to top'}
+                      title={note.pinned ? 'Unpin' : 'Pin to top'}
+                      className={
+                        'text-sm leading-none transition ' +
+                        (note.pinned ? 'text-[var(--color-ember)]' : 'text-[var(--color-muted)] opacity-50 hover:opacity-100')
+                      }
+                    >
+                      📌
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); startEdit(note) }}
+                      aria-label="Edit note"
+                      title="Edit"
+                      className="text-sm leading-none text-[var(--color-muted)] hover:text-[var(--color-paper)] transition"
+                    >
+                      ✎
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tapping the bullet preview also opens the editor — same
+                    "tap to expand" affordance as tasks elsewhere in the app. */}
                 <div className="cursor-pointer" onClick={() => startEdit(note)}>
-                  <p className="text-sm font-medium mb-1">{linkifyText(topic)}</p>
                   {previewBullets.length > 0 && (
                     <ul className="list-disc list-inside text-sm text-[var(--color-muted)] space-y-0.5 mb-1">
                       {previewBullets.map((b, i) => <li key={i} className="truncate">{linkifyText(b)}</li>)}
@@ -355,9 +406,6 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                       Convert to task
                     </button>
                   )}
-                  <button onClick={() => startEdit(note)} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-paper)]">
-                    Edit
-                  </button>
                   <button onClick={() => handleDelete(note)} className="text-xs text-[var(--color-muted)] hover:text-[var(--color-ember)]">
                     Delete
                   </button>
