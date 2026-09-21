@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/lib/notesParsing.js
- * VERSION: v4 (previously v1-v3 — see REVISION HISTORY below)
+ * VERSION: v5 (previously v1-v4 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Parses the raw text of a notepad entry (see NotesPanel.jsx) into a
@@ -62,6 +62,17 @@
  *       "Sep 20, 2026" — the colon both signals "this is the title" to the
  *       writer and is what triggers this new auto-dash behavior on the
  *       very next line.
+ *   v5 (this version) — loosened the colon-based title rule: per feedback,
+ *       requiring the line to literally END in ':' broke as soon as the
+ *       writer typed anything after it (e.g. "Sep 20, 2026: Grocery Run"
+ *       no longer ends in ':', so Enter fell back to a plain newline).
+ *       decideBulletAction() now accepts an isFirstLine flag — the FIRST
+ *       line of a note is always treated as its title regardless of what
+ *       it ends with, so Enter after it always drops into the dash list.
+ *       The colon-ending check is kept as a secondary rule for a heading
+ *       appearing later in a note. Verified the full updated decision
+ *       table standalone, including the exact scenario that motivated
+ *       this change and confirming no regressions to the dash/star rules.
  * =============================================================================
  */
 
@@ -139,28 +150,35 @@ export function parseNoteDisplay(content) {
  *   - Line starts with "-" -> 'continue' with "* " (a topic line's own
  *     Enter starts ITS details, per the request: "next line ... should
  *     automatically write a star").
- *   - Line ends with ":" -> 'continue' with "- " (a title/heading line —
- *     e.g. the capture box's auto-filled "Sep 20, 2026:" — starts the
- *     first dash item on Enter, rather than a bare newline).
- *   - Anything else (plain text with no marker and no trailing colon) ->
- *     'default': let Enter behave normally (plain newline, no auto-
- *     prefix) — this is the fallback for ordinary prose that isn't using
- *     the dash/star/colon convention at all.
+ *   - `isFirstLine` is true -> 'continue' with "- ": the very first line of
+ *     a note IS its title by convention (whether that's the auto-filled
+ *     "Sep 20, 2026:", a hand-typed "Project X", or a title extended with
+ *     more text after the colon like "Sep 20, 2026: Grocery Run") —
+ *     pressing Enter right after finishing it should ALWAYS drop into the
+ *     dash list, regardless of what the title's last character happens to
+ *     be. This replaced an earlier, narrower version of this rule that
+ *     only fired when the line ended in ":" — that broke as soon as the
+ *     writer typed anything after the colon.
+ *   - Line ends with ":" (and isn't the first line) -> 'continue' with
+ *     "- ": a colon-terminated heading appearing LATER in a note (e.g.
+ *     manually typing "Project X:" partway through, to start a new
+ *     sub-topic) gets the same shortcut as a true title line.
+ *   - Anything else (plain text with no marker, not the first line, no
+ *     trailing colon) -> 'default': let Enter behave normally (plain
+ *     newline, no auto-prefix).
  * @param {string} trimmedLine
+ * @param {boolean} [isFirstLine=false] - true when this is the very first
+ *   line of the whole textarea's content (see applyBulletAutoContinue,
+ *   which computes this from the cursor position).
  * @returns {{action: 'default'} | {action: 'continue'|'reset', prefix: string}}
  */
-export function decideBulletAction(trimmedLine) {
+export function decideBulletAction(trimmedLine, isFirstLine = false) {
   if (trimmedLine === '' || trimmedLine === '-' || trimmedLine === '*') {
     return { action: 'reset', prefix: '- ' }
   }
   if (trimmedLine.startsWith('*')) return { action: 'continue', prefix: '* ' }
   if (trimmedLine.startsWith('-')) return { action: 'continue', prefix: '* ' }
-  // A line ending in ':' is treated as a TITLE/TOPIC heading (e.g. the
-  // capture box's auto-filled "Sep 20, 2026:") — pressing Enter after one
-  // starts the first "- " item, rather than leaving a bare newline for the
-  // writer to prefix themselves. This is a general rule, not special-cased
-  // to just the auto-filled date: typing any title ending in ':' (e.g.
-  // "Project X:") gets the same shortcut.
+  if (isFirstLine) return { action: 'continue', prefix: '- ' }
   if (trimmedLine.endsWith(':')) return { action: 'continue', prefix: '- ' }
   return { action: 'default' }
 }
@@ -198,7 +216,11 @@ export function applyBulletAutoContinue(e, setValue) {
   const afterCursor = value.slice(cursor)
   const lineStart = beforeCursor.lastIndexOf('\n') + 1
   const currentLine = beforeCursor.slice(lineStart)
-  const decision = decideBulletAction(currentLine.trim())
+  // lineStart === 0 means this is the FIRST line of the whole textarea's
+  // content — i.e. the note's own title line, which always gets the "- "
+  // continuation regardless of what it ends with (see decideBulletAction's
+  // isFirstLine rule).
+  const decision = decideBulletAction(currentLine.trim(), lineStart === 0)
 
   if (decision.action === 'default') return // let the browser insert a plain "\n"
 
