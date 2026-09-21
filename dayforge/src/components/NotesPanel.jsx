@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v13 (previously v1-v12 — see REVISION HISTORY below)
+ * VERSION: v14 (previously v1-v13 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -109,6 +109,16 @@
  *     - Capture box's date auto-fill now appends a colon ("Sep 20,
  *       2026:") — see lib/notesParsing.js v4 for the paired change that
  *       makes a colon-ending line auto-start "- " on the next Enter.
+ *   v14 (this version), per further feedback:
+ *     - Header row rebuilt as a 3-column CSS grid (1fr auto 1fr) instead
+ *       of flexbox, so Pin (the middle column) sits at the row's true
+ *       horizontal center regardless of topic length, while Edit
+ *       (justify-self-end in its own column) still lands in the same
+ *       visual top-right corner as before.
+ *     - The capture box's date auto-fill no longer appends a trailing
+ *       newline after the colon — the cursor now lands right after
+ *       "Sep 20, 2026:" on the SAME line, so a title can be typed inline
+ *       there before the writer presses Enter themselves.
  * =============================================================================
  */
 
@@ -195,18 +205,19 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
 
   /**
    * Auto-fills today's date as the first line, but ONLY when the box is
-   * still empty. Cursor moved to the end via requestAnimationFrame since
-   * the textarea's value update from setDraft is asynchronous.
-   * The trailing colon ("Sep 20, 2026:") is deliberate — it signals to the
+   * still empty. The trailing colon ("Sep 20, 2026:") signals to the
    * writer that this line is a TITLE/TOPIC (matching the general "a line
-   * ending in ':' is a heading" rule now recognized by
-   * decideBulletAction()), and pressing Enter after it auto-starts the
-   * first "- " item rather than leaving a bare newline for the writer to
-   * prefix themselves.
+   * ending in ':' is a heading" rule recognized by decideBulletAction()).
+   * Cursor is placed right after the colon, ON THE SAME LINE (not a
+   * newline after it) — this lets the writer optionally extend the title
+   * inline (e.g. "Sep 20, 2026: Grocery Run") before pressing Enter
+   * themselves, rather than being forced onto a fresh second line
+   * immediately. Pressing Enter from here still triggers the auto-dash
+   * continuation as long as the line still ends in ':' at that point.
    */
   function handleCaptureFocus() {
     if (draft) return
-    const label = todayDateLabel() + ':\n'
+    const label = todayDateLabel() + ':'
     setDraft(label)
     requestAnimationFrame(() => {
       if (draftRef.current) {
@@ -366,56 +377,58 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                 className={'plate rounded-md p-3 ' + (note.converted ? 'opacity-60' : '')}
                 style={cardStyle}
               >
-                {/* Header row: topic (tap to open the editor) alongside
-                    Pin and Edit as inline icon buttons — reverted from a
-                    prior absolute-positioned layout per feedback that
-                    inline-with-the-title reads better than icons floating
-                    above the text. Both icons rest dim/colorless (muted +
-                    reduced opacity) until they reflect an ACTIVE state:
-                    Pin turns ember and fully opaque when the note is
-                    actually pinned (tapping it is what toggles that
-                    state); Edit turns ember and fully opaque only while
-                    THIS note is the one currently open in the editor
-                    overlay (editingId === note.id) — in practice that
-                    overlay covers the list while open, so this is mostly
-                    a brief transitional state, but the rule is applied
-                    for consistency with Pin's same on/off visual language
-                    rather than singling Edit out as always-static. */}
-                <div className="flex items-center justify-between gap-2 mb-1">
+                {/* Header row: topic (tap to open the editor), Pin, and
+                    Edit as inline icon buttons in the SAME row. Uses a
+                    3-column CSS grid (1fr auto 1fr) rather than flexbox so
+                    Pin (the auto-sized middle column) sits at the row's
+                    true horizontal center regardless of the topic's
+                    length — flexbox's justify-between would only push Pin
+                    away from Edit proportionally to leftover space, not
+                    guarantee an actual center point. Edit's column is
+                    forced to the same width as the topic's column (both
+                    1fr), but justify-self-end anchors the icon itself to
+                    that column's right edge, which is also the row's
+                    right edge — so Edit still lands in the same visual
+                    corner as before despite sharing a wide track.
+                    Both icons rest dim/colorless (muted + reduced opacity)
+                    until they reflect an ACTIVE state: Pin turns ember and
+                    fully opaque when the note is actually pinned (tapping
+                    it is what toggles that state); Edit turns ember and
+                    fully opaque only while THIS note is the one currently
+                    open in the editor overlay (editingId === note.id). */}
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-1">
                   <p
-                    className="text-sm font-medium cursor-pointer flex-1 min-w-0 truncate"
+                    className="text-sm font-medium cursor-pointer min-w-0 truncate"
                     onClick={() => startEdit(note)}
                   >
                     {linkifyText(topic)}
                   </p>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleTogglePin(note) }}
-                      aria-label={note.pinned ? 'Unpin note' : 'Pin note to top'}
-                      title={note.pinned ? 'Unpin' : 'Pin to top'}
-                      className={
-                        'text-lg sm:text-base leading-none transition p-1 ' +
-                        (note.pinned
-                          ? 'text-[var(--color-ember)] opacity-100'
-                          : 'text-[var(--color-muted)] opacity-40 hover:opacity-70')
-                      }
-                    >
-                      📌
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); startEdit(note) }}
-                      aria-label="Edit note"
-                      title="Edit"
-                      className={
-                        'text-lg sm:text-base leading-none transition p-1 ' +
-                        (editingId === note.id
-                          ? 'text-[var(--color-ember)] opacity-100'
-                          : 'text-[var(--color-muted)] opacity-40 hover:opacity-70')
-                      }
-                    >
-                      ✎
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleTogglePin(note) }}
+                    aria-label={note.pinned ? 'Unpin note' : 'Pin note to top'}
+                    title={note.pinned ? 'Unpin' : 'Pin to top'}
+                    className={
+                      'text-lg sm:text-base leading-none transition p-1 ' +
+                      (note.pinned
+                        ? 'text-[var(--color-ember)] opacity-100'
+                        : 'text-[var(--color-muted)] opacity-40 hover:opacity-70')
+                    }
+                  >
+                    📌
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); startEdit(note) }}
+                    aria-label="Edit note"
+                    title="Edit"
+                    className={
+                      'justify-self-end text-lg sm:text-base leading-none transition p-1 ' +
+                      (editingId === note.id
+                        ? 'text-[var(--color-ember)] opacity-100'
+                        : 'text-[var(--color-muted)] opacity-40 hover:opacity-70')
+                    }
+                  >
+                    ✎
+                  </button>
                 </div>
 
                 {/* Tapping the bullet preview also opens the editor — same

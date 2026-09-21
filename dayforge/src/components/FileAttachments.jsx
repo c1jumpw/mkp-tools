@@ -1,8 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/FileAttachments.jsx
- * VERSION: v1 (renamed and broadened from components/ImageAttachments.jsx —
- *          see REVISION HISTORY below)
+ * VERSION: v2 (previously v1 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Shared file-attachment UI (any file type — images, PDFs, documents,
@@ -39,6 +38,12 @@
  *       has no generic way to thumbnail an arbitrary PDF/document without
  *       a much heavier library, and downloading is the more useful action
  *       for those types anyway).
+ *   v2 (this version) — fixed a real bug: handleDelete() existed and
+ *       worked correctly, but was never actually wired to any button in
+ *       the UI, so there was no way to remove an attachment at all. Added
+ *       a small "✕" delete badge overlaid on each thumbnail/file-badge,
+ *       plus a "Delete" action alongside "Close" in the image lightbox
+ *       for convenience while already viewing an image full-size.
  * =============================================================================
  */
 
@@ -188,34 +193,49 @@ export default function FileAttachments({ kind, entryId }) {
         <div className="grid grid-cols-3 gap-2">
           {attachments.map((a) => (
             <div key={a.id} className="space-y-1">
-              {isImage(a.mime_type) ? (
+              {/* Wrapped in a relative container so the delete "✕" badge
+                  can sit on top of either the image thumbnail or the
+                  non-image file badge — this button was previously
+                  missing entirely (handleDelete existed but nothing
+                  called it), a real gap fixed here. */}
+              <div className="relative">
+                {isImage(a.mime_type) ? (
+                  <button
+                    type="button"
+                    onClick={() => setLightboxId(a.id)}
+                    className="block w-full aspect-square rounded overflow-hidden border border-[var(--color-line)] bg-[var(--color-ink)]"
+                  >
+                    {thumbUrls[a.id] ? (
+                      <img src={thumbUrls[a.id]} alt={a.label || 'attached image'} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[var(--color-muted)] text-xs">…</div>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(a)}
+                    disabled={downloadingId === a.id}
+                    className="w-full aspect-square rounded border border-[var(--color-line)] bg-[var(--color-ink)] flex flex-col items-center justify-center gap-1 hover:border-[var(--color-steel)] disabled:opacity-50 transition"
+                    title={a.original_filename}
+                  >
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--color-surface-raised)] text-[var(--color-muted)]">
+                      {downloadingId === a.id ? '…' : fileTypeBadge(a.mime_type, a.original_filename)}
+                    </span>
+                    <span className="text-[9px] text-[var(--color-muted)] truncate max-w-full px-1">
+                      {a.original_filename}
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setLightboxId(a.id)}
-                  className="block w-full aspect-square rounded overflow-hidden border border-[var(--color-line)] bg-[var(--color-ink)]"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(a) }}
+                  aria-label={`Delete ${a.original_filename || 'file'}`}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--color-ink)] border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-ember)] text-xs flex items-center justify-center leading-none transition"
                 >
-                  {thumbUrls[a.id] ? (
-                    <img src={thumbUrls[a.id]} alt={a.label || 'attached image'} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[var(--color-muted)] text-xs">…</div>
-                  )}
+                  ✕
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleDownload(a)}
-                  disabled={downloadingId === a.id}
-                  className="w-full aspect-square rounded border border-[var(--color-line)] bg-[var(--color-ink)] flex flex-col items-center justify-center gap-1 hover:border-[var(--color-steel)] disabled:opacity-50 transition"
-                  title={a.original_filename}
-                >
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--color-surface-raised)] text-[var(--color-muted)]">
-                    {downloadingId === a.id ? '…' : fileTypeBadge(a.mime_type, a.original_filename)}
-                  </span>
-                  <span className="text-[9px] text-[var(--color-muted)] truncate max-w-full px-1">
-                    {a.original_filename}
-                  </span>
-                </button>
-              )}
+              </div>
               {editingLabelId === a.id ? (
                 <input
                   autoFocus
@@ -295,13 +315,22 @@ export default function FileAttachments({ kind, entryId }) {
               <img src={thumbUrls[lightboxImage.id]} alt={lightboxImage.label || ''} className="max-w-full max-h-[75vh] object-contain rounded" />
             )}
             {lightboxImage.label && <p className="text-sm text-[var(--color-paper)]">{lightboxImage.label}</p>}
-            <button
-              type="button"
-              onClick={() => setLightboxId(null)}
-              className="text-sm text-[var(--color-muted)] hover:text-[var(--color-paper)] mt-1"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-4 mt-1">
+              <button
+                type="button"
+                onClick={() => handleDelete(lightboxImage)}
+                className="text-sm text-[var(--color-ember)] hover:brightness-110"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setLightboxId(null)}
+                className="text-sm text-[var(--color-muted)] hover:text-[var(--color-paper)]"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
