@@ -3,6 +3,10 @@
     {
       "id": "daily",
       "name": "Daily"
+    },
+    {
+      "id": "sales",
+      "name": "Sales"
     }
   ],
   "assignments": {
