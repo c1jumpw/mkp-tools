@@ -1,1 +1,356 @@
-
+{
+  "version": 1,
+  "colors": {
+    "Coding": "#2F7D62",
+    "Learning": "#B8811A",
+    "Prompting": "#3E6FB0",
+    "Sales": "#B4503F",
+    "Work": "#7A5AA6",
+    "Writing": "#3E8E96"
+  },
+  "prompts": [
+    {
+      "id": "p_seed_summarize",
+      "title": "Summarize with takeaways",
+      "category": "Writing",
+      "description": "Turn any long text into a tight summary plus the points worth acting on.",
+      "template": "Summarize the text below for {{audience}}.\n\nFormat: {{format}}.\nThen list the 3 most important takeaways and any decision or action the reader should take.\nDon't add facts that aren't in the text. If something is unclear, say so.\n\nText:\n\"\"\"\n{{text}}\n\"\"\"",
+      "fields": [
+        {
+          "key": "audience",
+          "label": "Audience",
+          "description": "Who is this summary for?",
+          "type": "text",
+          "placeholder": "e.g. a busy executive",
+          "default": "a busy reader",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "format",
+          "label": "Format",
+          "description": "How long should the summary be?",
+          "type": "select",
+          "placeholder": "",
+          "default": "3 bullet points",
+          "options": [
+            "3 bullet points",
+            "One short paragraph",
+            "One page"
+          ],
+          "required": true
+        },
+        {
+          "key": "text",
+          "label": "Text to summarize",
+          "description": "Paste the full text here.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": true,
+      "createdAt": 1790204851000,
+      "updatedAt": 1790204851000,
+      "history": []
+    },
+    {
+      "id": "p_seed_tone",
+      "title": "Rewrite in a different tone",
+      "category": "Writing",
+      "description": "Keep the meaning, change the voice.",
+      "template": "Rewrite the text below in a {{tone}} tone.\nKeep the meaning and every fact the same. Keep it about the same length.\n{{constraints}}\n\nText:\n\"\"\"\n{{text}}\n\"\"\"",
+      "fields": [
+        {
+          "key": "tone",
+          "label": "Tone",
+          "description": "Pick the voice you want.",
+          "type": "select",
+          "placeholder": "",
+          "default": "",
+          "options": [
+            "Friendly",
+            "Direct",
+            "Formal",
+            "Playful",
+            "Persuasive",
+            "Calm and reassuring"
+          ],
+          "required": true
+        },
+        {
+          "key": "constraints",
+          "label": "Extra rules",
+          "description": "Anything to avoid or include, like banned words or a word limit.",
+          "type": "text",
+          "placeholder": "e.g. No exclamation marks. Under 120 words.",
+          "default": "",
+          "options": [],
+          "required": false
+        },
+        {
+          "key": "text",
+          "label": "Original text",
+          "description": "",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790204851001,
+      "updatedAt": 1790204851001,
+      "history": []
+    },
+    {
+      "id": "p_seed_coldemail",
+      "title": "Cold email to a new prospect",
+      "category": "Sales",
+      "description": "A short, specific first-touch email that leads with their problem, not your product.",
+      "template": "Write a cold email to {{prospect_role}} at {{company}}.\n\nTheir likely problem: {{pain_point}}\nWhat we offer: {{offer}}\nDesired next step: {{next_step}}\n\nRules:\n- Under 110 words, plain text, no buzzwords or hype.\n- Open with something specific to their situation, not \"I hope this finds you well\".\n- One clear ask. End with a question that's easy to say yes to.\n- Give me 3 subject line options.",
+      "fields": [
+        {
+          "key": "prospect_role",
+          "label": "Prospect's role",
+          "description": "",
+          "type": "text",
+          "placeholder": "e.g. VP of Sales",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "company",
+          "label": "Company",
+          "description": "Name, and a few words on what they do.",
+          "type": "text",
+          "placeholder": "e.g. Northwind, a 200-person logistics SaaS",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "pain_point",
+          "label": "Their pain point",
+          "description": "What are they struggling with that you can help with?",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "offer",
+          "label": "Your offer",
+          "description": "One sentence, in plain language.",
+          "type": "text",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "next_step",
+          "label": "Next step",
+          "description": "",
+          "type": "select",
+          "placeholder": "",
+          "default": "A 15-minute call",
+          "options": [
+            "A 15-minute call",
+            "A reply with a quick yes/no",
+            "A short demo video",
+            "An intro to the right person"
+          ],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790204851002,
+      "updatedAt": 1790204851002,
+      "history": []
+    },
+    {
+      "id": "p_seed_actions",
+      "title": "Meeting notes to action items",
+      "category": "Work",
+      "description": "Clean up messy notes into decisions, owners, and deadlines.",
+      "template": "Turn these meeting notes into a clear recap.\n\nSections, in this order:\n1. Decisions made\n2. Action items (owner, task, due date)\n3. Open questions\n4. One-sentence summary for people who weren't there\n\nIf an owner or date isn't stated, write \"unassigned\" or \"no date\" rather than guessing.\n{{people}}\n\nNotes:\n\"\"\"\n{{notes}}\n\"\"\"",
+      "fields": [
+        {
+          "key": "people",
+          "label": "Attendees",
+          "description": "List the names so owners are spelled correctly.",
+          "type": "text",
+          "placeholder": "e.g. Attendees: Dana, Luis, Priya",
+          "default": "",
+          "options": [],
+          "required": false
+        },
+        {
+          "key": "notes",
+          "label": "Raw notes",
+          "description": "Paste them exactly as you have them.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790204851003,
+      "updatedAt": 1790204851003,
+      "history": []
+    },
+    {
+      "id": "p_seed_explain",
+      "title": "Explain it to a newcomer",
+      "category": "Learning",
+      "description": "Get a clear explanation pitched at your level.",
+      "template": "Explain {{topic}} to someone who is: {{level}}.\n\nUse {{style}}. Define any jargon the first time it appears.\nEnd with 3 questions I could answer to check I actually understood it.",
+      "fields": [
+        {
+          "key": "topic",
+          "label": "Topic",
+          "description": "What do you want to understand?",
+          "type": "text",
+          "placeholder": "e.g. how vector databases work",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "level",
+          "label": "My level",
+          "description": "",
+          "type": "select",
+          "placeholder": "",
+          "default": "A complete beginner",
+          "options": [
+            "A complete beginner",
+            "Comfortable with the basics",
+            "Experienced in an adjacent field",
+            "A practitioner who wants nuance"
+          ],
+          "required": true
+        },
+        {
+          "key": "style",
+          "label": "Explanation style",
+          "description": "",
+          "type": "select",
+          "placeholder": "",
+          "default": "a plain-language analogy",
+          "options": [
+            "a plain-language analogy",
+            "a step-by-step walkthrough",
+            "a worked example",
+            "a short Q&A"
+          ],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790204851004,
+      "updatedAt": 1790204851004,
+      "history": []
+    },
+    {
+      "id": "p_seed_codereview",
+      "title": "Code review",
+      "category": "Coding",
+      "description": "A focused review that ranks issues instead of listing everything.",
+      "template": "Review this {{language}} code with a focus on {{focus}}.\n\nList problems from most to least serious. For each one give: what's wrong, why it matters, and a corrected snippet.\nSkip style nitpicks unless they hide a bug. If the code is fine, say so plainly.\n{{context}}\n\n```{{language}}\n{{code}}\n```",
+      "fields": [
+        {
+          "key": "language",
+          "label": "Language",
+          "description": "",
+          "type": "text",
+          "placeholder": "e.g. Python",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "focus",
+          "label": "Review focus",
+          "description": "",
+          "type": "select",
+          "placeholder": "",
+          "default": "bugs and edge cases",
+          "options": [
+            "bugs and edge cases",
+            "security",
+            "performance",
+            "readability and maintainability"
+          ],
+          "required": true
+        },
+        {
+          "key": "context",
+          "label": "Context",
+          "description": "What does the code need to do? Any constraints?",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": false
+        },
+        {
+          "key": "code",
+          "label": "Code",
+          "description": "",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790204851005,
+      "updatedAt": 1790204851005,
+      "history": []
+    },
+    {
+      "id": "p_seed_improve",
+      "title": "Improve my prompt",
+      "category": "Prompting",
+      "description": "Ask for a sharper version of a prompt, with the reasoning.",
+      "template": "Here is a prompt I'm using:\n\"\"\"\n{{prompt}}\n\"\"\"\n\nWhat I'm trying to get: {{goal}}\n\nRewrite it so it's clearer and more likely to produce that result. Then, in a short list, explain what you changed and why. If key information is missing, ask me up to 3 questions before rewriting.",
+      "fields": [
+        {
+          "key": "prompt",
+          "label": "Current prompt",
+          "description": "Paste the prompt as it is now.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "goal",
+          "label": "Goal",
+          "description": "What should a good answer look like?",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790204851006,
+      "updatedAt": 1790204851006,
+      "history": []
+    }
+  ],
+  "deleted": {}
+}

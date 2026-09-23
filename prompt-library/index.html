@@ -1,1 +1,1202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prompt Library</title>
+<meta name="description" content="A private library of reusable prompts with fill-in inputs and one-tap copy.">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1E4A3D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Prompts">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+<style>
+/* =========================================================================
+   Prompt Library  ·  tokens
+   Pine + brass + a catalog-card red rule. Category colours double as
+   "book spines" on cards and shelves so colour always carries meaning.
+   ========================================================================= */
+:root{
+  --bg:#F3F5F1; --surface:#FFFFFF; --surface-2:#E8EDE6; --line:#D6DDD3;
+  --ink:#1D2B26; --muted:#5B6B64;
+  --primary:#1E4A3D; --primary-hover:#173B31; --on-primary:#F3F5F1;
+  --accent:#B8811A; --rule:#C4453B; --danger:#B3372E; --ok:#2F7D62;
+  --sheet:#FBFCFA; --ruled:#DDE6EE; --fill-bg:rgba(30,74,61,.10); --mark-bg:rgba(184,129,26,.20);
+  --focus:#B8811A;
+  --font-ui:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131E1A; --surface:#1A2822; --surface-2:#22332C; --line:#2E4239;
+    --ink:#E7EEE9; --muted:#96A8A0;
+    --primary:#E3A92F; --primary-hover:#F0BA4A; --on-primary:#1A1A12;
+    --accent:#E3A92F; --rule:#E8695B; --danger:#F08378; --ok:#5DBB98;
+    --sheet:#16231E; --ruled:#22342D; --fill-bg:rgba(227,169,47,.16); --mark-bg:rgba(232,105,91,.22);
+    --focus:#E3A92F; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131E1A; --surface:#1A2822; --surface-2:#22332C; --line:#2E4239;
+  --ink:#E7EEE9; --muted:#96A8A0;
+  --primary:#E3A92F; --primary-hover:#F0BA4A; --on-primary:#1A1A12;
+  --accent:#E3A92F; --rule:#E8695B; --danger:#F08378; --ok:#5DBB98;
+  --sheet:#16231E; --ruled:#22342D; --fill-bg:rgba(227,169,47,.16); --mark-bg:rgba(232,105,91,.22);
+  --focus:#E3A92F; color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--font-ui);-webkit-font-smoothing:antialiased;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.muted{color:var(--muted)}
+.ic{flex:none;display:block}
+
+/* ---------- buttons & inputs ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:transparent}
+.btn.primary:hover{background:var(--primary-hover)}
+.btn.lg{height:50px;padding:0 22px;font-size:16px;font-weight:600;border-radius:12px}
+.btn.sm{height:30px;padding:0 10px;font-size:13px;border-radius:8px}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
+.btn.danger{color:var(--danger)}
+.btn.copied{background:var(--ok);color:#fff}
+.icon-btn{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:10px;border:0;background:transparent;color:var(--muted)}
+.icon-btn:hover{background:var(--surface-2);color:var(--ink)}
+.star.on{color:var(--accent)}
+.star.on .ic path{fill:currentColor}
+.in{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:9px 12px;min-height:40px}
+.in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.in.invalid{border-color:var(--danger)}
+textarea.in{resize:vertical;line-height:1.5}
+select.in{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.fld label,.lbl{display:block;font-weight:600;font-size:14px}
+.fld .opt{font-weight:400;color:var(--muted);font-size:12.5px;margin-left:4px}
+.hint{font-size:13px;color:var(--muted);margin:1px 0 6px}
+
+/* ---------- lock ---------- */
+.lock{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:#1E4A3D;color:#F3F5F1}
+.lock-card{width:min(340px,100%);text-align:center}
+.lock-card img{width:84px;height:84px;border-radius:22px}
+.lock h1{font-size:26px;margin:16px 0 4px;font-weight:600;letter-spacing:-.01em}
+.lock p{margin:0 0 22px;opacity:.8}
+.lock input{width:100%;height:56px;text-align:center;font:500 26px var(--font-mono);letter-spacing:.6em;padding-left:.6em;border-radius:14px;border:2px solid rgba(243,245,241,.28);background:rgba(0,0,0,.18);color:#F3F5F1}
+.lock input:focus{outline:none;border-color:#E3A92F}
+.lock .err{height:22px;margin-top:10px;color:#FFB4AA;font-size:14px}
+.lock.shake input{animation:shake .32s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
+/* ---------- app shell ---------- */
+.app{height:100vh;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr)}
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top));border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:18px;letter-spacing:-.01em;white-space:nowrap}
+.brand img{width:30px;height:30px;border-radius:8px}
+.search{position:relative;flex:1;max-width:520px;margin:0 auto 0 12px}
+.search .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search input{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:0 40px 0 38px}
+.search input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.search kbd{position:absolute;right:10px;top:50%;transform:translateY(-50%);font:500 12px var(--font-mono);color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:1px 6px;background:var(--surface)}
+.pill{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;color:var(--muted);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.synced i{background:var(--ok)} .pill.local i{background:var(--accent)} .pill.error i{background:var(--danger)}
+.pill.error{color:var(--danger);border-color:var(--danger)}
+.pill.saving i{background:var(--accent);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+
+.body{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:0}
+.body.has-gen{grid-template-columns:230px minmax(0,1fr) minmax(400px,470px)}
+
+/* shelves (categories) */
+.shelves{overflow:auto;padding:14px 10px 24px;border-right:1px solid var(--line)}
+.shelf-head{font-size:13px;color:var(--muted);font-weight:600;padding:14px 10px 6px}
+.shelf{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:10px;border:1px solid transparent;background:none;text-align:left;color:var(--ink)}
+.shelf:hover{background:var(--surface-2)}
+.shelf.on{background:var(--surface);border-color:var(--line);font-weight:600}
+.shelf .sp{width:6px;height:16px;border-radius:2px;background:var(--cat,var(--muted));flex:none}
+.shelf .ic{color:var(--muted)}
+.shelf .n{margin-left:auto;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.shelf .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* list */
+.main{overflow:auto;padding:20px 22px 48px;min-width:0}
+.list-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.list-head h1{font-size:24px;line-height:1.15;margin:0;font-weight:650;letter-spacing:-.015em}
+.list-head .count{color:var(--muted);font-size:14px}
+.list-head .grow{flex:1}
+.list-head select{width:auto;min-height:34px;padding-top:5px;padding-bottom:5px;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.card{position:relative;display:flex;flex-direction:column;gap:6px;padding:14px 12px 12px 20px;background:var(--surface);border:1px solid var(--line);border-radius:12px;cursor:pointer;overflow:hidden;min-width:0}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--cat)}
+.card:hover{border-color:color-mix(in srgb,var(--ink) 30%,var(--line))}
+.card.sel{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.card-top{display:flex;align-items:flex-start;gap:6px}
+.card h3{flex:1;margin:0;font-size:16.5px;line-height:1.25;font-weight:600;letter-spacing:-.005em;padding-top:2px}
+.card .star{margin:-6px -4px 0 0;width:32px;height:32px}
+.card-desc{margin:0;color:var(--muted);font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.9em}
+.card-foot{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:999px;background:var(--surface-2);font-size:12.5px;color:var(--muted);max-width:100%}
+.chip .sp{width:6px;height:6px;border-radius:2px;background:var(--cat)}
+.chip span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-foot .grow{flex:1}
+.empty{max-width:440px;margin:8vh auto 0;text-align:center;color:var(--muted)}
+.empty h2{color:var(--ink);font-size:22px;margin:0 0 8px;font-weight:650}
+.empty p{margin:0 0 18px}
+
+/* ---------- generate window ---------- */
+.gen{display:none;flex-direction:column;min-height:0;background:var(--surface);border-left:1px solid var(--line)}
+.has-gen .gen{display:flex}
+.gen-head{display:flex;align-items:center;gap:6px;padding:12px 12px 10px 16px;border-bottom:1px solid var(--line)}
+.gen-back{display:none}
+.gen-title{flex:1;min-width:0}
+.gen-title h2{margin:0;font-size:19px;line-height:1.2;font-weight:650;letter-spacing:-.01em}
+.gen-title .chip{margin-top:4px;height:22px}
+.gen-scroll{flex:1;overflow:auto;padding:16px 18px 24px}
+.gen-desc{margin:0 0 16px;color:var(--muted)}
+.fields{display:flex;flex-direction:column;gap:16px}
+.fields-tools{display:flex;justify-content:flex-end;margin:-6px 0 0}
+.sheet-wrap{margin-top:20px;border:1px solid var(--line);border-radius:12px;background:var(--sheet);overflow:hidden}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 14px;border-bottom:2px solid var(--rule);font-size:13px;color:var(--muted)}
+.sheet-head strong{color:var(--ink);font-weight:600}
+.sheet-head .warn{color:var(--rule);font-weight:500}
+.sheet{font:400 13.5px/24px var(--font-mono);white-space:pre-wrap;overflow-wrap:anywhere;padding:12px 16px;
+  background-image:linear-gradient(to bottom,transparent 23px,var(--ruled) 23px);background-size:100% 24px;background-origin:content-box;background-attachment:local;min-height:72px}
+.fill{background:var(--fill-bg);border-radius:3px}
+mark.ph{background:var(--mark-bg);color:inherit;border-radius:3px;box-shadow:inset 0 0 0 1px var(--accent)}
+.gen-foot{display:flex;gap:10px;align-items:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
+.gen-foot .btn.primary{flex:1}
+
+.menu{position:relative}
+.menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:200px;padding:6px;border-radius:12px;background:var(--surface);border:1px solid var(--line);box-shadow:0 12px 32px -8px rgba(10,25,20,.35)}
+.menu-pop.up{top:auto;bottom:calc(100% + 8px)}
+.menu-pop button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:none;text-align:left}
+.menu-pop button:hover{background:var(--surface-2)}
+.menu-pop .danger{color:var(--danger)}
+
+/* ---------- dialogs ---------- */
+dialog{border:0;padding:0;border-radius:18px;background:var(--surface);color:var(--ink);box-shadow:0 24px 64px -12px rgba(5,20,15,.55);width:min(720px,calc(100vw - 24px));max-height:calc(100dvh - 32px)}
+dialog[open]{display:flex;flex-direction:column}
+dialog::backdrop{background:rgba(10,22,17,.55)}
+dialog.narrow{width:min(440px,calc(100vw - 24px))}
+.dlg-head{display:flex;align-items:center;gap:8px;padding:14px 14px 12px 20px;border-bottom:1px solid var(--line)}
+.dlg-head h2{flex:1;margin:0;font-size:19px;font-weight:650}
+.dlg-body{flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:16px}
+.dlg-foot{display:flex;align-items:center;gap:10px;padding:12px 20px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.dlg-foot .grow{flex:1}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tpl{font:400 13.5px/1.6 var(--font-mono);min-height:200px}
+.help{font-size:13px;color:var(--muted);margin:6px 0 0}
+.help code,.frow code,.kbd{font:500 12.5px var(--font-mono);background:var(--surface-2);border-radius:5px;padding:1px 6px}
+.lbl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.frow{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.frow-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.frow label{display:block;font-size:13px;font-weight:600}
+.frow label .in{margin-top:4px;font-weight:400;background:var(--surface)}
+.frow .chk{display:inline-flex;align-items:center;gap:6px;font-weight:500;color:var(--muted)}
+.frow .chk input{width:16px;height:16px;accent-color:var(--primary)}
+.frow[data-type="select"] .only-text{display:none}
+.frow:not([data-type="select"]) .only-select{display:none}
+.more summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);padding:2px 0}
+.more[open] summary{color:var(--ink)}
+.no-fields{padding:14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:14px}
+.hrow{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg)}
+.hrow-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hrow-top strong{flex:1;min-width:120px}
+.hpre{margin:10px 0 0;padding:10px;max-height:160px;overflow:auto;background:var(--sheet);border-radius:8px;font:400 12.5px/1.55 var(--font-mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.set-sec{display:flex;flex-direction:column;gap:10px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.set-sec:last-child{border-bottom:0;padding-bottom:0}
+.set-sec h3{margin:0;font-size:16px;font-weight:650}
+.set-sec p{margin:0;font-size:14px;color:var(--muted)}
+.set-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:7px 14px;font-weight:500}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--primary);color:var(--on-primary)}
+.status-msg{font-size:14px;min-height:20px}
+.status-msg.ok{color:var(--ok)} .status-msg.bad{color:var(--danger)}
+.kb{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;align-items:center}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 24px);padding:11px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-size:14.5px;box-shadow:0 10px 30px -8px rgba(0,0,0,.4)}
+.toast button{border:0;background:none;color:inherit;font-weight:700;text-decoration:underline;padding:0}
+body.has-gen .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
+
+/* ---------- small screens ---------- */
+@media (max-width:860px){
+  .top{flex-wrap:wrap;gap:8px 10px;padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top))}
+  .brand{font-size:17px;flex:1}
+  .search{order:5;flex:1 0 100%;max-width:none;margin:0}
+  .search kbd{display:none}
+  .top .grow{flex:1}
+  .pill span{display:none}
+  .pill{padding:0 10px}
+  .body,.body.has-gen{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .shelves{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;border-bottom:1px solid var(--line);scrollbar-width:none}
+  .shelves::-webkit-scrollbar{display:none}
+  .shelf-head{display:none}
+  .shelf{width:auto;flex:none;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--surface)}
+  .shelf.on{background:var(--primary);color:var(--on-primary);border-color:transparent}
+  .shelf.on .n,.shelf.on .ic{color:inherit;opacity:.8}
+  .main{padding:14px 12px 40px}
+  .list-head h1{font-size:22px}
+  .grid{grid-template-columns:1fr}
+  .gen{position:fixed;inset:0;z-index:40;border-left:0}
+  .gen-back{display:grid}
+  .btn.new-btn .lbl-t{display:none}
+  .btn.new-btn{padding:0 11px}
+  dialog{width:100vw;max-width:none;height:100dvh;max-height:none;border-radius:0}
+  dialog.narrow{width:min(440px,calc(100vw - 24px));height:auto;max-height:calc(100dvh - 32px);border-radius:18px}
+  .row2{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ============================ Passcode lock ============================ -->
+<div class="lock" id="lock">
+  <div class="lock-card">
+    <img src="apple-touch-icon.png" alt="">
+    <h1>Prompt Library</h1>
+    <p>Enter your passcode to open your prompts.</p>
+    <input id="lock-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="Passcode">
+    <div class="err" id="lock-err" role="alert"></div>
+  </div>
+</div>
+
+<!-- ============================== App shell ============================== -->
+<div class="app" id="app" hidden>
+  <header class="top">
+    <div class="brand"><img src="favicon.svg" alt="">Prompt Library</div>
+    <div class="search">
+      <span data-icon="search" data-size="18"></span>
+      <input id="search" type="search" placeholder="Search prompts" autocomplete="off" aria-label="Search prompts">
+      <kbd>/</kbd>
+    </div>
+    <button class="pill" id="pill" data-action="sync-pill" aria-live="polite"><i></i><span>Loading…</span></button>
+    <button class="btn primary new-btn" data-action="new"><span data-icon="plus" data-size="18"></span><span class="lbl-t">New prompt</span></button>
+    <button class="icon-btn" data-action="settings" aria-label="Settings"><span data-icon="sliders" data-size="20"></span></button>
+  </header>
+
+  <div class="body" id="body">
+    <nav class="shelves" id="shelves" aria-label="Categories"></nav>
+
+    <main class="main" id="main">
+      <div class="list-head">
+        <h1 id="list-title">All prompts</h1>
+        <span class="count" id="list-count"></span>
+        <button class="btn ghost sm" id="rename-shelf" data-action="rename-shelf" hidden>Rename category</button>
+        <span class="grow"></span>
+        <label class="sr-only" for="sort">Sort</label>
+        <select class="in" id="sort">
+          <option value="used">Recently used</option>
+          <option value="edited">Recently edited</option>
+          <option value="az">A to Z</option>
+        </select>
+      </div>
+      <div id="list"></div>
+    </main>
+
+    <aside class="gen" id="gen" aria-label="Generate prompt"></aside>
+  </div>
+</div>
+
+<!-- =============================== Dialogs =============================== -->
+<dialog id="editor" aria-labelledby="ed-heading">
+  <div class="dlg-head">
+    <h2 id="ed-heading">New prompt</h2>
+    <button class="icon-btn" data-action="ed-cancel" aria-label="Close"><span data-icon="close" data-size="20"></span></button>
+  </div>
+  <div class="dlg-body">
+    <div class="fld"><label for="ed-title">Title</label>
+      <input class="in" id="ed-title" maxlength="120" placeholder="e.g. Cold email to a new prospect"></div>
+    <div class="row2">
+      <div class="fld"><label for="ed-cat">Category</label>
+        <input class="in" id="ed-cat" list="ed-cats" maxlength="40" placeholder="Pick one or type a new one" autocomplete="off">
+        <datalist id="ed-cats"></datalist></div>
+      <div class="fld"><label for="ed-desc">Description</label>
+        <input class="in" id="ed-desc" maxlength="240" placeholder="What is this prompt for?"></div>
+    </div>
+    <div class="fld">
+      <div class="lbl-row"><label for="ed-tpl" style="margin:0">Prompt</label>
+        <button class="btn sm" data-action="ed-add-input" type="button"><span data-icon="plus" data-size="15"></span>Add input</button></div>
+      <textarea class="in tpl" id="ed-tpl" spellcheck="true" placeholder="Write your prompt. Wrap anything you want to fill in later in double braces, like {{audience}}."></textarea>
+      <p class="help">Each <code>{{name}}</code> becomes an input you fill in when you generate. Use the same name twice to reuse one answer.</p>
+    </div>
+    <div>
+      <div class="lbl" style="margin-bottom:8px">Inputs</div>
+      <div id="ed-fields" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn danger" data-action="ed-delete" type="button"><span data-icon="trash" data-size="17"></span>Delete</button>
+    <button class="btn ghost" data-action="ed-history" type="button"><span data-icon="history" data-size="17"></span>History</button>
+    <span class="grow"></span>
+    <button class="btn" data-action="ed-cancel" type="button">Cancel</button>
+    <button class="btn primary" data-action="ed-save" type="button">Save prompt</button>
+  </div>
+</dialog>
+
+<dialog id="history" aria-labelledby="hist-h">
+  <div class="dlg-head"><h2 id="hist-h">Earlier versions</h2>
+    <button class="icon-btn" data-action="close-dialog" aria-label="Close"><span data-icon="close" data-size="20"></span></button></div>
+  <div class="dlg-body" id="hist-body"></div>
+</dialog>
+
+<dialog id="settings" aria-labelledby="set-h">
+  <div class="dlg-head"><h2 id="set-h">Settings</h2>
+    <button class="icon-btn" data-action="close-dialog" aria-label="Close"><span data-icon="close" data-size="20"></span></button></div>
+  <div class="dlg-body">
+    <section class="set-sec" id="set-sync">
+      <h3>Sync</h3>
+      <p id="sync-explain"></p>
+      <div class="fld"><label for="token">GitHub token</label>
+        <input class="in" id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></div>
+      <div class="set-row">
+        <button class="btn primary" data-action="save-token">Save token</button>
+        <button class="btn" data-action="test-token">Test connection</button>
+        <button class="btn ghost danger" data-action="clear-token">Remove</button>
+      </div>
+      <div class="status-msg" id="token-status" aria-live="polite"></div>
+      <p>Use a fine-grained token limited to the <b>mkp-tools</b> repository with <b>Contents: Read and write</b>. It stays in this browser only. Do that once per device.</p>
+    </section>
+    <section class="set-sec">
+      <h3>Your data</h3>
+      <div class="set-row">
+        <button class="btn" data-action="refresh"><span data-icon="refresh" data-size="17"></span>Refresh from GitHub</button>
+        <button class="btn" data-action="export"><span data-icon="download" data-size="17"></span>Export JSON</button>
+        <button class="btn" data-action="import"><span data-icon="upload" data-size="17"></span>Import JSON</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+      <p>Short inputs are remembered on this device so you don't retype them. Long text is never remembered.</p>
+      <div class="set-row"><button class="btn sm" data-action="forget-inputs">Forget remembered inputs</button></div>
+    </section>
+    <section class="set-sec">
+      <h3>Appearance</h3>
+      <div class="seg" id="theme-seg" role="group" aria-label="Theme">
+        <button data-action="theme" data-v="auto">Auto</button><button data-action="theme" data-v="light">Light</button><button data-action="theme" data-v="dark">Dark</button>
+      </div>
+    </section>
+    <section class="set-sec">
+      <h3>Shortcuts</h3>
+      <div class="kb">
+        <span class="kbd">/</span><span>Search</span>
+        <span class="kbd">N</span><span>New prompt</span>
+        <span class="kbd">Ctrl / ⌘ + Enter</span><span>Copy prompt, or save in the editor</span>
+        <span class="kbd">Esc</span><span>Close the panel</span>
+      </div>
+    </section>
+    <section class="set-sec">
+      <h3>Access</h3>
+      <div class="set-row"><button class="btn" data-action="lock"><span data-icon="lock" data-size="17"></span>Lock this device</button></div>
+    </section>
+  </div>
+</dialog>
+
+<dialog id="ask" class="narrow" aria-labelledby="ask-title">
+  <form method="dialog" id="ask-form" style="display:contents">
+    <div class="dlg-head"><h2 id="ask-title"></h2></div>
+    <div class="dlg-body">
+      <p id="ask-body" style="margin:0"></p>
+      <input class="in" id="ask-input" hidden autocomplete="off">
+    </div>
+    <div class="dlg-foot">
+      <span class="grow"></span>
+      <button class="btn" type="button" id="ask-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="ask-ok" value="ok">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<input type="file" id="noop" hidden>
+
+<script>
+(() => {
+'use strict';
+
+/* ======================================================================
+   Config
+   ====================================================================== */
+const CFG = { owner:'c1jumpw', repo:'mkp-tools', branch:'main', path:'prompt-library/prompts.json', passcode:'0286' };
+const LS = { unlocked:'pl_unlocked_v1', token:'pl_token_v1', cache:'pl_cache_v1', dirty:'pl_dirty_v1',
+             inputs:'pl_inputs_v1', usage:'pl_usage_v1', theme:'pl_theme_v1', sort:'pl_sort_v1' };
+const API = `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${CFG.path}`;
+const HISTORY_MAX = 15;
+
+/* ======================================================================
+   Helpers
+   ====================================================================== */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now = () => Date.now();
+const uid = () => 'p_' + now().toString(36) + Math.random().toString(36).slice(2, 7);
+const jget = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
+const jset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const sget = k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+const sset = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} };
+const toB64 = s => { let bin=''; new TextEncoder().encode(s).forEach(b => bin += String.fromCharCode(b)); return btoa(bin); };
+const fromB64 = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g,'')), c => c.charCodeAt(0)));
+const fmtTime = ts => new Date(ts).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+const isMobile = () => matchMedia('(max-width:860px)').matches;
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+const ICONS = {
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  star:'<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 17l-5.2 2.7 1-5.9-4.3-4.1 5.9-.8z"/>',
+  copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  edit:'<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/>',
+  more:'<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',
+  back:'<path d="M15 5l-7 7 7 7"/>',
+  close:'<path d="M6 6l12 12M18 6L6 18"/>',
+  sliders:'<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+  history:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',
+  external:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  lock:'<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  download:'<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
+  upload:'<path d="M12 16V5M7 9l5-5 5 5M5 20h14"/>',
+  refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>',
+  link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  inputs:'<path d="M4 8h16M4 16h10"/>',
+  library:'<rect x="4" y="5" width="4" height="15" rx="1"/><rect x="10" y="3" width="4" height="17" rx="1"/><path d="M17 8l3.5 1-3.5 10.5L13.5 18.5z" transform="translate(-.5 0)"/>',
+  reset:'<path d="M4 12a8 8 0 1 1 2.3 5.7M4 19v-6h6"/>'
+};
+const icon = (n, s=18) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]||''}</svg>`;
+const hydrateIcons = (root=document) => $$('[data-icon]', root).forEach(el => { el.innerHTML = icon(el.dataset.icon, +el.dataset.size || 18); });
+
+const PALETTE = ['#2F7D62','#B8811A','#3E6FB0','#B4503F','#7A5AA6','#3E8E96','#8A8F2E','#B0587F','#6A7A86','#A2683A'];
+/* Each category keeps one colour, stored in prompts.json, so colours stay distinct and identical on every device. */
+const catColor = name => (state.data.colors && state.data.colors[name]) || PALETTE[0];
+function ensureColors(d) {
+  d.colors = d.colors || {};
+  const present = [...new Set(d.prompts.map(p => p.category))].sort((a, b) => a.localeCompare(b));
+  const used = new Set(present.map(c => d.colors[c]).filter(Boolean));
+  present.forEach((c, i) => {
+    if (d.colors[c]) return;
+    const col = PALETTE.find(x => !used.has(x)) || PALETTE[(Object.keys(d.colors).length + i) % PALETTE.length];
+    d.colors[c] = col; used.add(col);
+  });
+}
+
+/* ======================================================================
+   Data model
+   ====================================================================== */
+const KEY_SRC = '\\{\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\}\\}';
+const keysOf = t => { const out = []; const re = new RegExp(KEY_SRC, 'g'); let m; while ((m = re.exec(t))) if (!out.includes(m[1])) out.push(m[1]); return out; };
+const humanize = k => k.replace(/_+/g, ' ').replace(/^\w/, c => c.toUpperCase());
+const defField = k => ({ key:k, label:humanize(k), description:'', type:'text', placeholder:'', default:'', options:[], required:true });
+
+function normPrompt(p) {
+  p = p || {};
+  const fields = Array.isArray(p.fields) ? p.fields.filter(f => f && f.key).map(f => ({ ...defField(f.key), ...f, options: Array.isArray(f.options) ? f.options.map(String) : [] })) : [];
+  return {
+    id: String(p.id || uid()), title: String(p.title || 'Untitled'),
+    category: (String(p.category || '').trim()) || 'Uncategorized',
+    description: String(p.description || ''), template: String(p.template || ''),
+    fields, favorite: !!p.favorite,
+    createdAt: +p.createdAt || now(), updatedAt: +p.updatedAt || now(),
+    history: Array.isArray(p.history) ? p.history.slice(0, HISTORY_MAX) : []
+  };
+}
+function normData(d) {
+  const out = { version:1, prompts:[], deleted:{}, colors:{} };
+  if (Array.isArray(d)) d = { prompts:d };
+  if (d && typeof d === 'object') {
+    if (Array.isArray(d.prompts)) out.prompts = d.prompts.map(normPrompt);
+    if (d.deleted && typeof d.deleted === 'object') out.deleted = { ...d.deleted };
+    if (d.colors && typeof d.colors === 'object') out.colors = { ...d.colors };
+  }
+  ensureColors(out);
+  return out;
+}
+/* Per-prompt last-write-wins merge, with tombstones for deletions. */
+function mergeData(local, remote) {
+  const del = { ...remote.deleted };
+  for (const [id, ts] of Object.entries(local.deleted)) del[id] = Math.max(del[id] || 0, ts);
+  const map = new Map();
+  for (const p of [...remote.prompts, ...local.prompts]) { const cur = map.get(p.id); if (!cur || p.updatedAt > cur.updatedAt) map.set(p.id, p); }
+  const prompts = [...map.values()].filter(p => !(del[p.id] && del[p.id] >= p.updatedAt));
+  return { version:1, prompts, deleted:del, colors:{ ...local.colors, ...remote.colors } };
+}
+
+const state = { data: { version:1, prompts:[], deleted:{}, colors:{} }, sha: null };
+const view  = { cat:'all', q:'', sort: sget(LS.sort) || 'used', open:null };
+let gen = null;           // { id, values }
+let rev = 0;              // bumps on every local change
+let syncing = false, again = false, syncTimer = null, warnedLocal = false;
+
+const byId = id => state.data.prompts.find(p => p.id === id);
+const isDirty = () => sget(LS.dirty) === '1';
+const setDirty = v => sset(LS.dirty, v ? '1' : '');
+const token = () => sget(LS.token);
+const persist = () => jset(LS.cache, { data: state.data, sha: state.sha });
+const usage = () => jget(LS.usage, {});
+
+function serialize() {
+  const prompts = [...state.data.prompts].sort((a, b) => a.createdAt - b.createdAt);
+  const present = new Set(prompts.map(p => p.category)); const colors = Object.fromEntries(Object.entries(state.data.colors || {}).filter(([c]) => present.has(c)));
+  return JSON.stringify({ version:1, colors, prompts, deleted: state.data.deleted }, null, 2) + '\n';
+}
+
+/* ======================================================================
+   GitHub sync
+   ====================================================================== */
+const ghHeaders = (auth = true) => {
+  const h = { 'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28' };
+  if (auth && token()) h.Authorization = 'Bearer ' + token();
+  return h;
+};
+async function ghGet() {
+  const url = `${API}?ref=${CFG.branch}&t=${now()}`;
+  let res = await fetch(url, { headers: ghHeaders(), cache:'no-store' });
+  if (res.status === 401 && token()) res = await fetch(url, { headers: ghHeaders(false), cache:'no-store' }); // bad token shouldn't break reading
+  if (res.status === 404) return { data:null, sha:null };
+  if (!res.ok) throw new Error('GitHub ' + res.status);
+  const j = await res.json();
+  let text = '';
+  try {
+    if (j.content && j.encoding === 'base64') text = fromB64(j.content);
+    else if (j.download_url) text = await (await fetch(j.download_url, { cache:'no-store' })).text();
+  } catch {}
+  let data = null;
+  try { if (text.trim()) data = JSON.parse(text); } catch {}
+  return { data, sha:j.sha };
+}
+async function ghPut(text, sha) {
+  const body = { message: `Update prompts (${state.data.prompts.length})`, content: toB64(text), branch: CFG.branch };
+  if (sha) body.sha = sha;
+  return fetch(API, { method:'PUT', headers:{ ...ghHeaders(), 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+}
+
+function setSync(kind, msg) {
+  const map = {
+    loading:['', 'Loading…'], synced:['synced', 'Synced'], saving:['saving', 'Saving…'],
+    readonly:['', 'Up to date'], local:['local', 'Not synced'], error:['error', 'Not saved · retry'], offline:['', 'Offline copy']
+  };
+  const [cls, label] = map[kind] || map.loading;
+  const pill = $('#pill');
+  pill.className = 'pill ' + cls;
+  pill.querySelector('span').textContent = label;
+  pill.title = msg || ({
+    local:'Saved on this device only. Add a GitHub token in Settings to save to GitHub.',
+    readonly:'Showing the latest prompts from GitHub. Add a token in Settings to save edits.',
+    synced:'All changes are saved to GitHub.', offline:'Could not reach GitHub. Showing the last copy on this device.'
+  }[kind] || label);
+  pill.dataset.kind = kind;
+  if (!$('#settings').open) return;
+  updateSyncSettings();
+}
+const restingStatus = () => token() ? (isDirty() ? 'local' : 'synced') : (isDirty() ? 'local' : 'readonly');
+
+function scheduleSync(ms = 900) { clearTimeout(syncTimer); syncTimer = setTimeout(doSync, ms); }
+async function doSync() {
+  if (!isDirty()) return setSync(restingStatus());
+  if (!token()) return setSync('local');
+  if (syncing) { again = true; return; }
+  syncing = true; setSync('saving');
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (state.sha === null && attempt === 0) {
+        const r = await ghGet(); state.sha = r.sha;
+        if (r.data) state.data = mergeData(state.data, normData(r.data));
+      }
+      const myRev = rev;
+      const res = await ghPut(serialize(), state.sha);
+      if (res.ok) {
+        const j = await res.json();
+        state.sha = j.content && j.content.sha;
+        if (rev === myRev) setDirty(false); else again = true;
+        persist(); setSync(restingStatus());
+        return;
+      }
+      if (res.status === 409 || res.status === 422) {          // someone else saved first: merge and retry
+        const r = await ghGet(); state.sha = r.sha;
+        if (r.data) state.data = mergeData(state.data, normData(r.data));
+        persist(); render(); continue;
+      }
+      if ([401, 403, 404].includes(res.status)) throw new Error(`GitHub refused the token (${res.status}). Check that it has Contents: Read and write on ${CFG.repo}.`);
+      throw new Error('GitHub returned ' + res.status);
+    }
+    throw new Error('Kept hitting edit conflicts. Try again in a moment.');
+  } catch (e) {
+    setSync('error', e.message);
+  } finally {
+    syncing = false;
+    if (again) { again = false; scheduleSync(300); }
+  }
+}
+
+async function refresh({ quiet = false } = {}) {
+  if (syncing) return;
+  try {
+    const r = await ghGet();
+    state.sha = r.sha;
+    if (r.data) {
+      const remote = normData(r.data);
+      if (isDirty()) { state.data = mergeData(state.data, remote); persist(); scheduleSync(0); }
+      else { state.data = remote; persist(); }
+    } else {
+      if (!state.data.prompts.length) state.data = seedData();
+      rev++; setDirty(true); persist(); scheduleSync(0);
+    }
+    setSync(restingStatus());
+  } catch (e) {
+    if (!state.data.prompts.length) {
+      try { const r = await fetch('prompts.json?t=' + now(), { cache:'no-store' }); if (r.ok) state.data = normData(await r.json()); } catch {}
+    }
+    if (!quiet || $('#pill').dataset.kind === 'loading') setSync('offline');
+    if (!quiet) toast('Could not reach GitHub. Showing the last copy on this device.');
+  }
+  render();
+  if (gen && !byId(gen.id)) closeGen(); else if (gen) refreshOpenGenIfPristine();
+}
+function seedData() { return { version:1, prompts: [], deleted:{}, colors:{} }; }
+
+/* Any local change goes through here. */
+function mutate(fn) {
+  fn(state.data); ensureColors(state.data);
+  rev++; setDirty(true); persist(); render();
+  if (token()) scheduleSync(); else {
+    setSync('local');
+    if (!warnedLocal) { warnedLocal = true; toast('Saved on this device. Add a GitHub token in Settings to save everywhere.'); }
+  }
+}
+
+/* ======================================================================
+   Rendering: shelves + list
+   ====================================================================== */
+function categories() {
+  const m = new Map();
+  state.data.prompts.forEach(p => m.set(p.category, (m.get(p.category) || 0) + 1));
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+function visiblePrompts() {
+  let list = state.data.prompts.slice();
+  if (view.cat === 'fav') list = list.filter(p => p.favorite);
+  else if (view.cat.startsWith('c:')) { const c = view.cat.slice(2); list = list.filter(p => p.category === c); }
+  const terms = view.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length) list = list.filter(p => { const hay = (p.title + ' ' + p.category + ' ' + p.description + ' ' + p.template).toLowerCase(); return terms.every(t => hay.includes(t)); });
+  const u = usage();
+  const key = p => view.sort === 'used' ? ((u[p.id] && u[p.id].last) || 0) : p.updatedAt;
+  list.sort((a, b) => (b.favorite - a.favorite) || (view.sort === 'az' ? a.title.localeCompare(b.title) : (key(b) - key(a)) || (b.updatedAt - a.updatedAt)));
+  return list;
+}
+function renderShelves() {
+  const cats = categories();
+  if (view.cat.startsWith('c:') && !cats.some(([c]) => 'c:' + c === view.cat)) view.cat = 'all';
+  const favN = state.data.prompts.filter(p => p.favorite).length;
+  const item = (id, label, n, extra = '') => `<button class="shelf${view.cat === id ? ' on' : ''}" data-action="shelf" data-cat="${esc(id)}" ${extra}>${label}<span class="n">${n}</span></button>`;
+  $('#shelves').innerHTML =
+    item('all', `${icon('library', 17)}<span class="nm">All prompts</span>`, state.data.prompts.length) +
+    item('fav', `${icon('star', 17)}<span class="nm">Favorites</span>`, favN) +
+    (cats.length ? '<div class="shelf-head">Categories</div>' : '') +
+    cats.map(([c, n]) => item('c:' + c, `<i class="sp" style="--cat:${catColor(c)}"></i><span class="nm">${esc(c)}</span>`, n)).join('');
+}
+const snippet = t => t.replace(/\s+/g, ' ').trim().slice(0, 140);
+function cardHTML(p) {
+  const n = p.fields.length, ready = buildOutput(p, initialValues(p)).missing === 0;
+  return `<article class="card${view.open === p.id ? ' sel' : ''}" data-id="${esc(p.id)}" style="--cat:${catColor(p.category)}" tabindex="0" role="button" aria-label="Open ${esc(p.title)}">
+    <div class="card-top"><h3>${esc(p.title)}</h3>
+      <button class="icon-btn star${p.favorite ? ' on' : ''}" data-action="fav" data-id="${esc(p.id)}" aria-pressed="${p.favorite}" aria-label="${p.favorite ? 'Remove from favorites' : 'Add to favorites'}">${icon('star', 18)}</button></div>
+    <p class="card-desc">${esc(p.description || snippet(p.template))}</p>
+    <div class="card-foot">
+      <span class="chip"><i class="sp"></i><span>${esc(p.category)}</span></span>
+      ${n ? `<span class="chip">${icon('inputs', 13)}<span>${n} input${n > 1 ? 's' : ''}</span></span>` : ''}
+      ${ready ? `<span class="grow"></span><button class="btn sm" data-action="quick" data-id="${esc(p.id)}">${icon('copy', 14)}Copy</button>` : ''}
+    </div></article>`;
+}
+function renderList() {
+  const list = visiblePrompts(), total = state.data.prompts.length;
+  $('#list-title').textContent = view.cat === 'all' ? 'All prompts' : view.cat === 'fav' ? 'Favorites' : view.cat.slice(2);
+  $('#list-count').textContent = total ? `${list.length} ${list.length === 1 ? 'prompt' : 'prompts'}` : '';
+  $('#rename-shelf').hidden = !view.cat.startsWith('c:');
+  $('#sort').value = view.sort;
+  const box = $('#list');
+  if (!total) {
+    box.innerHTML = `<div class="empty"><h2>Your shelves are empty</h2><p>Save the prompts you reuse, add inputs for the parts that change, and copy a finished prompt in one tap.</p><button class="btn primary lg" data-action="new">${icon('plus', 20)}Add your first prompt</button></div>`;
+  } else if (!list.length) {
+    const msg = view.q.trim() ? `Nothing matches “${esc(view.q.trim())}”.` : view.cat === 'fav' ? 'No favorites yet. Tap the star on a prompt to pin it here.' : 'This category is empty.';
+    box.innerHTML = `<div class="empty"><p>${msg}</p>${view.q.trim() ? '<button class="btn" data-action="clear-search">Clear search</button>' : ''}</div>`;
+  } else {
+    box.innerHTML = `<div class="grid">${list.map(cardHTML).join('')}</div>`;
+  }
+}
+function render() { ensureColors(state.data); renderShelves(); renderList(); }
+function markSelected() { $$('.card').forEach(c => c.classList.toggle('sel', c.dataset.id === view.open)); }
+
+/* ======================================================================
+   Generate window
+   ====================================================================== */
+const S = { fs:'\uE000', fe:'\uE001', ps:'\uE002', pe:'\uE003' };
+function buildOutput(p, values) {
+  let missing = 0;
+  const raw = p.template.replace(new RegExp(KEY_SRC, 'g'), (m, k) => {
+    const f = p.fields.find(x => x.key === k);
+    if (!f) return m;
+    const v = String(values[k] ?? '');
+    if (v.trim()) return S.fs + v + S.fe;
+    if (f.required) { missing++; return S.ps + '[' + f.label + ']' + S.pe; }
+    return '';
+  });
+  const cleaned = raw.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  const text = cleaned.replace(/[\uE000-\uE003]/g, '');
+  const html = esc(cleaned).replace(/\uE000/g, '<span class="fill">').replace(/\uE001/g, '</span>').replace(/\uE002/g, '<mark class="ph">').replace(/\uE003/g, '</mark>');
+  return { text, html, missing };
+}
+function fieldHTML(f, val) {
+  const id = 'f_' + f.key, hid = id + '_h';
+  const hint = f.description ? `<div class="hint" id="${hid}">${esc(f.description)}</div>` : '';
+  const d = f.description ? `aria-describedby="${hid}"` : '';
+  let ctl;
+  if (f.type === 'long') ctl = `<textarea class="in" id="${id}" data-key="${esc(f.key)}" rows="4" placeholder="${esc(f.placeholder)}" ${d}>${esc(val)}</textarea>`;
+  else if (f.type === 'select') ctl = `<select class="in" id="${id}" data-key="${esc(f.key)}" ${d}><option value="">${f.required ? 'Choose…' : 'None'}</option>${f.options.map(o => `<option value="${esc(o)}"${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  else ctl = `<input class="in" id="${id}" data-key="${esc(f.key)}" value="${esc(val)}" placeholder="${esc(f.placeholder)}" autocomplete="off" ${d}>`;
+  return `<div class="fld"><label for="${id}">${esc(f.label)}${f.required ? '' : '<span class="opt">optional</span>'}</label>${hint}${ctl}</div>`;
+}
+function initialValues(p) {
+  const saved = (jget(LS.inputs, {}))[p.id] || {};
+  const v = {};
+  p.fields.forEach(f => { v[f.key] = (f.type !== 'long' && saved[f.key] !== undefined) ? saved[f.key] : (f.default || ''); });
+  return v;
+}
+function openGen(id, { focus = true } = {}) {
+  const p = byId(id); if (!p) return closeGen();
+  view.open = id; gen = { id, values: initialValues(p) };
+  $('#body').classList.add('has-gen'); document.body.classList.add('has-gen');
+  renderGen(); markSelected();
+  try { history.replaceState(null, '', '#' + id); } catch {}
+  if (focus && !isMobile()) { const first = $('#gen .in'); if (first) first.focus({ preventScroll:true }); }
+}
+function closeGen() {
+  gen = null; view.open = null;
+  $('#body').classList.remove('has-gen'); document.body.classList.remove('has-gen');
+  $('#gen').innerHTML = ''; markSelected();
+  try { history.replaceState(null, '', location.pathname + location.search); } catch {}
+}
+function refreshOpenGenIfPristine() { /* keep the person's typing; only re-render if the prompt itself changed */
+  const p = byId(gen.id); if (!p) return;
+  const sig = JSON.stringify([p.title, p.category, p.description, p.template, p.fields, p.favorite]);
+  if (sig !== gen.sig) { gen.values = { ...initialValues(p), ...Object.fromEntries(Object.entries(gen.values).filter(([k, v]) => p.fields.some(f => f.key === k) && v !== '')) }; renderGen(); }
+}
+function renderGen() {
+  const p = byId(gen.id); if (!p) return;
+  gen.sig = JSON.stringify([p.title, p.category, p.description, p.template, p.fields, p.favorite]);
+  const hasFields = p.fields.length > 0;
+  $('#gen').innerHTML = `
+    <div class="gen-head">
+      <button class="icon-btn gen-back" data-action="close-gen" aria-label="Back to library">${icon('back', 22)}</button>
+      <div class="gen-title"><h2>${esc(p.title)}</h2><span class="chip" style="--cat:${catColor(p.category)}"><i class="sp"></i><span>${esc(p.category)}</span></span></div>
+      <button class="icon-btn star${p.favorite ? ' on' : ''}" data-action="fav" data-id="${esc(p.id)}" aria-pressed="${p.favorite}" aria-label="Favorite">${icon('star', 20)}</button>
+      <button class="icon-btn" data-action="edit" data-id="${esc(p.id)}" aria-label="Edit prompt">${icon('edit', 20)}</button>
+      <div class="menu">
+        <button class="icon-btn" data-menu aria-label="More" aria-haspopup="menu">${icon('more', 20)}</button>
+        <div class="menu-pop" hidden role="menu">
+          <button data-action="dup" data-id="${esc(p.id)}" role="menuitem">${icon('copy', 17)}Duplicate</button>
+          <button data-action="history" data-id="${esc(p.id)}" role="menuitem"${p.history.length ? '' : ' disabled style="opacity:.5"'}>${icon('history', 17)}Earlier versions</button>
+          <button data-action="copy-link" data-id="${esc(p.id)}" role="menuitem">${icon('link', 17)}Copy link to prompt</button>
+          <button class="danger" data-action="delete" data-id="${esc(p.id)}" role="menuitem">${icon('trash', 17)}Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="gen-scroll">
+      ${p.description ? `<p class="gen-desc">${esc(p.description)}</p>` : ''}
+      ${hasFields ? `<div class="fields">${p.fields.map(f => fieldHTML(f, gen.values[f.key] ?? '')).join('')}</div>
+        <div class="fields-tools"><button class="btn ghost sm" data-action="clear-inputs">${icon('reset', 15)}Clear inputs</button></div>` : ''}
+      <section class="sheet-wrap" aria-label="Finished prompt">
+        <div class="sheet-head"><strong>Finished prompt</strong><span id="sheet-meta"></span></div>
+        <div class="sheet" id="sheet" tabindex="0"></div>
+      </section>
+    </div>
+    <div class="gen-foot">
+      <div class="menu">
+        <button class="btn" data-menu aria-haspopup="menu" aria-label="Open in an assistant">${icon('external', 17)}Open in</button>
+        <div class="menu-pop up" hidden role="menu">
+          <button data-action="open-claude" role="menuitem">Claude</button>
+          <button data-action="open-chatgpt" role="menuitem">ChatGPT</button>
+        </div>
+      </div>
+      <button class="btn primary lg" id="copy-btn" data-action="copy">${icon('copy', 20)}<span>Copy prompt</span></button>
+    </div>`;
+  updateSheet();
+}
+function updateSheet() {
+  const p = byId(gen.id); if (!p) return;
+  const out = buildOutput(p, gen.values);
+  $('#sheet').innerHTML = out.html;
+  const chars = out.text.length;
+  $('#sheet-meta').innerHTML = (out.missing ? `<span class="warn">${out.missing} input${out.missing > 1 ? 's' : ''} empty</span> · ` : '') + `${chars.toLocaleString()} chars · ~${Math.ceil(chars / 4).toLocaleString()} tokens`;
+}
+const saveInputsSoon = debounce(() => {
+  if (!gen) return; const p = byId(gen.id); if (!p) return;
+  const all = jget(LS.inputs, {}); const keep = {};
+  p.fields.forEach(f => { if (f.type !== 'long' && gen.values[f.key]) keep[f.key] = gen.values[f.key]; });
+  if (Object.keys(keep).length) all[p.id] = keep; else delete all[p.id];
+  jset(LS.inputs, all);
+}, 400);
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  try {
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch { return false; }
+}
+function noteUse(id) { const u = usage(); u[id] = { n: ((u[id] && u[id].n) || 0) + 1, last: now() }; jset(LS.usage, u); }
+async function doCopy() {
+  if (!gen) return; const p = byId(gen.id); if (!p) return;
+  const out = buildOutput(p, gen.values);
+  const ok = await copyText(out.text);
+  if (!ok) return toast('Copy was blocked. Select the text and copy it manually.');
+  noteUse(p.id);
+  const btn = $('#copy-btn');
+  btn.classList.add('copied'); btn.innerHTML = icon('check', 20) + '<span>Copied</span>';
+  setTimeout(() => { if ($('#copy-btn') === btn) { btn.classList.remove('copied'); btn.innerHTML = icon('copy', 20) + '<span>Copy prompt</span>'; } }, 1600);
+  toast(out.missing ? `Copied, but ${out.missing} input${out.missing > 1 ? 's are' : ' is'} still empty.` : `Copied ${out.text.length.toLocaleString()} characters.`);
+}
+async function openIn(where) {
+  if (!gen) return; const p = byId(gen.id); const out = buildOutput(p, gen.values);
+  const base = where === 'claude' ? 'https://claude.ai/new' : 'https://chatgpt.com/';
+  const url = base + '?q=' + encodeURIComponent(out.text);
+  noteUse(p.id);
+  if (url.length > 7000) { await copyText(out.text); window.open(base, '_blank', 'noopener'); toast('Too long to send by link, so it was copied. Paste it in.'); }
+  else window.open(url, '_blank', 'noopener');
+}
+
+/* ======================================================================
+   Toast, menus, confirm dialog
+   ====================================================================== */
+let toastTimer;
+function toast(msg, action) {
+  const t = $('#toast'); t.hidden = false; t.innerHTML = `<span>${esc(msg)}</span>` + (action ? `<button type="button">${esc(action.label)}</button>` : '');
+  if (action) t.querySelector('button').onclick = () => { t.hidden = true; action.run(); };
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, action ? 7000 : 2600);
+}
+function closeMenus(except) { $$('.menu-pop').forEach(m => { if (m !== except) m.hidden = true; }); }
+
+function ask({ title, body = '', ok = 'OK', danger = false, input = null }) {
+  return new Promise(resolve => {
+    const d = $('#ask'), inp = $('#ask-input'), okb = $('#ask-ok');
+    $('#ask-title').textContent = title; $('#ask-body').textContent = body; $('#ask-body').hidden = !body;
+    okb.textContent = ok; okb.classList.toggle('danger', danger);
+    inp.hidden = input === null; if (input !== null) { inp.value = input; }
+    let done = false;
+    const finish = v => { if (done) return; done = true; d.close(); resolve(v); };
+    $('#ask-cancel').onclick = () => finish(null);
+    d.oncancel = e => { e.preventDefault(); finish(null); };
+    $('#ask-form').onsubmit = e => { e.preventDefault(); finish(input !== null ? inp.value : true); };
+    d.showModal(); if (input !== null) { inp.focus(); inp.select(); } else okb.focus();
+  });
+}
+
+/* ======================================================================
+   Editor
+   ====================================================================== */
+const ed = { id:null, fields:{}, keys:null, snap:'' };
+function edSig() { return JSON.stringify([$('#ed-title').value, $('#ed-cat').value, $('#ed-desc').value, $('#ed-tpl').value, keysOf($('#ed-tpl').value).map(k => ed.fields[k])]); }
+function openEditor(id) {
+  const p = id ? byId(id) : null;
+  ed.id = p ? p.id : null; ed.fields = {}; ed.keys = null;
+  if (p) p.fields.forEach(f => { ed.fields[f.key] = { ...f, options: [...f.options] }; });
+  $('#ed-heading').textContent = p ? 'Edit prompt' : 'New prompt';
+  $('#ed-title').value = p ? p.title : '';
+  $('#ed-cat').value = p ? p.category : (view.cat.startsWith('c:') ? view.cat.slice(2) : '');
+  $('#ed-desc').value = p ? p.description : '';
+  $('#ed-tpl').value = p ? p.template : '';
+  $('#ed-cats').innerHTML = categories().map(([c]) => `<option value="${esc(c)}"></option>`).join('');
+  $('[data-action="ed-delete"]').hidden = !p;
+  $('[data-action="ed-history"]').hidden = !p || !p.history.length;
+  $$('#editor .invalid').forEach(x => x.classList.remove('invalid'));
+  syncRows(); ed.snap = edSig();
+  $('#editor').showModal();
+  if (!p) $('#ed-title').focus();
+  $('#editor .dlg-body').scrollTop = 0;
+}
+function rowHTML(f) {
+  return `<div class="frow" data-key="${esc(f.key)}" data-type="${esc(f.type)}">
+    <div class="frow-head"><code>{{${esc(f.key)}}}</code>
+      <label class="chk"><input type="checkbox" data-prop="required"${f.required ? ' checked' : ''}> Required</label></div>
+    <div class="row2">
+      <label>Label<input class="in" data-prop="label" value="${esc(f.label)}" maxlength="60"></label>
+      <label>Type<select class="in" data-prop="type">
+        <option value="text"${f.type === 'text' ? ' selected' : ''}>Short text</option>
+        <option value="long"${f.type === 'long' ? ' selected' : ''}>Long text</option>
+        <option value="select"${f.type === 'select' ? ' selected' : ''}>Dropdown</option></select></label>
+    </div>
+    <label>Description <span class="muted" style="font-weight:400">(shown under the label)</span><input class="in" data-prop="description" value="${esc(f.description)}" maxlength="200" placeholder="e.g. Who will read this?"></label>
+    <details class="more"${(f.placeholder || f.default) ? ' open' : ''}><summary>Example and default value</summary>
+      <div class="row2" style="margin-top:10px">
+        <label class="only-text">Example <span class="muted" style="font-weight:400">(faint hint)</span><input class="in" data-prop="placeholder" value="${esc(f.placeholder)}" maxlength="120"></label>
+        <label>Default value<input class="in" data-prop="default" value="${esc(f.default)}" maxlength="200"></label>
+      </div>
+    </details>
+    <label class="only-select">Dropdown options <span class="muted" style="font-weight:400">(separate with commas)</span><input class="in" data-prop="options" value="${esc(f.options.join(', '))}" placeholder="Friendly, Direct, Formal"></label>
+  </div>`;
+}
+function syncRows() {
+  const keys = keysOf($('#ed-tpl').value), sig = keys.join('|');
+  if (ed.keys && ed.keys.join('|') === sig) return;
+  ed.keys = keys;
+  keys.forEach(k => { if (!ed.fields[k]) ed.fields[k] = defField(k); });
+  $('#ed-fields').innerHTML = keys.length ? keys.map(k => rowHTML(ed.fields[k])).join('')
+    : '<div class="no-fields">No inputs yet. Type a name in double braces, like <code>{{audience}}</code>, or press Add input. Each one becomes a field you fill in when you generate.</div>';
+}
+function addInputAtCursor() {
+  const ta = $('#ed-tpl'); const existing = new Set(keysOf(ta.value));
+  let name = 'new_input', i = 2; while (existing.has(name)) name = 'new_input_' + i++;
+  const ins = '{{' + name + '}}', a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
+  ta.setRangeText(ins, a, b, 'end'); ta.focus(); ta.setSelectionRange(a + 2, a + 2 + name.length);
+  syncRows();
+}
+function saveEditor() {
+  const title = $('#ed-title').value.trim(), tpl = $('#ed-tpl').value.replace(/\s+$/, '');
+  if (!title) { $('#ed-title').classList.add('invalid'); $('#ed-title').focus(); return toast('Give the prompt a title.'); }
+  if (!tpl.trim()) { $('#ed-tpl').classList.add('invalid'); $('#ed-tpl').focus(); return toast('Write the prompt text first.'); }
+  const category = $('#ed-cat').value.trim() || 'Uncategorized', description = $('#ed-desc').value.trim();
+  const fields = keysOf(tpl).map(k => {
+    const f = { ...defField(k), ...ed.fields[k] };
+    f.label = (f.label || '').trim() || humanize(k);
+    f.options = f.type === 'select' ? f.options.map(s => s.trim()).filter(Boolean) : [];
+    if (f.type === 'select' && !f.options.length) f.type = 'text';
+    return f;
+  });
+  const t = now(); let openId;
+  const same = p => p && p.title === title && p.category === category && p.description === description && p.template === tpl && JSON.stringify(p.fields) === JSON.stringify(fields);
+  const existing = ed.id ? byId(ed.id) : null;
+  if (existing && same(existing)) { $('#editor').close(); return toast('No changes to save.'); }
+  mutate(d => {
+    if (existing) {
+      const p = d.prompts.find(x => x.id === ed.id);
+      p.history.unshift({ ts: p.updatedAt, title: p.title, category: p.category, description: p.description, template: p.template, fields: p.fields });
+      p.history = p.history.slice(0, HISTORY_MAX);
+      Object.assign(p, { title, category, description, template: tpl, fields, updatedAt: t }); openId = p.id;
+    } else {
+      const p = normPrompt({ id: uid(), title, category, description, template: tpl, fields, createdAt: t, updatedAt: t });
+      d.prompts.push(p); openId = p.id;
+    }
+  });
+  $('#editor').close(); openGen(openId, { focus:false }); toast('Saved.');
+}
+async function tryCloseEditor() {
+  if (edSig() !== ed.snap) { const ok = await ask({ title:'Discard your changes?', body:'This prompt has edits that haven’t been saved.', ok:'Discard', danger:true }); if (!ok) return; }
+  $('#editor').close();
+}
+
+/* ======================================================================
+   Prompt actions
+   ====================================================================== */
+function toggleFav(id) { mutate(d => { const p = d.prompts.find(x => x.id === id); p.favorite = !p.favorite; p.updatedAt = now(); }); if (gen && gen.id === id) renderGen(); }
+function dupPrompt(id) {
+  const p = byId(id); if (!p) return; const t = now(); const c = normPrompt({ ...JSON.parse(JSON.stringify(p)), id: uid(), title: p.title + ' (copy)', favorite:false, history:[], createdAt:t, updatedAt:t });
+  mutate(d => d.prompts.push(c)); openGen(c.id, { focus:false }); toast('Duplicated.');
+}
+async function deletePrompt(id) {
+  const p = byId(id); if (!p) return;
+  const ok = await ask({ title:`Delete “${p.title}”?`, body:'You can undo right after.', ok:'Delete', danger:true }); if (!ok) return;
+  const copy = JSON.parse(JSON.stringify(p));
+  mutate(d => { d.prompts = d.prompts.filter(x => x.id !== id); d.deleted[id] = now(); });
+  if (gen && gen.id === id) closeGen();
+  toast('Deleted.', { label:'Undo', run: () => { mutate(d => { copy.updatedAt = now(); delete d.deleted[id]; d.prompts.push(copy); }); openGen(id, { focus:false }); } });
+}
+async function renameShelf() {
+  if (!view.cat.startsWith('c:')) return; const old = view.cat.slice(2);
+  const v = await ask({ title:'Rename category', ok:'Rename', input: old }); if (v === null) return;
+  const nn = v.trim() || 'Uncategorized'; if (nn === old) return;
+  mutate(d => { d.prompts.forEach(p => { if (p.category === old) { p.category = nn; p.updatedAt = now(); } });
+    if (d.colors[old] && !d.colors[nn]) d.colors[nn] = d.colors[old]; });
+  view.cat = 'c:' + nn; render(); if (gen) renderGen();
+}
+function openHistory(id) {
+  const p = byId(id); if (!p) return;
+  $('#hist-body').innerHTML = p.history.length ? `<p class="muted" style="margin:0">Each time you save changes, the previous version is kept here (last ${HISTORY_MAX}).</p>` +
+    p.history.map((h, i) => `<div class="hrow"><div class="hrow-top"><strong>${esc(h.title)}</strong><span class="muted">${fmtTime(h.ts)}</span><button class="btn sm" data-action="restore" data-id="${esc(id)}" data-i="${i}">Restore</button></div><pre class="hpre">${esc(h.template)}</pre></div>`).join('')
+    : '<p class="muted">No earlier versions yet.</p>';
+  $('#history').showModal();
+}
+function restoreVersion(id, i) {
+  const h = (byId(id) || {}).history?.[i]; if (!h) return;
+  mutate(d => { const p = d.prompts.find(x => x.id === id);
+    p.history.unshift({ ts:p.updatedAt, title:p.title, category:p.category, description:p.description, template:p.template, fields:p.fields }); p.history = p.history.slice(0, HISTORY_MAX);
+    Object.assign(p, { title:h.title, category:h.category, description:h.description, template:h.template, fields:JSON.parse(JSON.stringify(h.fields || [])), updatedAt:now() }); });
+  $('#history').close(); if ($('#editor').open) $('#editor').close(); openGen(id, { focus:false }); toast('Restored.');
+}
+
+/* ======================================================================
+   Settings
+   ====================================================================== */
+function updateSyncSettings() {
+  $('#sync-explain').textContent = token()
+    ? 'A token is saved on this device. Edits here are committed to prompts.json in your repository, so every device sees them.'
+    : 'Anyone with the link and passcode can read and copy prompts. To save edits so they show up on every device, add a GitHub token on this one.';
+  const th = localStorage.getItem(LS.theme) || 'auto';
+  $$('#theme-seg button').forEach(b => b.classList.toggle('on', b.dataset.v === th));
+}
+function applyTheme(v) { if (v === 'light' || v === 'dark') document.documentElement.setAttribute('data-theme', v); else document.documentElement.removeAttribute('data-theme'); }
+function openSettings() { $('#token').value = ''; $('#token').placeholder = token() ? '•••••••• saved on this device' : 'github_pat_…'; $('#token-status').textContent = ''; updateSyncSettings(); $('#settings').showModal(); }
+function tokenMsg(t, cls) { const s = $('#token-status'); s.textContent = t; s.className = 'status-msg ' + (cls || ''); }
+async function testToken(t) {
+  const res = await fetch(`https://api.github.com/repos/${CFG.owner}/${CFG.repo}`, { headers: { 'Accept':'application/vnd.github+json', 'Authorization':'Bearer ' + t } });
+  if (res.status === 401) throw new Error('GitHub rejected that token.');
+  if (!res.ok) throw new Error('GitHub returned ' + res.status + '.');
+  const j = await res.json();
+  if (!j.permissions || !j.permissions.push) throw new Error('This token can read the repository but not write to it. Give it Contents: Read and write.');
+  return `Connected. This token can save to ${CFG.owner}/${CFG.repo}.`;
+}
+function exportJSON() {
+  const blob = new Blob([serialize()], { type:'application/json' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `prompt-library-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function importJSON(file) {
+  try {
+    const imported = normData(JSON.parse(await file.text())); imported.deleted = {};
+    if (!imported.prompts.length) return toast('That file has no prompts in it.');
+    const before = state.data.prompts.length;
+    mutate(d => { const m = mergeData(d, imported); d.prompts = m.prompts; });
+    toast(`Imported. ${state.data.prompts.length - before} new prompt${state.data.prompts.length - before === 1 ? '' : 's'} added.`);
+  } catch { toast('That file isn’t valid prompt JSON.'); }
+}
+
+/* ======================================================================
+   Events
+   ====================================================================== */
+document.addEventListener('click', async e => {
+  const menuBtn = e.target.closest('[data-menu]');
+  if (menuBtn) { const pop = menuBtn.parentElement.querySelector('.menu-pop'); closeMenus(pop); pop.hidden = !pop.hidden; return; }
+  if (!e.target.closest('.menu-pop')) closeMenus();
+  const a = e.target.closest('[data-action]');
+  if (a) {
+    const id = a.dataset.id, act = a.dataset.action;
+    if (a.closest('.menu-pop')) closeMenus();
+    switch (act) {
+      case 'new': openEditor(null); break;
+      case 'edit': openEditor(id); break;
+      case 'fav': e.stopPropagation(); toggleFav(id); break;
+      case 'quick': {
+        e.stopPropagation(); const p = byId(id); if (!p) break;
+        const out = buildOutput(p, initialValues(p));
+        if (out.missing) openGen(id);
+        else { const ok = await copyText(out.text); if (ok) { noteUse(id); toast(`Copied “${p.title}”.`); } else toast('Copy was blocked.'); }
+        break; }
+      case 'close-gen': closeGen(); break;
+      case 'copy': doCopy(); break;
+      case 'open-claude': openIn('claude'); break;
+      case 'open-chatgpt': openIn('chatgpt'); break;
+      case 'dup': dupPrompt(id); break;
+      case 'history': openHistory(id); break;
+      case 'restore': restoreVersion(id, +a.dataset.i); break;
+      case 'delete': deletePrompt(id); break;
+      case 'copy-link': { const ok = await copyText(location.origin + location.pathname + '#' + id); toast(ok ? 'Link copied.' : 'Copy was blocked.'); break; }
+      case 'clear-inputs': { const p = byId(gen.id); gen.values = Object.fromEntries(p.fields.map(f => [f.key, f.default || ''])); const all = jget(LS.inputs, {}); delete all[p.id]; jset(LS.inputs, all); renderGen(); break; }
+      case 'shelf': view.cat = a.dataset.cat; render(); $('#main').scrollTop = 0; break;
+      case 'rename-shelf': renameShelf(); break;
+      case 'clear-search': view.q = ''; $('#search').value = ''; renderList(); break;
+      case 'settings': openSettings(); break;
+      case 'sync-pill': if ($('#pill').dataset.kind === 'error' || $('#pill').dataset.kind === 'local' && token()) { scheduleSync(0); } else openSettings(); break;
+      case 'close-dialog': a.closest('dialog').close(); break;
+      case 'ed-save': saveEditor(); break;
+      case 'ed-cancel': tryCloseEditor(); break;
+      case 'ed-add-input': addInputAtCursor(); break;
+      case 'ed-delete': { const rid = ed.id; $('#editor').close(); deletePrompt(rid); break; }
+      case 'ed-history': openHistory(ed.id); break;
+      case 'theme': localStorage.setItem(LS.theme, a.dataset.v); applyTheme(a.dataset.v); updateSyncSettings(); break;
+      case 'save-token': {
+        const t = $('#token').value.trim(); if (!t) return tokenMsg('Paste a token first.', 'bad');
+        tokenMsg('Checking…');
+        try { const m = await testToken(t); sset(LS.token, t); tokenMsg(m, 'ok'); $('#token').value = ''; $('#token').placeholder = '•••••••• saved on this device'; updateSyncSettings(); if (isDirty()) scheduleSync(0); else { setSync(restingStatus()); refresh({ quiet:true }); } }
+        catch (err) { tokenMsg(err.message, 'bad'); }
+        break; }
+      case 'test-token': {
+        const t = $('#token').value.trim() || token(); if (!t) return tokenMsg('No token to test yet.', 'bad');
+        tokenMsg('Checking…'); try { tokenMsg(await testToken(t), 'ok'); } catch (err) { tokenMsg(err.message, 'bad'); }
+        break; }
+      case 'clear-token': sset(LS.token, ''); tokenMsg('Token removed from this device.', 'ok'); $('#token').placeholder = 'github_pat_…'; setSync(restingStatus()); updateSyncSettings(); break;
+      case 'refresh': await refresh(); toast('Refreshed.'); break;
+      case 'export': exportJSON(); break;
+      case 'import': $('#import-file').click(); break;
+      case 'forget-inputs': localStorage.removeItem(LS.inputs); if (gen) { const p = byId(gen.id); gen.values = Object.fromEntries(p.fields.map(f => [f.key, f.default || ''])); renderGen(); } toast('Remembered inputs cleared.'); break;
+      case 'lock': localStorage.removeItem(LS.unlocked); location.reload(); break;
+    }
+    return;
+  }
+  const card = e.target.closest('.card'); if (card) openGen(card.dataset.id);
+});
+document.addEventListener('keydown', e => {
+  const card = e.target.closest && e.target.closest('.card');
+  if (card && e.target === card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openGen(card.dataset.id); return; }
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName);
+  const anyDialog = $$('dialog').some(d => d.open);
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if ($('#editor').open) { e.preventDefault(); saveEditor(); } else if (gen && !anyDialog) { e.preventDefault(); doCopy(); }
+    return;
+  }
+  if (e.key === 'Escape') { if (!anyDialog) { closeMenus(); if (typing) document.activeElement.blur(); else if (gen) closeGen(); } return; }
+  if (typing || anyDialog || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === '/') { e.preventDefault(); $('#search').focus(); }
+  else if (e.key.toLowerCase() === 'n') { e.preventDefault(); openEditor(null); }
+});
+$('#search').addEventListener('input', e => { view.q = e.target.value; renderList(); });
+$('#sort').addEventListener('change', e => { view.sort = e.target.value; sset(LS.sort, view.sort); renderList(); });
+$('#gen').addEventListener('input', e => {
+  const k = e.target.dataset && e.target.dataset.key; if (!k || !gen) return;
+  gen.values[k] = e.target.value; updateSheet(); saveInputsSoon();
+});
+$('#ed-tpl').addEventListener('input', debounce(() => { $('#ed-tpl').classList.remove('invalid'); syncRows(); }, 180));
+$('#ed-title').addEventListener('input', e => e.target.classList.remove('invalid'));
+$('#ed-fields').addEventListener('input', e => {
+  const row = e.target.closest('.frow'); if (!row) return; const f = ed.fields[row.dataset.key], prop = e.target.dataset.prop; if (!f || !prop) return;
+  if (prop === 'required') f.required = e.target.checked;
+  else if (prop === 'options') f.options = e.target.value.split(',');
+  else if (prop === 'type') { f.type = e.target.value; row.dataset.type = f.type; }
+  else f[prop] = e.target.value;
+});
+$('#editor').addEventListener('cancel', e => { e.preventDefault(); tryCloseEditor(); });
+$('#import-file').addEventListener('change', e => { const f = e.target.files[0]; if (f) importJSON(f); e.target.value = ''; });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('#app').hidden && !isDirty() && !syncing) refresh({ quiet:true }); });
+window.addEventListener('online', () => { if (isDirty()) scheduleSync(0); });
+
+/* ======================================================================
+   Boot + passcode
+   ====================================================================== */
+async function boot() {
+  $('#app').hidden = false; hydrateIcons();
+  const cached = jget(LS.cache, null);
+  if (cached && cached.data) { state.data = normData(cached.data); state.sha = cached.sha || null; }
+  setSync('loading'); render();
+  await refresh({ quiet: !!cached });
+  const h = location.hash.slice(1); if (h && byId(h)) openGen(h, { focus:false });
+}
+function unlock() { $('#lock').hidden = true; boot(); }
+applyTheme(localStorage.getItem(LS.theme) || 'auto');
+if (sget(LS.unlocked) === '1') unlock();
+else {
+  const inp = $('#lock-input'); inp.focus();
+  inp.addEventListener('input', () => {
+    inp.value = inp.value.replace(/\D/g, '');
+    if (inp.value.length < 4) { $('#lock-err').textContent = ''; return; }
+    if (inp.value === CFG.passcode) { sset(LS.unlocked, '1'); unlock(); }
+    else { $('#lock-err').textContent = 'That passcode isn’t right.'; const l = $('#lock'); l.classList.remove('shake'); void l.offsetWidth; l.classList.add('shake'); inp.value = ''; }
+  });
+}
+hydrateIcons();
+})();
+</script>
+</body>
+</html>
