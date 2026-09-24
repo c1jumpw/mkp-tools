@@ -1,22 +1,21 @@
 /**
  * =============================================================================
  * FILE: src/lib/notesParsing.js
- * VERSION: v6 (previously v1-v5 — see REVISION HISTORY below)
+ * VERSION: v7 (previously v1-v6 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Parses the raw text of a notepad entry (see NotesPanel.jsx) into a
  *   display-friendly shape (a topic/heading line + bullet detail lines),
  *   splits one big multi-topic paste into several separate notes, and
- *   implements the live "outline typing" shortcut (dash/star/topic-
- *   separator auto-continuation as the user presses Enter).
+ *   implements the live "outline typing" shortcuts (Enter-key continuation
+ *   and Space-key level-flipping, both described below).
  *
  * WHY PARSING HAPPENS HERE, NOT IN THE DATABASE
  *   A note's `content` column (see supabase/migrations/003_notes.sql) stores
  *   exactly what the user typed — no structured topic/bullets columns.
  *   Parsing it into topic+bullets is purely a DISPLAY concern, done fresh
- *   every render from the raw text. This means the parsing logic can be
- *   tuned later without a database migration or touching any already-saved
- *   note — old notes just render differently the next time this logic changes.
+ *   every render from the raw text, so this logic can be tuned later
+ *   without a database migration or touching any already-saved note.
  *
  * FUNCTIONS IN THIS FILE
  *   - splitIntoTopics(): runs ONCE, when a note is first captured, to turn
@@ -24,63 +23,71 @@
  *     off with "--)".
  *   - parseNoteDisplay(): runs on EVERY render of an already-saved note, to
  *     turn its content into a heading + bullet list for display.
- *   - computeBulletContinuation() / applyBulletAutoContinue(): the LIVE
- *     TYPING SHORTCUT — see the OUTLINE TYPING SHORTCUT section below for
- *     the full rules. Unlike the v1-v5 version of this shortcut, this one
- *     requires PERSISTENT STATE across multiple keystrokes (a single
- *     line's text alone can't tell you "this is the 2nd consecutive blank
- *     Enter in a row") — see WHY THIS NEEDS A STATE REF below.
+ *   - computeBulletContinuation() / applyBulletAutoContinue(): the ENTER
+ *     KEY shortcut — see OUTLINE TYPING SHORTCUTS below.
+ *   - computeSpaceFlip() / applySpaceFlip(): the SPACE KEY shortcut — see
+ *     OUTLINE TYPING SHORTCUTS below.
  *
- * OUTLINE TYPING SHORTCUT (v6 — full rewrite, see REVISION HISTORY)
+ * OUTLINE TYPING SHORTCUTS (v7 — full rewrite, see REVISION HISTORY)
  *   The convention: "-" lines are topics, "*" lines are supporting details
  *   under a topic, and "--)" separates one note's content from a new one.
- *   "Skipping" means pressing Enter without typing anything on the current
- *   (already-blank-or-bare-marker) line — i.e. a deliberate blank Enter,
- *   as opposed to finishing a line that has real typed content on it.
+ *   Two INDEPENDENT keys drive two INDEPENDENT mechanisms:
  *
- *   1. Typing real content and pressing Enter ALWAYS continues at the
- *      level of the line just finished: a line starting with "*" continues
- *      with another "*"; anything else (a "-" line, or a plain line with
- *      no marker at all, e.g. a title) continues with "-". This is what
- *      keeps normal fast typing of many consecutive "*" detail lines
- *      fluid — see WHY NORMAL TYPING STAYS FAST below.
- *   2. Skipping TWICE in a row on a bare "-" line converts the next line
- *      to "*".
- *   3. Skipping ONCE on a bare "*" line keeps it "*" (another star).
- *   4. Skipping TWICE in a row on a bare "*" line converts the next line
- *      back to "-".
- *   5. Skipping THREE times in a row, from anywhere, overrides whatever
- *      rules 2-4 would have produced at that point and instead leaves one
- *      blank line followed by "--) " — starting a brand new topic/note.
+ *   ENTER ("skipping" = pressing Enter on an already-blank/bare-marker
+ *   line, i.e. without typing anything first):
+ *     1. Typing real content and pressing Enter continues at the level of
+ *        the line just finished: a line starting with "*" continues with
+ *        another "*"; anything else (a "-" line, or plain text with no
+ *        marker at all, e.g. a title) continues with "-". This is what
+ *        keeps fast typing of many consecutive "*" lines fluid — see WHY
+ *        NORMAL TYPING STAYS FAST below.
+ *     2. Skipping ONCE holds at whatever level the just-left bare line
+ *        already was: from a bare "-" (or a truly empty line), the next
+ *        line is "-"; from a bare "*", the next line is "*".
+ *     3. Skipping a SECOND time in a row (still nothing typed) overrides
+ *        rule 2's result and instead leaves one blank line followed by
+ *        "--) " — starting a brand new topic/note, regardless of which
+ *        level the skips started from ("from anywhere").
  *
- * WHY NORMAL TYPING STAYS FAST (rule 1) DESPITE RULES 2-5 REQUIRING 2-3
- * BLANK PRESSES
- *   Rules 2-5 only ever fire when the CURRENT line is already blank or a
+ *   SPACE (pressed while the CURRENT line is nothing but a bare "-" or "*"
+ *   marker — this shortcut does NOT fire on lines with any other content,
+ *   so it never hijacks an ordinary double space typed mid-sentence):
+ *     - Two consecutive space presses on a bare "-" line flip it to "*".
+ *     - Two consecutive space presses on a bare "*" line flip it to "-".
+ *     A single space press is absorbed normally (inserted as a plain
+ *     space) — only the SECOND consecutive press triggers the flip,
+ *     replacing the line's content with the flipped marker and discarding
+ *     any accumulated extra whitespace.
+ *
+ * WHY NORMAL TYPING STAYS FAST (rule 1) DESPITE ENTER'S SKIP RULES
+ *   Rules 2-3 only ever fire when the CURRENT line is already blank or a
  *   bare marker — i.e. only during a deliberate sequence of blank Enters.
  *   The moment real content is typed on any line, rule 1 takes over again
- *   and the skip counter resets to zero. So writing many "*" lines back to
- *   back (typing content on each, pressing Enter normally each time) never
- *   touches rules 2-5 at all — the 2-3-skip cost is only paid at the
- *   deliberate moments of switching levels or starting a new topic, e.g.:
- *     "- Hive work from call" [Enter]           -> rule 1: another "-"
- *     [Enter] (blank, skip 1)                    -> rule: stays "-" (holding)
- *     [Enter] (blank, skip 2)                     -> rule 2: becomes "*"
- *     "summarize call" [Enter]                    -> rule 1: another "*"
- *     "get plan for reviews" [Enter]               -> rule 1: another "*"
- *     "Google ads fix" [Enter]                      -> rule 1: another "*"
- *     [Enter][Enter][Enter] (blank, skip 1,2,3)      -> rule 5: "--) " (new topic)
+ *   and the skip counter resets to zero. Level-switching (dash<->star) now
+ *   happens via the SEPARATE Space-key mechanism, not via Enter at all —
+ *   so writing many "*" lines back to back (typing content, Enter, typing
+ *   content, Enter...) never touches the Enter skip-counting at all.
+ *   Example full sequence:
+ *     "- Hive work from call" [Enter]  -> rule 1: another "-"
+ *     [space][space] (on that bare "-")  -> flips to "*"
+ *     "summarize call" [Enter]            -> rule 1: another "*"
+ *     "get plan for reviews" [Enter]        -> rule 1: another "*"
+ *     "Google ads fix" [Enter]               -> rule 1: another "*"
+ *     [Enter][Enter] (blank, skip 1, skip 2)   -> rule 3: "--) " (new topic)
  *
- * WHY THIS NEEDS A STATE REF (unlike v1-v5's stateless decideBulletAction)
- *   "This is the 2nd consecutive blank Enter" cannot be determined from the
- *   current line's text alone — after the first blank Enter, the line just
- *   looks like a bare "-" or "*" either way, identical to before any skips
- *   happened. applyBulletAutoContinue() therefore takes a `skipStateRef` —
- *   a plain mutable ref (NOT React state, to avoid a re-render on every
- *   keystroke) holding { streak, fromLevel } — that the CALLER (NotesPanel)
- *   owns and must reset whenever the "typing session" changes (e.g.
- *   switching which note is being edited, or clearing the capture box
- *   after a successful Add) — seeing NotesPanel.jsx's usage for exactly
- *   where those resets happen.
+ * WHY BOTH MECHANISMS NEED STATE REFS (unlike a fully stateless design)
+ *   "This is the 2nd consecutive blank Enter" (or space press) cannot be
+ *   determined from the current line's text alone — after the first blank
+ *   Enter, or the first extra space, the line's TRIMMED content looks
+ *   identical to before that keypress happened. Both
+ *   applyBulletAutoContinue() and applySpaceFlip() therefore take a
+ *   caller-owned mutable ref (NOT React state, to avoid a re-render on
+ *   every keystroke) — see NotesPanel.jsx for where these refs live and
+ *   get reset (switching notes, clearing the capture box, etc).
+ *   applySpaceFlip() additionally self-resets its own ref whenever a
+ *   NON-space key is pressed (including Enter) — see its own comment —
+ *   so "two spaces IN A ROW" genuinely means consecutive, not "two spaces
+ *   at some point with other typing in between".
  *
  * REVISION HISTORY
  *   v1 (initial build) — displayed/documented the em-dash "—)" as the
@@ -92,23 +99,21 @@
  *       immediately continued with "*"/"*" respectively; a single blank
  *       Enter reset to a new "-".
  *   v4 — decideBulletAction() recognized a line ending in ":" as a title.
- *   v5 — loosened that to an isFirstLine flag, since a title extended past
- *       the colon no longer ended in ':'.
- *   v6 (this version) — full rewrite per user's detailed 5-rule spec,
- *       explicitly confirmed to REPLACE the old single-Enter dash->star
- *       behavior with a 2-skip threshold (see OUTLINE TYPING SHORTCUT
- *       above), plus new star-hold/star-to-dash/3-skip-topic-separator
- *       rules. Requires the new stateful skipStateRef mechanism (see WHY
- *       THIS NEEDS A STATE REF above) since multi-press counting can't be
- *       derived from a single line's text. decideBulletAction() (stateless,
- *       first-line/colon based) is REMOVED — computeBulletContinuation()
- *       replaces it entirely, including subsuming the old isFirstLine
- *       title-line behavior (a title with no marker at all still defaults
- *       to "-" under the new rule 1, with no special-casing needed).
- *       Verified the full state machine standalone across 8 sequences,
- *       including a full reproduction of the user's own reference note's
- *       structure end-to-end (title -> dash topic -> 2 skips -> star ->
- *       three fluidly-typed star details -> 3 skips -> new topic).
+ *   v5 — loosened that to an isFirstLine flag.
+ *   v6 — full rewrite to a stateful Enter-only model: 2 skips from a bare
+ *       "-" converted to "*", 1 skip from a bare "*" held "*", 2 skips
+ *       from a bare "*" converted back to "-", 3 skips from anywhere gave
+ *       the topic separator.
+ *   v7 (this version) — per further correction, the level-switching
+ *       (dash<->star) mechanism moved ENTIRELY off of Enter and onto a NEW
+ *       Space-key gesture (computeSpaceFlip/applySpaceFlip): two
+ *       consecutive spaces on a bare marker flips it in place. Enter's own
+ *       rules simplified correspondingly: skipping once now just HOLDS
+ *       whatever level the bare line already is (reading it fresh from the
+ *       line's own character each time, no persisted "fromLevel" needed
+ *       across presses), and skipping a 2nd time in a row (not a 3rd)
+ *       triggers the topic separator. Verified both mechanisms' full
+ *       decision tables standalone against every described rule.
  * =============================================================================
  */
 
@@ -167,27 +172,27 @@ export function parseNoteDisplay(content) {
   }
 }
 
-// A line counts as "blank" for skip-counting purposes if it's genuinely
-// empty, or is a bare marker with nothing typed after it (the state a line
-// is left in right after this module auto-inserts "- " or "* ").
+// A line counts as "blank" for Enter skip-counting purposes if it's
+// genuinely empty, or is a bare marker with nothing typed after it (the
+// state a line is left in right after this module auto-inserts "- " or "* ").
 function isBlankOrBareMarker(trimmed) {
   return trimmed === '' || trimmed === '-' || trimmed === '*'
 }
 
 /**
- * The pure decision core of the outline typing shortcut — see this file's
- * header OUTLINE TYPING SHORTCUT section for the full rule set. Kept
+ * The pure decision core of the ENTER-key shortcut — see this file's
+ * header OUTLINE TYPING SHORTCUTS section for the full rule set. Kept
  * separate from applyBulletAutoContinue() (which touches the DOM) so the
  * decision table itself can be tested without a real textarea element.
  *
  * @param {string} currentLineTrimmed - trimmed text of the line about to
  *   be "finished" by the Enter press.
- * @param {{streak: number, fromLevel: 'dash'|'star'|null}} skipState - the
- *   caller's current skip-tracking state (see WHY THIS NEEDS A STATE REF).
+ * @param {{streak: number}} skipState - the caller's current Enter
+ *   skip-tracking state.
  * @returns {{
  *   mode: 'append'|'replace',
  *   insertText: string,
- *   nextSkipState: {streak: number, fromLevel: 'dash'|'star'|null}
+ *   nextSkipState: {streak: number}
  * }}
  *   mode 'append': keep the current line's content as-is and add a new
  *     line after it (used when the current line has real content).
@@ -205,51 +210,35 @@ export function computeBulletContinuation(currentLineTrimmed, skipState) {
     return {
       mode: 'append',
       insertText: level === 'star' ? '* ' : '- ',
-      nextSkipState: { streak: 0, fromLevel: null },
+      nextSkipState: { streak: 0 },
     }
   }
 
-  // This Enter is a "skip" (blank or bare-marker line). Determine which
-  // level we're skip-navigating FROM: if this is the first skip in a new
-  // streak, read it off the current bare marker itself (a lone "*" means
-  // we were in star context; anything else, including a truly empty line,
-  // defaults to dash context); if we're already mid-streak, keep the
-  // level the streak started with.
+  // This Enter is a "skip" (blank or bare-marker line).
   const newStreak = skipState.streak + 1
-  const fromLevel = skipState.streak === 0
-    ? (currentLineTrimmed === '*' ? 'star' : 'dash')
-    : skipState.fromLevel
 
-  // Rule 5 takes priority over rules 2-4 once triggered: a 3rd consecutive
-  // skip overrides whatever the 2nd skip just produced (e.g. a star from
-  // rule 2) with the new-topic separator instead.
-  if (newStreak >= 3) {
-    return { mode: 'replace', insertText: '--) ', nextSkipState: { streak: 0, fromLevel: null } }
+  // Rule 3: a 2nd consecutive skip overrides rule 2's result with the
+  // new-topic separator, regardless of which level the skips started from.
+  if (newStreak >= 2) {
+    return { mode: 'replace', insertText: '--) ', nextSkipState: { streak: 0 } }
   }
-  if (fromLevel === 'dash') {
-    // Rule 2: 1st skip holds at "-" (waiting to see if a 2nd skip comes);
-    // 2nd skip converts to "*".
-    return {
-      mode: 'replace',
-      insertText: newStreak === 1 ? '- ' : '* ',
-      nextSkipState: { streak: newStreak, fromLevel: 'dash' },
-    }
-  }
-  // fromLevel === 'star'. Rule 3: 1st skip -> another "*". Rule 4: 2nd
-  // skip -> "-".
+
+  // Rule 2 (1st skip): hold at whatever level the CURRENT bare line
+  // already shows — read fresh from its own character each time, no
+  // memory of "which level we started from" needed across presses.
+  const level = currentLineTrimmed === '*' ? 'star' : 'dash'
   return {
     mode: 'replace',
-    insertText: newStreak === 1 ? '* ' : '- ',
-    nextSkipState: { streak: newStreak, fromLevel: 'star' },
+    insertText: level === 'star' ? '* ' : '- ',
+    nextSkipState: { streak: newStreak },
   }
 }
 
 /**
- * Textarea onKeyDown handler implementing the outline typing shortcut —
- * call this as `onKeyDown={(e) => applyBulletAutoContinue(e, setMyText,
- * mySkipStateRef)}`. Used by both NotesPanel's capture box and its
- * full-screen note editor overlay, each with their OWN skipStateRef (see
- * this file's header WHY THIS NEEDS A STATE REF).
+ * Textarea onKeyDown handler implementing the ENTER-key shortcut — call as
+ * `onKeyDown={(e) => applyBulletAutoContinue(e, setMyText, mySkipStateRef)}`.
+ * Used by both NotesPanel's capture box and its full-screen note editor
+ * overlay, each with their OWN skipStateRef.
  *
  * WHY THIS NEEDS TO PREVENT DEFAULT AND MANUALLY REBUILD THE VALUE
  *   A textarea's default Enter behavior just inserts a bare "\n". To insert
@@ -265,7 +254,7 @@ export function computeBulletContinuation(currentLineTrimmed, skipState) {
  *
  * @param {React.KeyboardEvent} e - must be from a <textarea>.
  * @param {(newValue: string) => void} setValue - the controlling state setter.
- * @param {React.MutableRefObject<{streak: number, fromLevel: string|null}>} skipStateRef
+ * @param {React.MutableRefObject<{streak: number}>} skipStateRef
  */
 export function applyBulletAutoContinue(e, setValue, skipStateRef) {
   if (e.key !== 'Enter') return
@@ -292,6 +281,93 @@ export function applyBulletAutoContinue(e, setValue, skipStateRef) {
     newCursor = beforeCursor.length + 1 + result.insertText.length
   }
 
+  setValue(newValue)
+  requestAnimationFrame(() => {
+    el.selectionStart = el.selectionEnd = newCursor
+  })
+}
+
+/**
+ * The pure decision core of the SPACE-key shortcut — see this file's
+ * header OUTLINE TYPING SHORTCUTS section. Only applies when the line is
+ * NOTHING BUT a bare "-" or "*" marker (deliberately narrow — this must
+ * never hijack an ordinary double space typed in the middle of a sentence
+ * on a "-"/"*" line that already has real content).
+ * @param {string} currentLineTrimmed
+ * @returns {string|null} the flipped marker text (e.g. '* ') to replace
+ *   the line with, or null if this line isn't a bare single marker at all
+ *   (the shortcut doesn't apply — caller should let the space insert
+ *   normally and reset its streak).
+ */
+export function computeSpaceFlip(currentLineTrimmed) {
+  if (currentLineTrimmed === '-') return '* '
+  if (currentLineTrimmed === '*') return '- '
+  return null
+}
+
+/**
+ * Textarea onKeyDown handler implementing the SPACE-key shortcut — call as
+ * `onKeyDown={(e) => applySpaceFlip(e, setMyText, mySpaceStateRef)}`
+ * ALONGSIDE applyBulletAutoContinue (both attached to the same textarea's
+ * onKeyDown; each internally ignores keys it doesn't care about, so
+ * calling both unconditionally on every keydown is safe — they only ever
+ * mutate state for their own respective key, Enter vs Space).
+ *
+ * SELF-RESETTING ON ANY NON-SPACE KEY
+ *   Unlike applyBulletAutoContinue (whose skip-state naturally resets via
+ *   computeBulletContinuation's own branching once real content exists),
+ *   this function's "two consecutive spaces" streak has no such natural
+ *   text-based reset — pressing Enter, then a letter, then backspace, etc.
+ *   would otherwise leave a stale streak=1 lying around to be
+ *   (incorrectly) completed by some LATER unrelated space press. So this
+ *   function explicitly resets its own ref to 0 on the very first line
+ *   whenever the pressed key isn't a space at all.
+ *
+ * @param {React.KeyboardEvent} e - must be from a <textarea>.
+ * @param {(newValue: string) => void} setValue - the controlling state setter.
+ * @param {React.MutableRefObject<number>} spaceStateRef - consecutive
+ *   space-press count (a plain number, not an object — simpler than the
+ *   Enter mechanism's state since there's no "which level" to remember).
+ */
+export function applySpaceFlip(e, setValue, spaceStateRef) {
+  if (e.key !== ' ') {
+    spaceStateRef.current = 0
+    return
+  }
+
+  const el = e.target
+  const cursor = el.selectionStart
+  const value = el.value
+  const beforeCursor = value.slice(0, cursor)
+  const afterCursor = value.slice(cursor)
+  const lineStart = beforeCursor.lastIndexOf('\n') + 1
+  const currentLine = beforeCursor.slice(lineStart)
+  const flipTo = computeSpaceFlip(currentLine.trim())
+
+  if (flipTo === null) {
+    // Not a bare single marker — this isn't a shortcut candidate at all;
+    // let the space insert normally and reset (an ordinary space typed
+    // mid-sentence must never accidentally count toward a future flip).
+    spaceStateRef.current = 0
+    return
+  }
+
+  const newStreak = spaceStateRef.current + 1
+  if (newStreak < 2) {
+    // First space on this bare line: hold, let it insert normally (trim()
+    // in computeSpaceFlip already ignores trailing whitespace, so the
+    // line still reads as a bare marker on the next press regardless of
+    // how many literal space characters have accumulated).
+    spaceStateRef.current = newStreak
+    return
+  }
+
+  // Second consecutive space: flip the marker, discarding any
+  // accumulated extra whitespace by replacing the whole line's content.
+  e.preventDefault()
+  const newValue = value.slice(0, lineStart) + flipTo + afterCursor
+  const newCursor = lineStart + flipTo.length
+  spaceStateRef.current = 0
   setValue(newValue)
   requestAnimationFrame(() => {
     el.selectionStart = el.selectionEnd = newCursor

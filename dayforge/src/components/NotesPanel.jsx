@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v15 (previously v1-v14 — see REVISION HISTORY below)
+ * VERSION: v16 (previously v1-v15 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -132,11 +132,23 @@
  *       the date auto-fill starts a fresh session and after a successful
  *       Add clears the box. Also updated the on-screen tip text, which
  *       described the old single-skip behavior.
+ *   v16 (this version) — per further correction, level-switching moved
+ *       entirely off Enter and onto a NEW Space-key gesture (two
+ *       consecutive spaces on a bare "-"/"*" flips it — see
+ *       lib/notesParsing.js v7's applySpaceFlip). Enter's own rules
+ *       simplified to match: 1 skip just holds the current bare line's
+ *       level, 2 skips (not 3) trigger the "--) " topic separator. Added
+ *       two more refs (draftSpaceStateRef, editSpaceStateRef) alongside
+ *       the existing Enter-skip refs, reset at the same moments (note
+ *       switched, capture session started/cleared). Both onKeyDown
+ *       handlers now call applyBulletAutoContinue AND applySpaceFlip
+ *       together — safe to call both unconditionally since each ignores
+ *       keys it doesn't care about (mutually exclusive on e.key).
  * =============================================================================
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { splitIntoTopics, parseNoteDisplay, applyBulletAutoContinue } from '../lib/notesParsing'
+import { splitIntoTopics, parseNoteDisplay, applyBulletAutoContinue, applySpaceFlip } from '../lib/notesParsing'
 import { NOTE_COLORS, getNoteColorHex, hexToRgba } from '../lib/noteColors'
 import { linkifyText } from '../lib/linkify'
 import { useAutosave } from '../hooks/useAutosave'
@@ -178,22 +190,28 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   const [colorPickerId, setColorPickerId] = useState(null) // note id whose color swatch picker is open
   const [search, setSearch] = useState('')
 
-  // Skip-tracking state for the outline typing shortcut (see
-  // lib/notesParsing.js's applyBulletAutoContinue / computeBulletContinuation
-  // and this file's header OUTLINE TYPING SHORTCUT section) — TWO
-  // independent refs, one per textarea, since the capture box and the
-  // note editor are separate typing sessions that must not share a skip
-  // streak. Plain refs (not React state) since updating on every keystroke
-  // as state would trigger a re-render each time for no visual benefit —
-  // this counter has no direct UI representation of its own.
-  const draftSkipStateRef = useRef({ streak: 0, fromLevel: null })
-  const editSkipStateRef = useRef({ streak: 0, fromLevel: null })
+  // Skip-tracking state for the ENTER-key outline shortcut (see
+  // lib/notesParsing.js's applyBulletAutoContinue/computeBulletContinuation)
+  // — TWO independent refs, one per textarea, since the capture box and
+  // the note editor are separate typing sessions that must not share a
+  // skip streak. Plain refs (not React state) since updating on every
+  // keystroke as state would trigger a re-render each time for no visual
+  // benefit — these counters have no direct UI representation of their own.
+  const draftSkipStateRef = useRef({ streak: 0 })
+  const editSkipStateRef = useRef({ streak: 0 })
 
-  // Reset the editor's skip streak whenever a DIFFERENT note starts being
-  // edited (or the editor closes) — a streak from the previously-open note
-  // must not carry over and affect a freshly-opened one.
+  // Separate tracking for the SPACE-key level-flip shortcut (see
+  // applySpaceFlip) — a plain number (consecutive space-press count), also
+  // one per textarea for the same reason as the Enter refs above.
+  const draftSpaceStateRef = useRef(0)
+  const editSpaceStateRef = useRef(0)
+
+  // Reset the editor's Enter/Space streaks whenever a DIFFERENT note starts
+  // being edited (or the editor closes) — a streak from the previously-open
+  // note must not carry over and affect a freshly-opened one.
   useEffect(() => {
-    editSkipStateRef.current = { streak: 0, fromLevel: null }
+    editSkipStateRef.current = { streak: 0 }
+    editSpaceStateRef.current = 0
   }, [editingId])
 
   // Search applies first (against the raw content — matches whatever the
@@ -250,7 +268,8 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
     if (draft) return
     const label = todayDateLabel() + ':'
     setDraft(label)
-    draftSkipStateRef.current = { streak: 0, fromLevel: null }
+    draftSkipStateRef.current = { streak: 0 }
+    draftSpaceStateRef.current = 0
     requestAnimationFrame(() => {
       if (draftRef.current) {
         draftRef.current.selectionStart = draftRef.current.selectionEnd = label.length
@@ -267,8 +286,9 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
       if (topics.length) await onAddBulk(topics)
       setDraft('')
       // A successful Add ends this typing session — the next thing typed
-      // into the (now-empty) box starts a fresh skip streak.
-      draftSkipStateRef.current = { streak: 0, fromLevel: null }
+      // into the (now-empty) box starts a fresh streak for both shortcuts.
+      draftSkipStateRef.current = { streak: 0 }
+      draftSpaceStateRef.current = 0
     } catch (err) {
       setError('Could not save: ' + (err.message || 'unknown error'))
     } finally {
@@ -335,7 +355,10 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={handleCaptureFocus}
-          onKeyDown={(e) => applyBulletAutoContinue(e, setDraft, draftSkipStateRef)}
+          onKeyDown={(e) => {
+            applyBulletAutoContinue(e, setDraft, draftSkipStateRef)
+            applySpaceFlip(e, setDraft, draftSpaceStateRef)
+          }}
           rows={4}
           placeholder={'Jot anything… start a new topic mid-thought with --)\n\nGroceries\n- milk\n- eggs --) Doctor appt\n- follow up with insurance'}
           className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-2 text-sm mb-2 resize-none focus:border-[var(--color-ember)] outline-none"
@@ -343,7 +366,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
         <div className="flex items-center justify-between mb-4">
           <p className="text-[10px] text-[var(--color-muted)]">
             Tip: separate unrelated topics with <span className="[font-family:var(--font-mono)]">--)</span> — each becomes its own note.
-            Skip a line twice after <span className="[font-family:var(--font-mono)]">-</span> for <span className="[font-family:var(--font-mono)]">*</span> details, twice after <span className="[font-family:var(--font-mono)]">*</span> for a new <span className="[font-family:var(--font-mono)]">-</span>, or three times for a new topic.
+            Space-space on a bare <span className="[font-family:var(--font-mono)]">-</span> or <span className="[font-family:var(--font-mono)]">*</span> flips it; skip a line twice for a new topic (<span className="[font-family:var(--font-mono)]">--)</span>).
           </p>
           <button
             onClick={handleCapture}
@@ -577,7 +600,10 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={(e) => applyBulletAutoContinue(e, setEditText, editSkipStateRef)}
+            onKeyDown={(e) => {
+              applyBulletAutoContinue(e, setEditText, editSkipStateRef)
+              applySpaceFlip(e, setEditText, editSpaceStateRef)
+            }}
             autoFocus
             className="flex-1 w-full bg-[var(--color-ink)] text-[var(--color-paper)] p-4 text-base resize-none outline-none"
           />
