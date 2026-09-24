@@ -1,78 +1,114 @@
 /**
  * =============================================================================
  * FILE: src/lib/notesParsing.js
- * VERSION: v5 (previously v1-v4 — see REVISION HISTORY below)
+ * VERSION: v6 (previously v1-v5 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   Parses the raw text of a notepad entry (see NotesPanel.jsx) into a
- *   display-friendly shape (a topic/heading line + bullet detail lines), and
- *   splits one big multi-topic paste into several separate notes.
+ *   display-friendly shape (a topic/heading line + bullet detail lines),
+ *   splits one big multi-topic paste into several separate notes, and
+ *   implements the live "outline typing" shortcut (dash/star/topic-
+ *   separator auto-continuation as the user presses Enter).
  *
  * WHY PARSING HAPPENS HERE, NOT IN THE DATABASE
  *   A note's `content` column (see supabase/migrations/003_notes.sql) stores
  *   exactly what the user typed — no structured topic/bullets columns.
  *   Parsing it into topic+bullets is purely a DISPLAY concern, done fresh
  *   every render from the raw text. This means the parsing logic can be
- *   tuned later (e.g. recognizing another bullet character, or a different
- *   topic-separator convention) without a database migration or touching
- *   any already-saved note — old notes just render differently the next
- *   time this function's logic changes.
+ *   tuned later without a database migration or touching any already-saved
+ *   note — old notes just render differently the next time this logic changes.
  *
- * TWO SEPARATE FUNCTIONS FOR TWO SEPARATE MOMENTS
+ * FUNCTIONS IN THIS FILE
  *   - splitIntoTopics(): runs ONCE, when a note is first captured, to turn
- *     one big multi-topic paste into several separate note ROWS (matching
- *     how the user described writing — one continuous stream covering
- *     several unrelated topics, marked off with "--)").
+ *     one big multi-topic paste into several separate note ROWS, marked
+ *     off with "--)".
  *   - parseNoteDisplay(): runs on EVERY render of an already-saved note, to
- *     turn its (now single-topic) content into a heading + bullet list for
- *     display. A saved note is expected to already be single-topic by the
- *     time this runs (splitIntoTopics happened at capture time), but this
- *     function doesn't assume that — if a note somehow still contains a
- *     "--)" marker (e.g. pasted directly via an edit rather than the normal
- *     capture flow), it simply renders the whole thing as one topic's lines;
- *     it does not re-split on this function's own initiative, since editing
- *     an existing note should not silently multiply it into several notes.
- *   - applyBulletAutoContinue(): a LIVE TYPING AID (not a parsing function
- *     at all — grouped in this file since it encodes the same "-"/"*"
- *     writing convention). Intercepts the Enter key in a note textarea to
- *     auto-continue the user's own dash/star hierarchy — see its own doc
- *     comment for the exact rules.
+ *     turn its content into a heading + bullet list for display.
+ *   - computeBulletContinuation() / applyBulletAutoContinue(): the LIVE
+ *     TYPING SHORTCUT — see the OUTLINE TYPING SHORTCUT section below for
+ *     the full rules. Unlike the v1-v5 version of this shortcut, this one
+ *     requires PERSISTENT STATE across multiple keystrokes (a single
+ *     line's text alone can't tell you "this is the 2nd consecutive blank
+ *     Enter in a row") — see WHY THIS NEEDS A STATE REF below.
+ *
+ * OUTLINE TYPING SHORTCUT (v6 — full rewrite, see REVISION HISTORY)
+ *   The convention: "-" lines are topics, "*" lines are supporting details
+ *   under a topic, and "--)" separates one note's content from a new one.
+ *   "Skipping" means pressing Enter without typing anything on the current
+ *   (already-blank-or-bare-marker) line — i.e. a deliberate blank Enter,
+ *   as opposed to finishing a line that has real typed content on it.
+ *
+ *   1. Typing real content and pressing Enter ALWAYS continues at the
+ *      level of the line just finished: a line starting with "*" continues
+ *      with another "*"; anything else (a "-" line, or a plain line with
+ *      no marker at all, e.g. a title) continues with "-". This is what
+ *      keeps normal fast typing of many consecutive "*" detail lines
+ *      fluid — see WHY NORMAL TYPING STAYS FAST below.
+ *   2. Skipping TWICE in a row on a bare "-" line converts the next line
+ *      to "*".
+ *   3. Skipping ONCE on a bare "*" line keeps it "*" (another star).
+ *   4. Skipping TWICE in a row on a bare "*" line converts the next line
+ *      back to "-".
+ *   5. Skipping THREE times in a row, from anywhere, overrides whatever
+ *      rules 2-4 would have produced at that point and instead leaves one
+ *      blank line followed by "--) " — starting a brand new topic/note.
+ *
+ * WHY NORMAL TYPING STAYS FAST (rule 1) DESPITE RULES 2-5 REQUIRING 2-3
+ * BLANK PRESSES
+ *   Rules 2-5 only ever fire when the CURRENT line is already blank or a
+ *   bare marker — i.e. only during a deliberate sequence of blank Enters.
+ *   The moment real content is typed on any line, rule 1 takes over again
+ *   and the skip counter resets to zero. So writing many "*" lines back to
+ *   back (typing content on each, pressing Enter normally each time) never
+ *   touches rules 2-5 at all — the 2-3-skip cost is only paid at the
+ *   deliberate moments of switching levels or starting a new topic, e.g.:
+ *     "- Hive work from call" [Enter]           -> rule 1: another "-"
+ *     [Enter] (blank, skip 1)                    -> rule: stays "-" (holding)
+ *     [Enter] (blank, skip 2)                     -> rule 2: becomes "*"
+ *     "summarize call" [Enter]                    -> rule 1: another "*"
+ *     "get plan for reviews" [Enter]               -> rule 1: another "*"
+ *     "Google ads fix" [Enter]                      -> rule 1: another "*"
+ *     [Enter][Enter][Enter] (blank, skip 1,2,3)      -> rule 5: "--) " (new topic)
+ *
+ * WHY THIS NEEDS A STATE REF (unlike v1-v5's stateless decideBulletAction)
+ *   "This is the 2nd consecutive blank Enter" cannot be determined from the
+ *   current line's text alone — after the first blank Enter, the line just
+ *   looks like a bare "-" or "*" either way, identical to before any skips
+ *   happened. applyBulletAutoContinue() therefore takes a `skipStateRef` —
+ *   a plain mutable ref (NOT React state, to avoid a re-render on every
+ *   keystroke) holding { streak, fromLevel } — that the CALLER (NotesPanel)
+ *   owns and must reset whenever the "typing session" changes (e.g.
+ *   switching which note is being edited, or clearing the capture box
+ *   after a successful Add) — seeing NotesPanel.jsx's usage for exactly
+ *   where those resets happen.
  *
  * REVISION HISTORY
  *   v1 (initial build) — displayed/documented the em-dash "—)" as the
  *       primary separator, though the regex always accepted the literal
  *       "--)" too.
- *   v2 — corrected per user feedback: "--)" (literal two hyphens) is how
- *       they actually type it, not an em-dash. This was purely a
- *       documentation/UI-copy correction — the underlying regex already
- *       matched "--)" correctly before this change; only the displayed
- *       guidance text (here and in NotesPanel.jsx) was misleading.
- *   v3 — added applyBulletAutoContinue(), a typing-shortcut feature
- *       request: while editing a note, pressing Enter after a line
- *       already using the user's own "-"/"*" convention auto-continues it,
- *       and two Enters in a row (an intentionally blank line) starts a
- *       fresh "-" topic instead of piling up empty bullets.
- *       (Note: this file's top VERSION line was left at v2 when this
- *       change shipped — corrected retroactively in v4 below.)
- *   v4 (this version) — decideBulletAction() now also recognizes a line
- *       ENDING in ":" as a title/heading, auto-starting "- " on Enter
- *       (previously such a line fell through to 'default', a plain
- *       newline). Paired with NotesPanel.jsx's capture-box date auto-fill
- *       now producing "Sep 20, 2026:" (trailing colon added) instead of
- *       "Sep 20, 2026" — the colon both signals "this is the title" to the
- *       writer and is what triggers this new auto-dash behavior on the
- *       very next line.
- *   v5 (this version) — loosened the colon-based title rule: per feedback,
- *       requiring the line to literally END in ':' broke as soon as the
- *       writer typed anything after it (e.g. "Sep 20, 2026: Grocery Run"
- *       no longer ends in ':', so Enter fell back to a plain newline).
- *       decideBulletAction() now accepts an isFirstLine flag — the FIRST
- *       line of a note is always treated as its title regardless of what
- *       it ends with, so Enter after it always drops into the dash list.
- *       The colon-ending check is kept as a secondary rule for a heading
- *       appearing later in a note. Verified the full updated decision
- *       table standalone, including the exact scenario that motivated
- *       this change and confirming no regressions to the dash/star rules.
+ *   v2 — corrected the displayed separator to the literal "--)".
+ *   v3 — added the original (stateless) applyBulletAutoContinue(): typing
+ *       real content on a "-" or "*" line and pressing Enter ONCE
+ *       immediately continued with "*"/"*" respectively; a single blank
+ *       Enter reset to a new "-".
+ *   v4 — decideBulletAction() recognized a line ending in ":" as a title.
+ *   v5 — loosened that to an isFirstLine flag, since a title extended past
+ *       the colon no longer ended in ':'.
+ *   v6 (this version) — full rewrite per user's detailed 5-rule spec,
+ *       explicitly confirmed to REPLACE the old single-Enter dash->star
+ *       behavior with a 2-skip threshold (see OUTLINE TYPING SHORTCUT
+ *       above), plus new star-hold/star-to-dash/3-skip-topic-separator
+ *       rules. Requires the new stateful skipStateRef mechanism (see WHY
+ *       THIS NEEDS A STATE REF above) since multi-press counting can't be
+ *       derived from a single line's text. decideBulletAction() (stateless,
+ *       first-line/colon based) is REMOVED — computeBulletContinuation()
+ *       replaces it entirely, including subsuming the old isFirstLine
+ *       title-line behavior (a title with no marker at all still defaults
+ *       to "-" under the new rule 1, with no special-casing needed).
+ *       Verified the full state machine standalone across 8 sequences,
+ *       including a full reproduction of the user's own reference note's
+ *       structure end-to-end (title -> dash topic -> 2 skips -> star ->
+ *       three fluidly-typed star details -> 3 skips -> new topic).
  * =============================================================================
  */
 
@@ -131,82 +167,107 @@ export function parseNoteDisplay(content) {
   }
 }
 
-/**
- * Pure decision function: given the TRIMMED content of the line the cursor
- * is currently on (i.e. the line about to be "finished" by pressing
- * Enter), decides what auto-continuation behavior (if any) applies.
- * Separated from applyBulletAutoContinue() below so the decision table
- * itself can be tested without needing a real DOM textarea element.
- *
- * RULES (per user's typing-shortcut request, matching the exact writing
- * convention shown in their example: a "-" line as a topic/sub-task, "*"
- * lines as supporting details under it, a blank line between groups):
- *   - Line is blank, or is a BARE marker with nothing typed after it
- *     ("-" or "*" alone) -> 'reset': the user either intentionally left a
- *     blank line, or pressed Enter again on an auto-inserted bullet
- *     without typing anything into it (the "skipped twice" case) — either
- *     way, start a fresh topic with "- ".
- *   - Line starts with "*" -> 'continue' with "* " (stay in detail mode).
- *   - Line starts with "-" -> 'continue' with "* " (a topic line's own
- *     Enter starts ITS details, per the request: "next line ... should
- *     automatically write a star").
- *   - `isFirstLine` is true -> 'continue' with "- ": the very first line of
- *     a note IS its title by convention (whether that's the auto-filled
- *     "Sep 20, 2026:", a hand-typed "Project X", or a title extended with
- *     more text after the colon like "Sep 20, 2026: Grocery Run") —
- *     pressing Enter right after finishing it should ALWAYS drop into the
- *     dash list, regardless of what the title's last character happens to
- *     be. This replaced an earlier, narrower version of this rule that
- *     only fired when the line ended in ":" — that broke as soon as the
- *     writer typed anything after the colon.
- *   - Line ends with ":" (and isn't the first line) -> 'continue' with
- *     "- ": a colon-terminated heading appearing LATER in a note (e.g.
- *     manually typing "Project X:" partway through, to start a new
- *     sub-topic) gets the same shortcut as a true title line.
- *   - Anything else (plain text with no marker, not the first line, no
- *     trailing colon) -> 'default': let Enter behave normally (plain
- *     newline, no auto-prefix).
- * @param {string} trimmedLine
- * @param {boolean} [isFirstLine=false] - true when this is the very first
- *   line of the whole textarea's content (see applyBulletAutoContinue,
- *   which computes this from the cursor position).
- * @returns {{action: 'default'} | {action: 'continue'|'reset', prefix: string}}
- */
-export function decideBulletAction(trimmedLine, isFirstLine = false) {
-  if (trimmedLine === '' || trimmedLine === '-' || trimmedLine === '*') {
-    return { action: 'reset', prefix: '- ' }
-  }
-  if (trimmedLine.startsWith('*')) return { action: 'continue', prefix: '* ' }
-  if (trimmedLine.startsWith('-')) return { action: 'continue', prefix: '* ' }
-  if (isFirstLine) return { action: 'continue', prefix: '- ' }
-  if (trimmedLine.endsWith(':')) return { action: 'continue', prefix: '- ' }
-  return { action: 'default' }
+// A line counts as "blank" for skip-counting purposes if it's genuinely
+// empty, or is a bare marker with nothing typed after it (the state a line
+// is left in right after this module auto-inserts "- " or "* ").
+function isBlankOrBareMarker(trimmed) {
+  return trimmed === '' || trimmed === '-' || trimmed === '*'
 }
 
 /**
- * Textarea onKeyDown handler implementing the typing shortcut: call this
- * directly as `onKeyDown={(e) => applyBulletAutoContinue(e, setMyText)}` on
- * any note-content textarea (used by both NotesPanel's capture box and its
- * full-screen note editor overlay).
+ * The pure decision core of the outline typing shortcut — see this file's
+ * header OUTLINE TYPING SHORTCUT section for the full rule set. Kept
+ * separate from applyBulletAutoContinue() (which touches the DOM) so the
+ * decision table itself can be tested without a real textarea element.
+ *
+ * @param {string} currentLineTrimmed - trimmed text of the line about to
+ *   be "finished" by the Enter press.
+ * @param {{streak: number, fromLevel: 'dash'|'star'|null}} skipState - the
+ *   caller's current skip-tracking state (see WHY THIS NEEDS A STATE REF).
+ * @returns {{
+ *   mode: 'append'|'replace',
+ *   insertText: string,
+ *   nextSkipState: {streak: number, fromLevel: 'dash'|'star'|null}
+ * }}
+ *   mode 'append': keep the current line's content as-is and add a new
+ *     line after it (used when the current line has real content).
+ *   mode 'replace': the current line is blank/bare — its content is
+ *     cleared back to the start of the line before inserting the new
+ *     blank-line-plus-marker sequence, so repeated skips don't pile up
+ *     multiple stray blank lines.
+ */
+export function computeBulletContinuation(currentLineTrimmed, skipState) {
+  if (!isBlankOrBareMarker(currentLineTrimmed)) {
+    // Rule 1: normal content continuation. Level is read off the CURRENT
+    // line's own marker — "*" continues "*"; anything else (a "-" line, or
+    // plain text with no marker at all, e.g. a title) continues "-".
+    const level = currentLineTrimmed.startsWith('*') ? 'star' : 'dash'
+    return {
+      mode: 'append',
+      insertText: level === 'star' ? '* ' : '- ',
+      nextSkipState: { streak: 0, fromLevel: null },
+    }
+  }
+
+  // This Enter is a "skip" (blank or bare-marker line). Determine which
+  // level we're skip-navigating FROM: if this is the first skip in a new
+  // streak, read it off the current bare marker itself (a lone "*" means
+  // we were in star context; anything else, including a truly empty line,
+  // defaults to dash context); if we're already mid-streak, keep the
+  // level the streak started with.
+  const newStreak = skipState.streak + 1
+  const fromLevel = skipState.streak === 0
+    ? (currentLineTrimmed === '*' ? 'star' : 'dash')
+    : skipState.fromLevel
+
+  // Rule 5 takes priority over rules 2-4 once triggered: a 3rd consecutive
+  // skip overrides whatever the 2nd skip just produced (e.g. a star from
+  // rule 2) with the new-topic separator instead.
+  if (newStreak >= 3) {
+    return { mode: 'replace', insertText: '--) ', nextSkipState: { streak: 0, fromLevel: null } }
+  }
+  if (fromLevel === 'dash') {
+    // Rule 2: 1st skip holds at "-" (waiting to see if a 2nd skip comes);
+    // 2nd skip converts to "*".
+    return {
+      mode: 'replace',
+      insertText: newStreak === 1 ? '- ' : '* ',
+      nextSkipState: { streak: newStreak, fromLevel: 'dash' },
+    }
+  }
+  // fromLevel === 'star'. Rule 3: 1st skip -> another "*". Rule 4: 2nd
+  // skip -> "-".
+  return {
+    mode: 'replace',
+    insertText: newStreak === 1 ? '* ' : '- ',
+    nextSkipState: { streak: newStreak, fromLevel: 'star' },
+  }
+}
+
+/**
+ * Textarea onKeyDown handler implementing the outline typing shortcut —
+ * call this as `onKeyDown={(e) => applyBulletAutoContinue(e, setMyText,
+ * mySkipStateRef)}`. Used by both NotesPanel's capture box and its
+ * full-screen note editor overlay, each with their OWN skipStateRef (see
+ * this file's header WHY THIS NEEDS A STATE REF).
  *
  * WHY THIS NEEDS TO PREVENT DEFAULT AND MANUALLY REBUILD THE VALUE
  *   A textarea's default Enter behavior just inserts a bare "\n". To insert
- *   "\n* " or "\n- " instead — or, for the 'reset' case, to erase a
- *   dangling bare marker on the current line before adding the new one —
- *   the default insertion must be prevented and the new value constructed
- *   by hand from the textarea's current value and cursor position.
+ *   "\n* " or "\n- " (or, for a 'replace', to erase a dangling bare marker
+ *   first), the default insertion must be prevented and the new value
+ *   constructed by hand from the textarea's current value and cursor position.
  * WHY THE CURSOR POSITION IS RESTORED VIA requestAnimationFrame
  *   This is a controlled React textarea — calling the setValue callback
  *   doesn't immediately update `el.value`; React re-renders first. Setting
  *   selectionStart/selectionEnd synchronously here would still act on the
  *   OLD value's length. Deferring to the next animation frame guarantees
- *   the DOM has the new value by the time the cursor is repositioned. Same
- *   pattern already used for the capture box's date auto-fill.
+ *   the DOM has the new value by the time the cursor is repositioned.
  *
  * @param {React.KeyboardEvent} e - must be from a <textarea>.
  * @param {(newValue: string) => void} setValue - the controlling state setter.
+ * @param {React.MutableRefObject<{streak: number, fromLevel: string|null}>} skipStateRef
  */
-export function applyBulletAutoContinue(e, setValue) {
+export function applyBulletAutoContinue(e, setValue, skipStateRef) {
   if (e.key !== 'Enter') return
 
   const el = e.target
@@ -216,25 +277,19 @@ export function applyBulletAutoContinue(e, setValue) {
   const afterCursor = value.slice(cursor)
   const lineStart = beforeCursor.lastIndexOf('\n') + 1
   const currentLine = beforeCursor.slice(lineStart)
-  // lineStart === 0 means this is the FIRST line of the whole textarea's
-  // content — i.e. the note's own title line, which always gets the "- "
-  // continuation regardless of what it ends with (see decideBulletAction's
-  // isFirstLine rule).
-  const decision = decideBulletAction(currentLine.trim(), lineStart === 0)
 
-  if (decision.action === 'default') return // let the browser insert a plain "\n"
+  const result = computeBulletContinuation(currentLine.trim(), skipStateRef.current)
+  skipStateRef.current = result.nextSkipState
 
   e.preventDefault()
 
   let newValue, newCursor
-  if (decision.action === 'reset') {
-    // Erase whatever's on the current line (blank already, or a dangling
-    // bare "-"/"*" the user didn't fill in) and start the new topic fresh.
-    newValue = value.slice(0, lineStart) + '\n' + decision.prefix + afterCursor
-    newCursor = lineStart + 1 + decision.prefix.length
+  if (result.mode === 'replace') {
+    newValue = value.slice(0, lineStart) + '\n' + result.insertText + afterCursor
+    newCursor = lineStart + 1 + result.insertText.length
   } else {
-    newValue = beforeCursor + '\n' + decision.prefix + afterCursor
-    newCursor = beforeCursor.length + 1 + decision.prefix.length
+    newValue = beforeCursor + '\n' + result.insertText + afterCursor
+    newCursor = beforeCursor.length + 1 + result.insertText.length
   }
 
   setValue(newValue)

@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v14 (previously v1-v13 — see REVISION HISTORY below)
+ * VERSION: v15 (previously v1-v14 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -119,10 +119,23 @@
  *       newline after the colon — the cursor now lands right after
  *       "Sep 20, 2026:" on the SAME line, so a title can be typed inline
  *       there before the writer presses Enter themselves.
+ *   v15 (this version) — the outline typing shortcut was fully rewritten
+ *       in lib/notesParsing.js v6 to a stateful, multi-skip model (2 skips
+ *       to escalate dash->star, 1 skip to hold star, 2 skips to drop back
+ *       to dash, 3 skips from anywhere for a new "--)" topic) — see that
+ *       file's header for the full rule set. This file now owns two
+ *       independent skip-state refs (draftSkipStateRef, editSkipStateRef —
+ *       one per textarea, since a skip streak must never leak between the
+ *       capture box and the note editor) and resets them at the right
+ *       moments: the editor's ref resets whenever `editingId` changes (a
+ *       different note opened), and the capture box's ref resets both when
+ *       the date auto-fill starts a fresh session and after a successful
+ *       Add clears the box. Also updated the on-screen tip text, which
+ *       described the old single-skip behavior.
  * =============================================================================
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { splitIntoTopics, parseNoteDisplay, applyBulletAutoContinue } from '../lib/notesParsing'
 import { NOTE_COLORS, getNoteColorHex, hexToRgba } from '../lib/noteColors'
 import { linkifyText } from '../lib/linkify'
@@ -165,6 +178,24 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   const [colorPickerId, setColorPickerId] = useState(null) // note id whose color swatch picker is open
   const [search, setSearch] = useState('')
 
+  // Skip-tracking state for the outline typing shortcut (see
+  // lib/notesParsing.js's applyBulletAutoContinue / computeBulletContinuation
+  // and this file's header OUTLINE TYPING SHORTCUT section) — TWO
+  // independent refs, one per textarea, since the capture box and the
+  // note editor are separate typing sessions that must not share a skip
+  // streak. Plain refs (not React state) since updating on every keystroke
+  // as state would trigger a re-render each time for no visual benefit —
+  // this counter has no direct UI representation of its own.
+  const draftSkipStateRef = useRef({ streak: 0, fromLevel: null })
+  const editSkipStateRef = useRef({ streak: 0, fromLevel: null })
+
+  // Reset the editor's skip streak whenever a DIFFERENT note starts being
+  // edited (or the editor closes) — a streak from the previously-open note
+  // must not carry over and affect a freshly-opened one.
+  useEffect(() => {
+    editSkipStateRef.current = { streak: 0, fromLevel: null }
+  }, [editingId])
+
   // Search applies first (against the raw content — matches whatever the
   // user actually typed, not just the parsed topic), then the
   // showConverted toggle narrows further. convertedCount below is
@@ -205,20 +236,21 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
 
   /**
    * Auto-fills today's date as the first line, but ONLY when the box is
-   * still empty. The trailing colon ("Sep 20, 2026:") signals to the
-   * writer that this line is a TITLE/TOPIC (matching the general "a line
-   * ending in ':' is a heading" rule recognized by decideBulletAction()).
-   * Cursor is placed right after the colon, ON THE SAME LINE (not a
-   * newline after it) — this lets the writer optionally extend the title
-   * inline (e.g. "Sep 20, 2026: Grocery Run") before pressing Enter
-   * themselves, rather than being forced onto a fresh second line
-   * immediately. Pressing Enter from here still triggers the auto-dash
-   * continuation as long as the line still ends in ':' at that point.
+   * still empty. The trailing colon ("Sep 20, 2026:") is a visual cue that
+   * this line is the title — functionally, any first line (colon or not)
+   * gets the "- " continuation on Enter per computeBulletContinuation()'s
+   * rule 1 (see lib/notesParsing.js). Cursor is placed right after the
+   * colon, ON THE SAME LINE (not a newline after it) — this lets the
+   * writer optionally extend the title inline (e.g. "Sep 20, 2026: Grocery
+   * Run") before pressing Enter themselves. Also resets the capture box's
+   * skip-tracking state, since auto-filling counts as starting a fresh
+   * typing session.
    */
   function handleCaptureFocus() {
     if (draft) return
     const label = todayDateLabel() + ':'
     setDraft(label)
+    draftSkipStateRef.current = { streak: 0, fromLevel: null }
     requestAnimationFrame(() => {
       if (draftRef.current) {
         draftRef.current.selectionStart = draftRef.current.selectionEnd = label.length
@@ -234,6 +266,9 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
       const topics = splitIntoTopics(draft)
       if (topics.length) await onAddBulk(topics)
       setDraft('')
+      // A successful Add ends this typing session — the next thing typed
+      // into the (now-empty) box starts a fresh skip streak.
+      draftSkipStateRef.current = { streak: 0, fromLevel: null }
     } catch (err) {
       setError('Could not save: ' + (err.message || 'unknown error'))
     } finally {
@@ -300,7 +335,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={handleCaptureFocus}
-          onKeyDown={(e) => applyBulletAutoContinue(e, setDraft)}
+          onKeyDown={(e) => applyBulletAutoContinue(e, setDraft, draftSkipStateRef)}
           rows={4}
           placeholder={'Jot anything… start a new topic mid-thought with --)\n\nGroceries\n- milk\n- eggs --) Doctor appt\n- follow up with insurance'}
           className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-2 text-sm mb-2 resize-none focus:border-[var(--color-ember)] outline-none"
@@ -308,7 +343,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
         <div className="flex items-center justify-between mb-4">
           <p className="text-[10px] text-[var(--color-muted)]">
             Tip: separate unrelated topics with <span className="[font-family:var(--font-mono)]">--)</span> — each becomes its own note.
-            Press Enter after a <span className="[font-family:var(--font-mono)]">-</span> line to auto-add <span className="[font-family:var(--font-mono)]">*</span> details; a blank line starts a new <span className="[font-family:var(--font-mono)]">-</span>.
+            Skip a line twice after <span className="[font-family:var(--font-mono)]">-</span> for <span className="[font-family:var(--font-mono)]">*</span> details, twice after <span className="[font-family:var(--font-mono)]">*</span> for a new <span className="[font-family:var(--font-mono)]">-</span>, or three times for a new topic.
           </p>
           <button
             onClick={handleCapture}
@@ -542,7 +577,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={(e) => applyBulletAutoContinue(e, setEditText)}
+            onKeyDown={(e) => applyBulletAutoContinue(e, setEditText, editSkipStateRef)}
             autoFocus
             className="flex-1 w-full bg-[var(--color-ink)] text-[var(--color-paper)] p-4 text-base resize-none outline-none"
           />
