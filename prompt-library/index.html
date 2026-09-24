@@ -223,12 +223,13 @@ dialog.narrow{width:min(440px,calc(100vw - 24px))}
 .set-sec h3{margin:0;font-size:16px;font-weight:650}
 .set-sec p{margin:0;font-size:14px;color:var(--muted)}
 .set-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg{align-self:flex-start;display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .seg button{border:0;background:var(--surface);padding:7px 14px;font-weight:500}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button.on{background:var(--primary);color:var(--on-primary)}
 .status-msg{font-size:14px;min-height:20px}
 .status-msg.ok{color:var(--ok)} .status-msg.bad{color:var(--danger)}
+.kb .kbd{justify-self:start}
 .kb{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;align-items:center}
 
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 24px);padding:11px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-size:14.5px;box-shadow:0 10px 30px -8px rgba(0,0,0,.4)}
@@ -364,20 +365,13 @@ body.has-gen .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
     <section class="set-sec" id="set-sync">
       <h3>Sync</h3>
       <p id="sync-explain"></p>
-      <div class="fld"><label for="token">GitHub token</label>
-        <input class="in" id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></div>
-      <div class="set-row">
-        <button class="btn primary" data-action="save-token">Save token</button>
-        <button class="btn" data-action="test-token">Test connection</button>
-        <button class="btn ghost danger" data-action="clear-token">Remove</button>
-      </div>
-      <div class="status-msg" id="token-status" aria-live="polite"></div>
-      <p>Use a fine-grained token limited to the <b>mkp-tools</b> repository with <b>Contents: Read and write</b>. It stays in this browser only. Do that once per device.</p>
-    </section>
+      <div class="set-row"><button class="btn" data-action="check-relay"><span data-icon="refresh" data-size="17"></span>Check connection</button></div>
+      <div class="status-msg" id="relay-status" aria-live="polite"></div>
+    </section></section>
     <section class="set-sec">
       <h3>Your data</h3>
       <div class="set-row">
-        <button class="btn" data-action="refresh"><span data-icon="refresh" data-size="17"></span>Refresh from GitHub</button>
+        <button class="btn" data-action="refresh"><span data-icon="refresh" data-size="17"></span>Refresh now</button>
         <button class="btn" data-action="export"><span data-icon="download" data-size="17"></span>Export JSON</button>
         <button class="btn" data-action="import"><span data-icon="upload" data-size="17"></span>Import JSON</button>
         <input type="file" id="import-file" accept="application/json,.json" hidden>
@@ -432,10 +426,9 @@ body.has-gen .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
 /* ======================================================================
    Config
    ====================================================================== */
-const CFG = { owner:'c1jumpw', repo:'mkp-tools', branch:'main', path:'prompt-library/prompts.json', passcode:'0286' };
-const LS = { unlocked:'pl_unlocked_v1', token:'pl_token_v1', cache:'pl_cache_v1', dirty:'pl_dirty_v1',
+const CFG = { relay:'https://prompt-library-relay.c1-jumpw.workers.dev', passcode:'0286' };   // passcode here is only the offline fallback
+const LS = { unlocked:'pl_unlocked_v1', pass:'pl_pass_v1', cache:'pl_cache_v1', dirty:'pl_dirty_v1',
              inputs:'pl_inputs_v1', usage:'pl_usage_v1', theme:'pl_theme_v1', sort:'pl_sort_v1' };
-const API = `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${CFG.path}`;
 const HISTORY_MAX = 15;
 
 /* ======================================================================
@@ -450,8 +443,6 @@ const jget = (k, d) => { try { const v = localStorage.getItem(k); return v == nu
 const jset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 const sget = k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 const sset = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} };
-const toB64 = s => { let bin=''; new TextEncoder().encode(s).forEach(b => bin += String.fromCharCode(b)); return btoa(bin); };
-const fromB64 = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g,'')), c => c.charCodeAt(0)));
 const fmtTime = ts => new Date(ts).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
 const isMobile = () => matchMedia('(max-width:860px)').matches;
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
@@ -537,147 +528,131 @@ function mergeData(local, remote) {
   return { version:1, prompts, deleted:del, colors:{ ...local.colors, ...remote.colors } };
 }
 
-const state = { data: { version:1, prompts:[], deleted:{}, colors:{} }, sha: null };
+const state = { data: { version:1, prompts:[], deleted:{}, colors:{} } };
 const view  = { cat:'all', q:'', sort: sget(LS.sort) || 'used', open:null };
 let gen = null;           // { id, values }
 let rev = 0;              // bumps on every local change
-let syncing = false, again = false, syncTimer = null, warnedLocal = false;
+let syncing = false, again = false, syncTimer = null;
 
 const byId = id => state.data.prompts.find(p => p.id === id);
 const isDirty = () => sget(LS.dirty) === '1';
 const setDirty = v => sset(LS.dirty, v ? '1' : '');
-const token = () => sget(LS.token);
-const persist = () => jset(LS.cache, { data: state.data, sha: state.sha });
+const persist = () => jset(LS.cache, { data: state.data });
 const usage = () => jget(LS.usage, {});
 
-function serialize() {
+function snapshot() {
   const prompts = [...state.data.prompts].sort((a, b) => a.createdAt - b.createdAt);
-  const present = new Set(prompts.map(p => p.category)); const colors = Object.fromEntries(Object.entries(state.data.colors || {}).filter(([c]) => present.has(c)));
-  return JSON.stringify({ version:1, colors, prompts, deleted: state.data.deleted }, null, 2) + '\n';
+  const present = new Set(prompts.map(p => p.category));
+  const colors = Object.fromEntries(Object.entries(state.data.colors || {}).filter(([c]) => present.has(c)));
+  return { version:1, colors, prompts, deleted: state.data.deleted };
 }
+const serialize = () => JSON.stringify(snapshot(), null, 2) + '\n';
 
 /* ======================================================================
-   GitHub sync
+   Relay sync  (Cloudflare Worker → KV)
+   Every change is saved to the relay and every device merges what the relay
+   holds, so devices never overwrite each other. If the relay can't be reached,
+   edits stay on this device and are pushed as soon as it's back.
    ====================================================================== */
-const ghHeaders = (auth = true) => {
-  const h = { 'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28' };
-  if (auth && token()) h.Authorization = 'Bearer ' + token();
-  return h;
-};
-async function ghGet() {
-  const url = `${API}?ref=${CFG.branch}&t=${now()}`;
-  let res = await fetch(url, { headers: ghHeaders(), cache:'no-store' });
-  if (res.status === 401 && token()) res = await fetch(url, { headers: ghHeaders(false), cache:'no-store' }); // bad token shouldn't break reading
-  if (res.status === 404) return { data:null, sha:null };
-  if (!res.ok) throw new Error('GitHub ' + res.status);
-  const j = await res.json();
-  let text = '';
-  try {
-    if (j.content && j.encoding === 'base64') text = fromB64(j.content);
-    else if (j.download_url) text = await (await fetch(j.download_url, { cache:'no-store' })).text();
-  } catch {}
-  let data = null;
-  try { if (text.trim()) data = JSON.parse(text); } catch {}
-  return { data, sha:j.sha };
+const RELAY = CFG.relay.replace(/\/+$/, '');
+let relayUp = null;                                   // null = not tried yet
+class AuthError extends Error {}
+
+async function relayCall(path, opts = {}) {
+  const res = await fetch(RELAY + path, { ...opts, cache:'no-store',
+    headers: { 'X-Library-Key': sget(LS.pass), ...(opts.body ? { 'Content-Type':'application/json' } : {}) } });
+  if (res.status === 401) throw new AuthError('Passcode not accepted');
+  if (res.status === 429) throw new Error('Too many wrong passcodes. Try again in a few minutes.');
+  if (!res.ok) throw new Error('The relay returned ' + res.status);
+  return res.json();
 }
-async function ghPut(text, sha) {
-  const body = { message: `Update prompts (${state.data.prompts.length})`, content: toB64(text), branch: CFG.branch };
-  if (sha) body.sha = sha;
-  return fetch(API, { method:'PUT', headers:{ ...ghHeaders(), 'Content-Type':'application/json' }, body: JSON.stringify(body) });
-}
+const relayGet = async () => (await relayCall('/prompts')).data;
+const relayPut = async doc => (await relayCall('/prompts', { method:'PUT', body: JSON.stringify({ data: doc }) })).data;
+const friendly = e => e instanceof TypeError ? 'Can’t reach the relay. Changes are kept on this device and will save when it’s back.' : e.message;
 
 function setSync(kind, msg) {
-  const map = {
-    loading:['', 'Loading…'], synced:['synced', 'Synced'], saving:['saving', 'Saving…'],
-    readonly:['', 'Up to date'], local:['local', 'Not synced'], error:['error', 'Not saved · retry'], offline:['', 'Offline copy']
-  };
+  const map = { loading:['', 'Loading…'], synced:['synced', 'Synced'], saving:['saving', 'Saving…'],
+                local:['local', 'Not synced'], error:['error', 'Not saved · retry'], offline:['', 'Offline copy'] };
   const [cls, label] = map[kind] || map.loading;
   const pill = $('#pill');
-  pill.className = 'pill ' + cls;
-  pill.querySelector('span').textContent = label;
-  pill.title = msg || ({
-    local:'Saved on this device only. Add a GitHub token in Settings to save to GitHub.',
-    readonly:'Showing the latest prompts from GitHub. Add a token in Settings to save edits.',
-    synced:'All changes are saved to GitHub.', offline:'Could not reach GitHub. Showing the last copy on this device.'
-  }[kind] || label);
-  pill.dataset.kind = kind;
-  if (!$('#settings').open) return;
-  updateSyncSettings();
+  pill.className = 'pill ' + cls; pill.querySelector('span').textContent = label; pill.dataset.kind = kind;
+  pill.title = msg || ({ loading:'Loading your prompts…', synced:'All changes are saved and shared across your devices.', saving:'Saving…',
+    local:'Changes are on this device and will sync when the relay is reachable.', offline:'Can’t reach the relay. Showing the last copy on this device.' }[kind] || label);
+  if ($('#settings').open) updateSyncSettings();
 }
-const restingStatus = () => token() ? (isDirty() ? 'local' : 'synced') : (isDirty() ? 'local' : 'readonly');
+const restingStatus = () => isDirty() ? 'local' : (relayUp === false ? 'offline' : 'synced');
+
+/* Lock screen bounce: the relay no longer accepts this device's passcode. */
+function needUnlock() {
+  sset(LS.unlocked, ''); sset(LS.pass, '');
+  try { sessionStorage.setItem('pl_relock', '1'); } catch {}
+  location.reload();
+}
+/* True if local holds anything the relay lacks (or has newer). Lets devices heal each other. */
+function needsPush(local, remote) {
+  const rp = new Map(remote.prompts.map(p => [p.id, p.updatedAt]));
+  if (local.prompts.some(p => !rp.has(p.id) || p.updatedAt > rp.get(p.id))) return true;
+  return Object.entries(local.deleted).some(([id, ts]) => !(remote.deleted[id] >= ts));
+}
+async function loadStarter() {
+  try { const r = await fetch('prompts.json?t=' + now(), { cache:'no-store' }); if (r.ok) return normData(await r.json()); } catch {}
+  return state.data;
+}
 
 function scheduleSync(ms = 900) { clearTimeout(syncTimer); syncTimer = setTimeout(doSync, ms); }
 async function doSync() {
   if (!isDirty()) return setSync(restingStatus());
-  if (!token()) return setSync('local');
   if (syncing) { again = true; return; }
   syncing = true; setSync('saving');
+  let retryIn = 0;
   try {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (state.sha === null && attempt === 0) {
-        const r = await ghGet(); state.sha = r.sha;
-        if (r.data) state.data = mergeData(state.data, normData(r.data));
-      }
-      const myRev = rev;
-      const res = await ghPut(serialize(), state.sha);
-      if (res.ok) {
-        const j = await res.json();
-        state.sha = j.content && j.content.sha;
-        if (rev === myRev) setDirty(false); else again = true;
-        persist(); setSync(restingStatus());
-        return;
-      }
-      if (res.status === 409 || res.status === 422) {          // someone else saved first: merge and retry
-        const r = await ghGet(); state.sha = r.sha;
-        if (r.data) state.data = mergeData(state.data, normData(r.data));
-        persist(); render(); continue;
-      }
-      if ([401, 403, 404].includes(res.status)) throw new Error(`GitHub refused the token (${res.status}). Check that it has Contents: Read and write on ${CFG.repo}.`);
-      throw new Error('GitHub returned ' + res.status);
-    }
-    throw new Error('Kept hitting edit conflicts. Try again in a moment.');
+    const myRev = rev, before = JSON.stringify(state.data);
+    const merged = normData(await relayPut(snapshot()));
+    relayUp = true;
+    state.data = mergeData(state.data, merged); ensureColors(state.data);
+    if (rev === myRev) setDirty(false); else again = true;
+    persist();
+    if (JSON.stringify(state.data) !== before) { render(); if (gen) refreshOpenGenIfPristine(); }
+    setSync(restingStatus());
   } catch (e) {
-    setSync('error', e.message);
+    if (e instanceof AuthError) { needUnlock(); return; }
+    relayUp = false; setSync('error', friendly(e)); retryIn = 30000;
   } finally {
     syncing = false;
-    if (again) { again = false; scheduleSync(300); }
+    if (again) { again = false; scheduleSync(300); } else if (retryIn) scheduleSync(retryIn);
   }
 }
 
 async function refresh({ quiet = false } = {}) {
   if (syncing) return;
   try {
-    const r = await ghGet();
-    state.sha = r.sha;
-    if (r.data) {
-      const remote = normData(r.data);
-      if (isDirty()) { state.data = mergeData(state.data, remote); persist(); scheduleSync(0); }
-      else { state.data = remote; persist(); }
+    const remote = await relayGet(); relayUp = true;
+    if (remote) {
+      const r = normData(remote);
+      state.data = mergeData(state.data, r);
+      if (isDirty() || needsPush(state.data, r)) { rev++; setDirty(true); scheduleSync(0); }
     } else {
-      if (!state.data.prompts.length) state.data = seedData();
-      rev++; setDirty(true); persist(); scheduleSync(0);
+      // The relay is empty: seed it from this device's copy, or from the starter prompts that ship with the site.
+      if (!state.data.prompts.length) state.data = await loadStarter();
+      if (state.data.prompts.length) { rev++; setDirty(true); scheduleSync(0); }
     }
-    setSync(restingStatus());
+    persist(); setSync(restingStatus());
   } catch (e) {
-    if (!state.data.prompts.length) {
-      try { const r = await fetch('prompts.json?t=' + now(), { cache:'no-store' }); if (r.ok) state.data = normData(await r.json()); } catch {}
-    }
-    if (!quiet || $('#pill').dataset.kind === 'loading') setSync('offline');
-    if (!quiet) toast('Could not reach GitHub. Showing the last copy on this device.');
+    if (e instanceof AuthError) return needUnlock();
+    relayUp = false;
+    if (!state.data.prompts.length) state.data = await loadStarter();
+    setSync(isDirty() ? 'local' : 'offline', friendly(e));
+    if (!quiet) toast(friendly(e));
   }
   render();
   if (gen && !byId(gen.id)) closeGen(); else if (gen) refreshOpenGenIfPristine();
 }
-function seedData() { return { version:1, prompts: [], deleted:{}, colors:{} }; }
 
 /* Any local change goes through here. */
 function mutate(fn) {
   fn(state.data); ensureColors(state.data);
   rev++; setDirty(true); persist(); render();
-  if (token()) scheduleSync(); else {
-    setSync('local');
-    if (!warnedLocal) { warnedLocal = true; toast('Saved on this device. Add a GitHub token in Settings to save everywhere.'); }
-  }
+  setSync('saving'); scheduleSync();
 }
 
 /* ======================================================================
@@ -1043,22 +1018,24 @@ function restoreVersion(id, i) {
    Settings
    ====================================================================== */
 function updateSyncSettings() {
-  $('#sync-explain').textContent = token()
-    ? 'A token is saved on this device. Edits here are committed to prompts.json in your repository, so every device sees them.'
-    : 'Anyone with the link and passcode can read and copy prompts. To save edits so they show up on every device, add a GitHub token on this one.';
+  $('#sync-explain').textContent = 'Prompts you add or edit are saved to your private relay and appear on every device that has the passcode. Other devices pick up changes within about a minute, or straight away when you tap Refresh now.';
   const th = localStorage.getItem(LS.theme) || 'auto';
   $$('#theme-seg button').forEach(b => b.classList.toggle('on', b.dataset.v === th));
 }
 function applyTheme(v) { if (v === 'light' || v === 'dark') document.documentElement.setAttribute('data-theme', v); else document.documentElement.removeAttribute('data-theme'); }
-function openSettings() { $('#token').value = ''; $('#token').placeholder = token() ? '•••••••• saved on this device' : 'github_pat_…'; $('#token-status').textContent = ''; updateSyncSettings(); $('#settings').showModal(); }
-function tokenMsg(t, cls) { const s = $('#token-status'); s.textContent = t; s.className = 'status-msg ' + (cls || ''); }
-async function testToken(t) {
-  const res = await fetch(`https://api.github.com/repos/${CFG.owner}/${CFG.repo}`, { headers: { 'Accept':'application/vnd.github+json', 'Authorization':'Bearer ' + t } });
-  if (res.status === 401) throw new Error('GitHub rejected that token.');
-  if (!res.ok) throw new Error('GitHub returned ' + res.status + '.');
-  const j = await res.json();
-  if (!j.permissions || !j.permissions.push) throw new Error('This token can read the repository but not write to it. Give it Contents: Read and write.');
-  return `Connected. This token can save to ${CFG.owner}/${CFG.repo}.`;
+function openSettings() { $('#relay-status').textContent = ''; updateSyncSettings(); $('#settings').showModal(); }
+function relayMsg(t, cls) { const el = $('#relay-status'); el.textContent = t; el.className = 'status-msg ' + (cls || ''); }
+async function checkRelay() {
+  relayMsg('Checking…');
+  try {
+    const h = await fetch(RELAY + '/health', { cache:'no-store' });
+    if (!h.ok) throw new Error('The relay returned ' + h.status);
+    await relayGet(); relayUp = true; setSync(restingStatus());
+    relayMsg('Connected. Your prompts are saving to the relay.', 'ok');
+  } catch (e) {
+    if (e instanceof AuthError) return relayMsg('The relay rejected this device’s passcode. Use “Lock this device”, then enter it again.', 'bad');
+    relayUp = false; relayMsg(friendly(e), 'bad');
+  }
 }
 function exportJSON() {
   const blob = new Blob([serialize()], { type:'application/json' }), a = document.createElement('a');
@@ -1109,7 +1086,7 @@ document.addEventListener('click', async e => {
       case 'rename-shelf': renameShelf(); break;
       case 'clear-search': view.q = ''; $('#search').value = ''; renderList(); break;
       case 'settings': openSettings(); break;
-      case 'sync-pill': if ($('#pill').dataset.kind === 'error' || $('#pill').dataset.kind === 'local' && token()) { scheduleSync(0); } else openSettings(); break;
+      case 'sync-pill': { const k = $('#pill').dataset.kind; if (k === 'error' || k === 'local') scheduleSync(0); else if (k === 'offline') refresh(); else openSettings(); break; }
       case 'close-dialog': a.closest('dialog').close(); break;
       case 'ed-save': saveEditor(); break;
       case 'ed-cancel': tryCloseEditor(); break;
@@ -1117,22 +1094,12 @@ document.addEventListener('click', async e => {
       case 'ed-delete': { const rid = ed.id; $('#editor').close(); deletePrompt(rid); break; }
       case 'ed-history': openHistory(ed.id); break;
       case 'theme': localStorage.setItem(LS.theme, a.dataset.v); applyTheme(a.dataset.v); updateSyncSettings(); break;
-      case 'save-token': {
-        const t = $('#token').value.trim(); if (!t) return tokenMsg('Paste a token first.', 'bad');
-        tokenMsg('Checking…');
-        try { const m = await testToken(t); sset(LS.token, t); tokenMsg(m, 'ok'); $('#token').value = ''; $('#token').placeholder = '•••••••• saved on this device'; updateSyncSettings(); if (isDirty()) scheduleSync(0); else { setSync(restingStatus()); refresh({ quiet:true }); } }
-        catch (err) { tokenMsg(err.message, 'bad'); }
-        break; }
-      case 'test-token': {
-        const t = $('#token').value.trim() || token(); if (!t) return tokenMsg('No token to test yet.', 'bad');
-        tokenMsg('Checking…'); try { tokenMsg(await testToken(t), 'ok'); } catch (err) { tokenMsg(err.message, 'bad'); }
-        break; }
-      case 'clear-token': sset(LS.token, ''); tokenMsg('Token removed from this device.', 'ok'); $('#token').placeholder = 'github_pat_…'; setSync(restingStatus()); updateSyncSettings(); break;
+      case 'check-relay': checkRelay(); break;
       case 'refresh': await refresh(); toast('Refreshed.'); break;
       case 'export': exportJSON(); break;
       case 'import': $('#import-file').click(); break;
       case 'forget-inputs': localStorage.removeItem(LS.inputs); if (gen) { const p = byId(gen.id); gen.values = Object.fromEntries(p.fields.map(f => [f.key, f.default || ''])); renderGen(); } toast('Remembered inputs cleared.'); break;
-      case 'lock': localStorage.removeItem(LS.unlocked); location.reload(); break;
+      case 'lock': sset(LS.unlocked, ''); sset(LS.pass, ''); location.reload(); break;
     }
     return;
   }
@@ -1178,21 +1145,37 @@ window.addEventListener('online', () => { if (isDirty()) scheduleSync(0); });
 async function boot() {
   $('#app').hidden = false; hydrateIcons();
   const cached = jget(LS.cache, null);
-  if (cached && cached.data) { state.data = normData(cached.data); state.sha = cached.sha || null; }
+  if (cached && cached.data) { state.data = normData(cached.data); }
   setSync('loading'); render();
   await refresh({ quiet: !!cached });
   const h = location.hash.slice(1); if (h && byId(h)) openGen(h, { focus:false });
 }
 function unlock() { $('#lock').hidden = true; boot(); }
+/* The relay is the authority on the passcode whenever it can be reached; the built-in code only works offline. */
+async function verifyPasscode(code) {
+  try {
+    const res = await fetch(RELAY + '/prompts', { headers:{ 'X-Library-Key': code }, cache:'no-store' });
+    if (res.status === 200) return true;
+    if (res.status === 401) return false;
+    if (res.status === 429) return 'blocked';
+  } catch {}
+  return code === CFG.passcode;
+}
+try { localStorage.removeItem('pl_token_v1'); } catch {}   // the old GitHub-token sync is gone; clear any saved token
 applyTheme(localStorage.getItem(LS.theme) || 'auto');
-if (sget(LS.unlocked) === '1') unlock();
+if (sget(LS.unlocked) === '1' && sget(LS.pass)) unlock();
 else {
   const inp = $('#lock-input'); inp.focus();
-  inp.addEventListener('input', () => {
+  try { if (sessionStorage.getItem('pl_relock')) { sessionStorage.removeItem('pl_relock'); $('#lock-err').textContent = 'Enter your passcode again to keep syncing.'; } } catch {}
+  let checking = false;
+  inp.addEventListener('input', async () => {
     inp.value = inp.value.replace(/\D/g, '');
     if (inp.value.length < 4) { $('#lock-err').textContent = ''; return; }
-    if (inp.value === CFG.passcode) { sset(LS.unlocked, '1'); unlock(); }
-    else { $('#lock-err').textContent = 'That passcode isn’t right.'; const l = $('#lock'); l.classList.remove('shake'); void l.offsetWidth; l.classList.add('shake'); inp.value = ''; }
+    if (checking) return; checking = true;
+    const code = inp.value, ok = await verifyPasscode(code); checking = false;
+    if (ok === true) { sset(LS.unlocked, '1'); sset(LS.pass, code); unlock(); return; }
+    $('#lock-err').textContent = ok === 'blocked' ? 'Too many attempts. Wait a few minutes and try again.' : 'That passcode isn’t right.';
+    const l = $('#lock'); l.classList.remove('shake'); void l.offsetWidth; l.classList.add('shake'); inp.value = '';
   });
 }
 hydrateIcons();

@@ -1,0 +1,42 @@
+# =============================================================================
+# wrangler.toml — Cloudflare Worker config for prompt-library-relay
+# =============================================================================
+# PURPOSE
+#   Lets the Prompt Library site save prompts to Workers KV so every device
+#   sees the same prompts. See worker.js for the endpoints.
+#
+# DEPLOY
+#   Automatic: any push to main that touches prompt-library/worker/** runs
+#   .github/workflows/deploy-prompt-library-relay.yml (uses the same
+#   CLOUDFLARE_API_TOKEN repo secret as the Dispatch worker).
+#   Manual:    cd prompt-library/worker && npx wrangler deploy
+#
+# THE PASSCODE
+#   The Worker checks the X-Library-Key header against, in order:
+#     1. env.PASSCODE           (a secret — set with `npx wrangler secret put PASSCODE`)
+#     2. env.DEFAULT_PASSCODE   (the plain var below)
+#   The var below is public (this repo is public) and matches the passcode the
+#   site already contains. To make the passcode genuinely private, set the
+#   PASSCODE secret; it takes precedence over the var.
+#
+# VERSION HISTORY
+#   v1  Initial version. KV-backed storage with server-side merge.
+# =============================================================================
+
+name = "prompt-library-relay"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+[vars]
+# The one origin allowed to call this Worker from a browser (CORS).
+# Protocol + domain, no path, no trailing slash. Comma-separate to allow more.
+ALLOWED_ORIGIN = "https://c1jumpw.github.io"
+DEFAULT_PASSCODE = "0286"
+
+# Re-uses the KV namespace already created for Dispatch (TOKEN_STORE). The id is
+# a storage reference, not a secret. This Worker only ever reads and writes the
+# single key "prompt-library:v1"; it never touches Dispatch's keys.
+[[kv_namespaces]]
+binding = "LIBRARY_STORE"
+id = "529827efc99e46b6aab8d32bb154edef"

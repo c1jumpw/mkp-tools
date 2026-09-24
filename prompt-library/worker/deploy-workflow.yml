@@ -1,0 +1,36 @@
+# -----------------------------------------------------------------------------
+# ONE-TIME ACTIVATION: this file was committed to prompt-library/worker/ because the
+# token used to create it can't write to .github/workflows/. To switch it on, open it on
+# GitHub, click the pencil (Edit), change its path to
+#     .github/workflows/deploy-prompt-library-relay.yml
+# and commit. That commit deploys the Worker for the first time.
+# -----------------------------------------------------------------------------
+# =============================================================================
+# deploy-prompt-library-relay.yml — auto-deploys the Prompt Library relay Worker
+# =============================================================================
+# Runs when a commit touching prompt-library/worker/** lands on main, or on
+# demand from the Actions tab. Uses the same CLOUDFLARE_API_TOKEN repository
+# secret as deploy-worker.yml (the Dispatch Worker). No other secrets needed.
+# =============================================================================
+
+name: Deploy Prompt Library relay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'prompt-library/worker/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Deploy Worker via Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: 'prompt-library/worker'
