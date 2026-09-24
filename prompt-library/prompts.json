@@ -2,9 +2,11 @@
   "version": 1,
   "colors": {
     "Coding": "#2F7D62",
+    "Guides & Visuals": "#8A8F2E",
     "Learning": "#B8811A",
     "Prompting": "#3E6FB0",
     "Sales": "#B4503F",
+    "Summaries & Research": "#B0587F",
     "Work": "#7A5AA6",
     "Writing": "#3E8E96"
   },
@@ -12,7 +14,7 @@
     {
       "id": "p_seed_summarize",
       "title": "Summarize with takeaways",
-      "category": "Writing",
+      "category": "Summaries & Research",
       "description": "Turn any long text into a tight summary plus the points worth acting on.",
       "template": "Summarize the text below for {{audience}}.\n\nFormat: {{format}}.\nThen list the 3 most important takeaways and any decision or action the reader should take.\nDon't add facts that aren't in the text. If something is unclear, say so.\n\nText:\n\"\"\"\n{{text}}\n\"\"\"",
       "fields": [
@@ -53,7 +55,7 @@
       ],
       "favorite": true,
       "createdAt": 1790204851000,
-      "updatedAt": 1790204851000,
+      "updatedAt": 1790209999000,
       "history": []
     },
     {
@@ -349,6 +351,384 @@
       "favorite": false,
       "createdAt": 1790204851006,
       "updatedAt": 1790204851006,
+      "history": []
+    },
+    {
+      "id": "p_u_autodeploy",
+      "title": "Set up auto-deployment for a GitHub-hosted app",
+      "category": "Coding",
+      "description": "Move from manual PowerShell deploys to automatic ones, and learn which keys never to paste in chat.",
+      "template": "Let's set {{app}} up for auto deployment (rather than manual, through PowerShell) if possible.\n\n- Since it's housed on GitHub, a temporary personal access token can be used to update things.\n- Just let me know which keys and passwords to not share in the chat.\n\nNote: there is access to {{accounts}} if needed.",
+      "fields": [
+        {
+          "key": "app",
+          "label": "App",
+          "description": "What are you setting up auto deployment for?",
+          "type": "text",
+          "placeholder": "",
+          "default": "this app",
+          "options": [],
+          "required": false
+        },
+        {
+          "key": "accounts",
+          "label": "Available accounts",
+          "description": "Hosting or service accounts you can use.",
+          "type": "text",
+          "placeholder": "",
+          "default": "a Supabase, Cloudflare, and Vercel account",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210000000,
+      "updatedAt": 1790210000000,
+      "history": []
+    },
+    {
+      "id": "p_u_webapp",
+      "title": "Develop a web app from a brainstorm conversation",
+      "category": "Coding",
+      "description": "Turn a brainstorm into a web app you can publish through GitHub, with name ideas.",
+      "template": "Can you develop a web app? Please advise on the name, and enable me to publish it via GitHub. It should be deployable on any device (not local storage).\n\nAttached is the conversation I used to brainstorm the app:\n{{conversation}}",
+      "fields": [
+        {
+          "key": "conversation",
+          "label": "Brainstorm conversation",
+          "description": "Paste it here, or leave blank if you're attaching it or it's already in this chat.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210001000,
+      "updatedAt": 1790210001000,
+      "history": []
+    },
+    {
+      "id": "p_u_qasweep",
+      "title": "Deep-sweep QA and debugging of a web app",
+      "category": "Coding",
+      "description": "Line-by-line diagnosis of errors and broken references, with an optional button-by-button checklist.",
+      "template": "I want you to look line by line into things, sandbox if you have to, to diagnose the issues. Let's use the context from our back and forth to analyze the request, code, revisions, inputs, outputs, etc. to ensure this web app is working correctly.\n\n{{known_issues}}\n\nLook into failed references, errors, issues, and everything that is functioning or supposed to function.\n\nIf needed, provide a full list of page by page / section by section / button by button features and functions to check off as a quality assurance method, to ensure all loose ends are tied and as an act of confirmation.\n\nYou can also ask any questions to clarify and confirm before beginning your deep sweep.",
+      "fields": [
+        {
+          "key": "known_issues",
+          "label": "Known issues",
+          "description": "Anything you've already noticed that's broken or confusing.",
+          "type": "long",
+          "placeholder": "e.g. Known issue: the Save button does nothing on mobile",
+          "default": "",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210002000,
+      "updatedAt": 1790210002000,
+      "history": []
+    },
+    {
+      "id": "p_u_setupguide",
+      "title": "Step-by-step setup guide for tools and configurations",
+      "category": "Coding",
+      "description": "Add-on that walks you through setup one step at a time, with placeholders to swap out.",
+      "template": "{{goal}}\n\nIf additional tools/configurations are required, let's proceed with you guiding me through setting them up. Please make each step easy to understand.\n\nLet's break it down step by step: I do the input and give you the output, then you proceed to the next set of instructions.\n\nFor example: a description of what X tool is and where to get it from, and an example with placeholders for functions to paste or use, with instructions on which variables to replace, etc.\n\nI'd also like to prioritize (if possible) that any permanent key, API, set code, or integration can be programmed directly into the app (securely) to minimize human error. Please advise.",
+      "fields": [
+        {
+          "key": "goal",
+          "label": "What are you setting up?",
+          "description": "Optional. Say which app or tool this is for.",
+          "type": "text",
+          "placeholder": "e.g. Cloudflare Workers for my app",
+          "default": "",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210003000,
+      "updatedAt": 1790210003000,
+      "history": []
+    },
+    {
+      "id": "p_u_comments",
+      "title": "Comment code thoroughly (standards and version naming)",
+      "category": "Coding",
+      "description": "Rules for file headers, function docs, inline notes, TODOs and versioned file names.",
+      "template": "When you write code, always include clear, concise comments throughout the entire file(s) so that context is carried end-to-end. Use the following rules:\n\nAt the top of the file, add a brief header comment describing:\n- Overall purpose of the script/module\n- Key responsibilities and data flows\n- Any important assumptions or external dependencies\n\nFor every function, method, or class:\nAdd a doc-style comment immediately above it explaining:\n- What it does and why it exists\n- Parameters and return values (including types if known)\n- Common edge cases and constraints\n- Possible exceptions or failure conditions and how they're handled\n\nFor non-obvious logic blocks (loops, conditionals, complex calculations, async flows, external API calls):\nAdd inline comments summarizing:\n- The intent of the block (not restating the code)\n- Any tricky behavior, side effects, or performance trade-offs\n- Any assumptions about input shape, ordering, or state\n\nWhenever you introduce new variables, data structures, or configuration, add a short comment where they are defined that explains:\n- Their purpose and how they're used\n- Expected value ranges, formats, or units\n\nIf you skip handling a known edge case or future enhancement, add a clear TODO comment describing:\n- What's missing\n- Why it's safe for now\n- How you'd address it later\n\nMake comments:\n- Accurate and kept in sync with the code you generate\n- High-signal and non-redundant (do not narrate every line; explain intent, design decisions, and caveats)\n\nOutput must always include these comments in the final code, not just in your explanation text.\n\nIn addition, include comments about revisions, error history, and version changes (for context).\n\nAs you create revisions of files, do not just reuse the same file name. Also include the version name as it comes, for better organization.",
+      "fields": [],
+      "favorite": false,
+      "createdAt": 1790210004000,
+      "updatedAt": 1790210004000,
+      "history": []
+    },
+    {
+      "id": "p_u_clickuphtml",
+      "title": "Convert a document into a ClickUp-ready HTML artifact",
+      "category": "Guides & Visuals",
+      "description": "Turns a document into a visual, user-friendly HTML artifact you can paste into ClickUp.",
+      "template": "Convert this to an HTML artifact that is user-friendly and visual, and that can be pasted into ClickUp.\n\n{{document}}",
+      "fields": [
+        {
+          "key": "document",
+          "label": "Document",
+          "description": "Paste it here, or leave blank if you're attaching it or it's already in this chat.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210005000,
+      "updatedAt": 1790210005000,
+      "history": []
+    },
+    {
+      "id": "p_u_figureprompts",
+      "title": "Write 2 figure or illustration prompts from notes",
+      "category": "Guides & Visuals",
+      "description": "Copy-only image prompts for icon and diagram style visuals with minimal on-image text.",
+      "template": "Can you send a copy-only prompt that can be used later to describe this information as a figure, illustration, and/or diagram?\n\nLet's create something more icon/illustration/diagram-based rather than words (so keep words to a minimum and visuals and objects at a maximum).\n\nThe figure/illustration/diagram is meant to complement the text mentioned, as an additional visual guide (use colors, icons, etc.). The on-image text should be kept minimal and focus on simple imagery that can support an explainer.\n\nPlease create 2 variations of prompt designs and send the prompts as copy only.\n\n{{information}}",
+      "fields": [
+        {
+          "key": "information",
+          "label": "Information to illustrate",
+          "description": "Paste the notes or topic, or leave blank if it's already in this chat.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210006000,
+      "updatedAt": 1790210006000,
+      "history": []
+    },
+    {
+      "id": "p_u_leanguide",
+      "title": "Create a lean guide from notes",
+      "category": "Guides & Visuals",
+      "description": "A short guide with titles, tables, examples, figures and emojis, kept to few sections.",
+      "template": "Can you make the guide for {{topic}}?\n\nPlease make this guide with titles, subtitles, tables, examples, figures, emojis, etc., but keep the guide lean in the number of sections. You can include descriptions within the sections though.\n\nHere are the notes:\n{{notes}}",
+      "fields": [
+        {
+          "key": "topic",
+          "label": "Guide topic",
+          "description": "What is the guide for?",
+          "type": "text",
+          "placeholder": "e.g. onboarding a new sales rep",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "notes",
+          "label": "Notes",
+          "description": "Paste your raw notes.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210007000,
+      "updatedAt": 1790210007000,
+      "history": []
+    },
+    {
+      "id": "p_u_casestudy",
+      "title": "Turn a chat into a case study and extended summary",
+      "category": "Summaries & Research",
+      "description": "Export a whole conversation so you can analyze it later or keep researching in a new chat.",
+      "template": "Please turn this conversation into a case study, so the context can be analyzed later.\n\nTurn this entire chat conversation we've been having into an extended summary so I can continue researching this in another chat.\n\nInclude timestamps, references, and quotes when you feel it's needed for context.\n\nAnswer with complete honesty. Analyze inputs, ideology, etc.\n\nSend the result as copy only (no docs/code).",
+      "fields": [],
+      "favorite": false,
+      "createdAt": 1790210008000,
+      "updatedAt": 1790210008000,
+      "history": []
+    },
+    {
+      "id": "p_u_lightbulb",
+      "title": "Extract insights, quotes and gems from a conversation 💡",
+      "category": "Summaries & Research",
+      "description": "Summary plus timestamped quotes on business, mindset and marketing, ready to repurpose as content.",
+      "template": "In this recent conversation between {{speaker}} and another (or others), a lot of notable points that could help others, and that others could truly value, were made by {{speaker}}.\n\nBased on the transcript, can you provide:\n1. A quick summary of the conversation.\n2. Extract notable quotes, gems, and ideas. Focus these extracts on ideas related to things like business, mindset, marketing, practicality, habits, motivation, professionalism, ideologies, etc. Useful items that can be repurposed as content.\n3. Reference each insight with timestamps (if available).\n\nThe final output should be ready for use in future guides or content development for {{speaker}}.\n\nHere is the transcript (attached, or pasted below):\n{{transcript}}",
+      "fields": [
+        {
+          "key": "speaker",
+          "label": "Speaker",
+          "description": "Whose insights should be extracted?",
+          "type": "text",
+          "placeholder": "",
+          "default": "Mambay",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "transcript",
+          "label": "Transcript",
+          "description": "Paste it here, or leave blank if you're attaching it.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210009000,
+      "updatedAt": 1790210009000,
+      "history": []
+    },
+    {
+      "id": "p_u_journal",
+      "title": "Turn notes into a journal entry",
+      "category": "Writing",
+      "description": "Copy-only journal entry from rough notes. It can rearrange things and adds a title.",
+      "template": "Can you turn my notes into a journal entry? Copy only (no docs or code). You can rearrange things if it makes more sense. Give it a title.\n\nNotes:\n{{notes}}",
+      "fields": [
+        {
+          "key": "notes",
+          "label": "Notes",
+          "description": "Paste your rough notes.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210010000,
+      "updatedAt": 1790210010000,
+      "history": []
+    },
+    {
+      "id": "p_u_antiai",
+      "title": "📝 Anti-AI writing style guide",
+      "category": "Writing",
+      "description": "Phrases, words and punctuation to avoid so writing sounds like a person wrote it.",
+      "template": "{{task}}\n\n📝 Anti-AI Detection Style Guide: word exclusions for common ChatGPT words\n\n1. Words & Phrases to Avoid\nThese expressions are overused in AI-generated writing and make content sound generic. Replace or rephrase them.\n\nCliché transitions\n- “At the end of the day”\n- “With that being said”\n- “It goes without saying”\n- “In a nutshell”\n- “Needless to say”\n- “When it comes to”\n- “On the other hand”\n- “As a matter of fact”\n\nFiller quantifiers\n- “A significant number of”\n- “It’s worth mentioning”\n- “Last but not least”\n\nBuzzwords & corporate jargon\n- “Cutting-edge”\n- “Leveraging”\n- “Moving forward” / “Going forward”\n- “Seamless integration”\n- “Robust framework”\n- “Holistic approach”\n- “Paradigm shift”\n- “Synergy”\n- “Scale-up”\n- “Optimize”\n- “Game-changer”\n\nFormal/academic filler\n- “Notwithstanding”\n- “In the realm of”\n- “Takeaway”\n- \"Best Regards\"\n👉 Tip: Instead of defaulting to these phrases, use plain, direct language or more specific descriptions.\n\n2. Punctuation Rules\n- Replace em dashes (—) with commas, parentheses, or rewrites.\n- Avoid semicolons in casual contexts; prefer periods or conjunctions.\n- Remove ellipses (…) unless deliberately showing hesitation.\n- Limit parenthetical asides; fold info into the main sentence.\n- Use colons sparingly; don’t overuse for lists or emphasis.\n\n3. Language Rules\n- Replace hedging phrases (e.g., “however,” “it’s worth noting”) with direct statements.\n- Avoid stock transitions (“furthermore,” “in conclusion”) unless needed.\n- Vary terms; don’t repeat the same phrase.\n- Use contractions in informal writing (e.g., “don’t” vs. “do not”).\n- Swap formal words (“utilize,” “ascertain”) for simpler ones (“use,” “find out”).\n\n4. Style Rules\n- Prefer concise, varied sentence lengths over rigid structures.\n- Allow imperfections: fragments, casual tone, natural flow.\n- Adjust tone to fit the audience (formal or conversational).\n- Keep the core message intact, but avoid sounding polished to the point of sterility.\n\n5. Example Fix\nBefore (AI-like):\n“The results—though preliminary—suggest success; however, it’s worth noting limitations.”\nAfter (Human-like):\n“The preliminary results suggest success, but the limitations still need attention.”\n\n✅ Quick Checklist for Editing\n- Did I cut out clichés and filler phrases?\n- Did I simplify overly formal words?\n- Did I vary sentence lengths and rhythms?\n- Does the text sound like something a person would naturally say?\n\n---\nIn the results please refrain from using these phrases attached, and the words below between the colon \":\" and the 3 greater than signs \">>>\" below:\n\n:\nExplore, Revolutionize, Landscape, Delve, Dive, Uncover, Discover, unleash, ultimate, innovative and unique approach, unlock, elevate, introducing, delightful, ignite, empower, limitless, harnessing, memorable, extraordinary, decode, blend, indulge, effortless, await, enjoy, irresistible, hassle-free, tailored, unforgettable, meaningful, impactful, Step into, Capture\n\n>>>\n\nPlease also limit the use of exclamation marks so that it looks more conversational than an ad.",
+      "fields": [
+        {
+          "key": "task",
+          "label": "What should be written?",
+          "description": "Leave blank to use this as a standing style guide for the rest of the chat.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": false
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210011000,
+      "updatedAt": 1790210011000,
+      "history": []
+    },
+    {
+      "id": "p_u_taskwriter",
+      "title": "Write task titles and descriptions with duration labels",
+      "category": "Work",
+      "description": "Lean, clear task titles (start with a verb) and descriptions, labeled Quick Task, Small or Big Project.",
+      "template": "Can you write out a quick, easy-to-understand task title and description for the following task(s)? Please describe the task(s) with the criteria below. Keep the answer lean, but thorough and understandable. Answer with copy only (no code/docs needed).\n\nTasks:\n{{tasks}}\n\nTask criteria:\n\nTitle:\n- Must start with a verb\n- Must contain at least 5 words\n\nDescription:\n- Must be at least 1-2 sentences\n\nDuration (label):\n- Items must be labeled by duration (your best guess between the 3 options)\n- Quick Task = 1-30 min\n- Small Project = 30 min - 2 hours\n- Big Project = More than 2 hours",
+      "fields": [
+        {
+          "key": "tasks",
+          "label": "Tasks",
+          "description": "List the task(s), one per line.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210012000,
+      "updatedAt": 1790210012000,
+      "history": []
+    },
+    {
+      "id": "p_u_curriculum",
+      "title": "Daily, weekly and monthly checklists from a role curriculum",
+      "category": "Work",
+      "description": "Builds recurring checklists from an uploaded curriculum. Sent in two parts to fit the size limit.",
+      "template": "I've uploaded a curriculum defining all the roles of the {{role}}. Can you create a daily, weekly, and monthly checklist based on these documents?\n\nYou have a limit, so I'm sending the curriculum in two parts. This message has {{part}}.",
+      "fields": [
+        {
+          "key": "role",
+          "label": "Role",
+          "description": "Which role or position is the curriculum for?",
+          "type": "text",
+          "placeholder": "e.g. Customer Success Manager",
+          "default": "",
+          "options": [],
+          "required": true
+        },
+        {
+          "key": "part",
+          "label": "Which part are you sending?",
+          "description": "",
+          "type": "select",
+          "placeholder": "",
+          "default": "the first half",
+          "options": [
+            "the first half",
+            "the second half"
+          ],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210013000,
+      "updatedAt": 1790210013000,
+      "history": []
+    },
+    {
+      "id": "p_u_meetingbriefs",
+      "title": "Meeting notes and detailed task briefs from a transcript",
+      "category": "Work",
+      "description": "Major talking points and next actions, then a full brief for every task. Asks questions first.",
+      "template": "Can you create meeting notes, getting all the major talking points from this meeting as well as next actions?\n\nAfter you create the meeting notes, create another thing: for each task named in the transcript, create a task description using the context below. Please include the following sections:\n\n- Task/Project Name\n- Objective\n- Current situation\n- Requirements\n- Steps to completing the task/project\n- Definition of Done table (with Facts, Feelings, and Functionality as 3 columns)\n- Additional\n\nBefore you give me the main answer, please list all next actions discussed as a bullet list, and ask me any clarifying questions before you produce the full detailed notes.\n\nPlease analyze the context closely and extend this result to be longer and more specific. Don't limit the result by being brief; accuracy is way more important. Let me know if this is clear.\n\nHere is the transcript to give you context on the tasks/projects:\n{{transcript}}",
+      "fields": [
+        {
+          "key": "transcript",
+          "label": "Transcript",
+          "description": "Paste the full meeting transcript.",
+          "type": "long",
+          "placeholder": "",
+          "default": "",
+          "options": [],
+          "required": true
+        }
+      ],
+      "favorite": false,
+      "createdAt": 1790210014000,
+      "updatedAt": 1790210014000,
+      "history": []
+    },
+    {
+      "id": "p_u_extended",
+      "title": "Extended, accurate answer (add-on)",
+      "category": "Prompting",
+      "description": "Add to any request to get a longer, more specific and more accurate result.",
+      "template": "Please analyze the context closely and extend this result to be longer and more specific.\n\nPlease don't limit the result by being brief. Accuracy is way more important. Let me know if this is clear.",
+      "fields": [],
+      "favorite": false,
+      "createdAt": 1790210015000,
+      "updatedAt": 1790210015000,
       "history": []
     }
   ],

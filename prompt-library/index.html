@@ -594,8 +594,14 @@ function needsPush(local, remote) {
   if (local.prompts.some(p => !rp.has(p.id) || p.updatedAt > rp.get(p.id))) return true;
   return Object.entries(local.deleted).some(([id, ts]) => !(remote.deleted[id] >= ts));
 }
-async function loadStarter() {
-  try { const r = await fetch('prompts.json?t=' + now(), { cache:'no-store' }); if (r.ok) return normData(await r.json()); } catch {}
+/* Starter prompts ship with the site (prompts.json). They are merged into this device's library whenever the relay
+   is empty or unreachable, so newly added starters appear on their own. Merging (not replacing) means anything you
+   edited stays as you left it, and a starter you deleted stays deleted (its tombstone wins). */
+async function withStarter() {
+  try {
+    const r = await fetch('prompts.json?t=' + now(), { cache:'no-store' });
+    if (r.ok) return mergeData(state.data, normData(await r.json()));
+  } catch {}
   return state.data;
 }
 
@@ -632,15 +638,15 @@ async function refresh({ quiet = false } = {}) {
       state.data = mergeData(state.data, r);
       if (isDirty() || needsPush(state.data, r)) { rev++; setDirty(true); scheduleSync(0); }
     } else {
-      // The relay is empty: seed it from this device's copy, or from the starter prompts that ship with the site.
-      if (!state.data.prompts.length) state.data = await loadStarter();
+      // The relay is empty: seed it with this device's copy plus the starter prompts that ship with the site.
+      state.data = await withStarter();
       if (state.data.prompts.length) { rev++; setDirty(true); scheduleSync(0); }
     }
     persist(); setSync(restingStatus());
   } catch (e) {
     if (e instanceof AuthError) return needUnlock();
     relayUp = false;
-    if (!state.data.prompts.length) state.data = await loadStarter();
+    state.data = await withStarter();
     setSync(isDirty() ? 'local' : 'offline', friendly(e));
     if (!quiet) toast(friendly(e));
   }
