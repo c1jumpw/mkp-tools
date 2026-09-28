@@ -306,6 +306,28 @@
   .modal-content video{max-width:100%; max-height:100%;}
   .modal-content iframe{width:100%; height:100%; border:none;}
 
+  /* document viewer */
+  .doc-panel{
+    display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center;
+    padding:28px 22px; max-width:420px; color:var(--text);
+  }
+  .doc-panel-icon{font-size:38px;}
+  .doc-panel-name{font-family:var(--serif); font-size:17px; word-break:break-word;}
+  .doc-panel-meta{font-size:12px; color:var(--text-dim);}
+  .doc-panel-actions{display:flex; gap:9px; flex-wrap:wrap; justify-content:center; margin-top:4px;}
+  .doc-btn{
+    background:var(--brass); color:#221a0e; border:none; border-radius:9px; padding:11px 18px;
+    font-weight:700; font-size:13px; cursor:pointer; text-decoration:none; display:inline-block;
+  }
+  .doc-btn.secondary{background:var(--bg-2); color:var(--brass); border:1px solid var(--brass-dim);}
+  .doc-text{
+    width:100%; height:100%; overflow:auto; -webkit-overflow-scrolling:touch; padding:24px 20px;
+    box-sizing:border-box; color:var(--text); font-size:14px; line-height:1.65;
+    white-space:pre-wrap; word-break:break-word; text-align:left;
+  }
+  .doc-progress{width:190px; height:4px; border-radius:2px; background:var(--line); overflow:hidden;}
+  .doc-progress-fill{height:100%; width:0%; background:var(--brass); transition:width .2s;}
+
   /* tag modal */
   .tag-modal-overlay{
     position:fixed; inset:0; background:rgba(10,8,6,0.75); z-index:70; display:none;
@@ -1169,7 +1191,8 @@
     let entries;
     try { entries = await fetchFolder(path); } catch(e){ return []; }
     const visible = entries.filter(e => !e.name.startsWith("."));
-    const dirs = visible.filter(e => e.type === "dir");
+    // Never surface something you've thrown away as today's practice.
+    const dirs = visible.filter(e => e.type === "dir" && !isTrashEntry(e));
     const files = visible.filter(e => e.type !== "dir" && kindOf(e.name) === "audio");
     const nested = await Promise.all(dirs.map(d => collectAllAudio(d.path)));
     return files.concat(...nested);
@@ -1250,6 +1273,10 @@
     const organizing = el("organizeToggle").checked;
 
     let visible = allEntries.filter(e => {
+      // Trash is a housekeeping folder, not part of the library proper — it only
+      // appears while Organize is on, and then always last (see below), so it never
+      // sits between real folders during ordinary listening/browsing.
+      if (isTrashEntry(e)) return organizing;
       if (e.type === "dir") return true;
       const kind = kindOf(e.name);
       if (activeFilter !== "all" && kind !== activeFilter) return false;
@@ -1262,23 +1289,30 @@
       return;
     }
 
-    const folders = visible.filter(e => e.type === "dir");
+    const folders = visible.filter(e => e.type === "dir" && !isTrashEntry(e));
     const files = visible.filter(e => e.type !== "dir");
+    const trash = visible.filter(isTrashEntry);
 
     const frag = document.createDocumentFragment();
     folders.forEach(f => frag.appendChild(renderFolderRow(f, organizing)));
     files.forEach(f => frag.appendChild(renderFileRow(f, organizing)));
+    trash.forEach(f => frag.appendChild(renderFolderRow(f, organizing)));
     box.appendChild(frag);
   }
 
+  function isTrashEntry(entry){
+    return entry.type === "dir" && entry.path === `${MEDIA_PATH}/trash`;
+  }
+
   function renderFolderRow(entry, organizing){
+    const isTrash = isTrashEntry(entry);
     const row = document.createElement("div");
     row.className = "item folder";
     row.innerHTML = `
-      <div class="item-icon">📁</div>
+      <div class="item-icon">${isTrash ? "🗑" : "📁"}</div>
       <div class="item-body">
-        <div class="item-title">${entry.name}</div>
-        <div class="item-meta">Folder</div>
+        <div class="item-title">${isTrash ? "Trash" : entry.name}</div>
+        <div class="item-meta">${isTrash ? "Removed items" : "Folder"}</div>
       </div>
       <div class="item-chevron">›</div>`;
     row.addEventListener("click", (e) => {
@@ -1539,7 +1573,16 @@
     const res = await relayFetch(`/release-asset?name=${encodeURIComponent(file.name)}`, {
       method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file
     });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+    if (!res.ok){
+      const msg = (await res.json().catch(() => ({}))).message || `HTTP ${res.status}`;
+      // This route was added to the relay alongside the in-app uploader. A 404 here almost
+      // always means the Worker still runs an older version, so say that plainly instead of
+      // leaving a bare "Not found" to interpret.
+      if (res.status === 404){
+        throw new Error("The relay doesn't have the large-file route yet — paste the latest Worker code into Cloudflare and Save + Deploy, then retry.");
+      }
+      throw new Error(msg);
+    }
     const data = await res.json();
     const pointerPath = `${folder}/${file.name}.ghrelease.json`;
     statusFn("Linking file into the folder…");
@@ -1547,11 +1590,42 @@
     return pointerPath;
   }
 
+  // Anything at or above this goes straight to the Release-asset path instead of the blob
+  // API. Base64 inflates a file by ~33%, so a 35MB video becomes a ~47MB JSON body that the
+  // Worker has to buffer whole before forwarding — which is what was silently timing out
+  // rather than erroring. Release assets take the raw bytes, no inflation, reliable to 2GB.
+  const BLOB_MAX_BYTES = 20 * 1024 * 1024;
+  // A hung request never returns a status, so the old "fall back only on 422 too-large"
+  // rule could never fire on a timeout. This bounds the wait and converts it into a fallback.
+  const BLOB_TIMEOUT_MS = 90 * 1000;
+
   async function pdlUploadOneFile(file, folder, statusFn){
+    if (file.size >= BLOB_MAX_BYTES){
+      statusFn("Large file — using the reliable path…");
+      return await pdlUploadAsReleaseAsset(file, folder, statusFn);
+    }
+
     statusFn("Reading file…");
     const b64 = await fileToBase64PDL(file);
     statusFn("Uploading…");
-    const blobRes = await relayFetch("/blob", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: b64, encoding: "base64" }) });
+
+    let blobRes;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), BLOB_TIMEOUT_MS);
+    try{
+      blobRes = await relayFetch("/blob", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: b64, encoding: "base64" }), signal: ctrl.signal
+      });
+    } catch(err){
+      // Timed out or the connection dropped mid-upload — retry it the reliable way rather
+      // than surfacing a dead end.
+      statusFn("Upload stalled — retrying the reliable way…");
+      return await pdlUploadAsReleaseAsset(file, folder, statusFn);
+    } finally {
+      clearTimeout(timer);
+    }
+
     if (!blobRes.ok){
       const errBody = await blobRes.json().catch(() => ({}));
       const msg = errBody.message || `HTTP ${blobRes.status}`;
@@ -3457,19 +3531,134 @@
     setMediaSrcWithFallback(el("modalContent").querySelector("video"), entry.path);
     wireVideoSpeed();
   }
-  function openDoc(entry){
+  // Documents can't be shown straight from GitHub: the github.com blob page sends
+  // X-Frame-Options: deny so an iframe of it renders blank, and raw.githubusercontent.com
+  // sends application/octet-stream + nosniff, which forces a download instead of rendering.
+  // So we fetch the bytes ourselves (CORS is open) and hand the browser a Blob whose MIME
+  // type we set correctly — that works regardless of what the host claims the file is.
+  const MIME_BY_EXT = {
+    pdf: "application/pdf", txt: "text/plain", md: "text/plain",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  };
+  // iOS renders PDFs inside an iframe unreliably (blank, or first page only), so there we
+  // lead with "open it properly" rather than showing a broken-looking embed.
+  function isIOS(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function fmtBytes(n){
+    if (!n) return "";
+    return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  }
+
+  async function fetchDocBlob(path, mime, onProgress){
+    let res;
+    try{
+      res = await fetch(jsDelivrUrl(path));
+      if (!res.ok) throw new Error("cdn miss");
+    } catch(e){
+      res = await fetch(rawUrl(path)); // CDN may not have a just-uploaded file yet
+    }
+    if (!res.ok) throw new Error(`Couldn't fetch the file (${res.status})`);
+
+    const total = Number(res.headers.get("content-length")) || 0;
+    if (!res.body || !total){
+      return new Blob([await res.arrayBuffer()], { type: mime });
+    }
+    const reader = res.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for(;;){
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      onProgress(received / total);
+    }
+    return new Blob(chunks, { type: mime });
+  }
+
+  function docPanel({ icon, name, meta, buttons }){
+    return `
+      <div class="doc-panel">
+        <div class="doc-panel-icon">${icon}</div>
+        <div class="doc-panel-name">${name}</div>
+        ${meta ? `<div class="doc-panel-meta">${meta}</div>` : ""}
+        <div class="doc-panel-actions">${buttons}</div>
+      </div>`;
+  }
+
+  async function openDoc(entry){
     const ext = entry.name.split(".").pop().toLowerCase();
-    if (ext === "pdf"){
-      el("modalContent").innerHTML = `<iframe src="${blobUrl(entry.path)}"></iframe>`;
-      el("modalOverlay").classList.add("show");
-    } else {
-      window.open(blobUrl(entry.path), "_blank");
+    const mime = MIME_BY_EXT[ext] || "application/octet-stream";
+    const label = niceName(entry.name);
+
+    el("modalContent").innerHTML = `
+      <div class="doc-panel">
+        <div class="doc-panel-icon">▤</div>
+        <div class="doc-panel-name">${label}</div>
+        <div class="doc-panel-meta" id="docLoadingMeta">Loading…</div>
+        <div class="doc-progress"><div class="doc-progress-fill" id="docProgressFill"></div></div>
+      </div>`;
+    el("modalOverlay").classList.add("show");
+
+    try{
+      const blob = await fetchDocBlob(entry.path, mime, pct => {
+        const fill = el("docProgressFill");
+        if (fill) fill.style.width = `${Math.round(pct * 100)}%`;
+      });
+
+      // Plain text and markdown read best inline — no download, no external viewer.
+      if (ext === "txt" || ext === "md"){
+        const text = await blob.text();
+        el("modalContent").innerHTML = `<div class="doc-text"></div>`;
+        el("modalContent").querySelector(".doc-text").textContent = text;
+        return;
+      }
+
+      const objUrl = URL.createObjectURL(blob);
+      // Revoked when the modal closes (see modalClose), not here — the iframe/tab still needs it.
+      openDocObjectUrls.push(objUrl);
+      const size = fmtBytes(blob.size);
+
+      if (ext === "pdf" && !isIOS()){
+        el("modalContent").innerHTML = `<iframe src="${objUrl}"></iframe>`;
+        return;
+      }
+
+      el("modalContent").innerHTML = docPanel({
+        icon: ext === "pdf" ? "▤" : "📄",
+        name: label,
+        meta: ext === "pdf" ? `PDF · ${size}` : `${ext.toUpperCase()} · ${size}`,
+        buttons: `
+          <button class="doc-btn" id="docOpenBtn">Open</button>
+          <a class="doc-btn secondary" href="${objUrl}" download="${entry.name}">Download</a>`
+      });
+      el("docOpenBtn").addEventListener("click", () => window.open(objUrl, "_blank"));
+    } catch(err){
+      el("modalContent").innerHTML = docPanel({
+        icon: "⚠",
+        name: label,
+        meta: `Couldn't open this document: ${err.message}`,
+        buttons: `<a class="doc-btn secondary" href="${rawUrl(entry.path)}" target="_blank" rel="noopener">Open on GitHub</a>`
+      });
+    }
+  }
+
+  // Object URLs pin their Blob in memory until revoked — with 30MB+ documents that adds up
+  // fast on a phone, so they're released as soon as the viewer closes.
+  const openDocObjectUrls = [];
+  function releaseDocObjectUrls(){
+    while (openDocObjectUrls.length){
+      try { URL.revokeObjectURL(openDocObjectUrls.pop()); } catch(e){}
     }
   }
   el("modalClose").addEventListener("click", () => {
     el("modalContent").innerHTML = "";
     el("modalOverlay").classList.remove("show");
     el("modalSpeed").classList.remove("show");
+    releaseDocObjectUrls();
   });
 
   // ---------- chunked file reconstruction ----------
@@ -3579,11 +3768,30 @@
   }
 
   async function openPointerDoc(entry){
+    const label = niceName(entry.name);
+    el("modalContent").innerHTML = `
+      <div class="doc-panel">
+        <div class="doc-panel-icon">▤</div>
+        <div class="doc-panel-name">${label}</div>
+        <div class="doc-panel-meta">Loading…</div>
+      </div>`;
+    el("modalOverlay").classList.add("show");
     try{
       const pointer = await fetchPointer(entry.path);
-      window.open(pointer.url, "_blank");
+      // Deliberately a real link the person taps rather than window.open() — this runs after
+      // an await, so the browser no longer counts it as a user gesture and mobile popup
+      // blockers silently swallow it, which looks exactly like "the document won't open".
+      el("modalContent").innerHTML = docPanel({
+        icon: "▤",
+        name: label,
+        meta: pointer.size ? fmtBytes(pointer.size) : "",
+        buttons: `<a class="doc-btn" href="${pointer.url}" target="_blank" rel="noopener">Open document</a>`
+      });
     } catch(err){
-      alert("Couldn't load document: " + err.message);
+      el("modalContent").innerHTML = docPanel({
+        icon: "⚠", name: label,
+        meta: `Couldn't load this document: ${err.message}`, buttons: ""
+      });
     }
   }
 
