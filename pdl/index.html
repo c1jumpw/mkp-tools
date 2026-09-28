@@ -1569,17 +1569,24 @@
   }
 
   async function pdlUploadAsReleaseAsset(file, folder, statusFn){
-    statusFn("Storing as a release asset (large file)…");
-    const res = await relayFetch(`/release-asset?name=${encodeURIComponent(file.name)}`, {
-      method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file
-    });
+    statusFn("Uploading 0%…");
+    const url = CONFIG.WORKER_URL.replace(/\/+$/, "") + `/release-asset?name=${encodeURIComponent(file.name)}`;
+    const raw = await uploadWithProgress(
+      url,
+      { "X-App-Key": CONFIG.APP_KEY, "Content-Type": file.type || "application/octet-stream" },
+      file,
+      pct => statusFn(`Uploading ${Math.round(pct * 100)}%…`)
+    );
+    const res = { ok: raw.ok, status: raw.status, json: async () => JSON.parse(raw.body || "{}") };
     if (!res.ok){
       const msg = (await res.json().catch(() => ({}))).message || `HTTP ${res.status}`;
-      // This route was added to the relay alongside the in-app uploader. A 404 here almost
-      // always means the Worker still runs an older version, so say that plainly instead of
-      // leaving a bare "Not found" to interpret.
+      // This route was added to the relay alongside the in-app uploader, so a 404 means the
+      // Worker is still on an older version. Not worth retrying — but not fatal either: the
+      // chunked path the caller falls back to uses only routes the relay has always had.
       if (res.status === 404){
-        throw new Error("The relay doesn't have the large-file route yet — paste the latest Worker code into Cloudflare and Save + Deploy, then retry.");
+        const e = new Error("Relay has no large-file route (older Worker version)");
+        e.noRetry = true;
+        throw e;
       }
       throw new Error(msg);
     }
@@ -1598,11 +1605,117 @@
   // A hung request never returns a status, so the old "fall back only on 422 too-large"
   // rule could never fire on a timeout. This bounds the wait and converts it into a fallback.
   const BLOB_TIMEOUT_MS = 90 * 1000;
+  // Each part is small enough to finish before a shaky mobile connection drops it, and a
+  // failure only costs that one part rather than the whole upload.
+  const CHUNK_SIZE = 4 * 1024 * 1024;
+
+  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  async function withRetry(fn, attempts, onRetry){
+    let lastErr;
+    for (let i = 0; i < attempts; i++){
+      try { return await fn(); }
+      catch(err){
+        lastErr = err;
+        if (err && err.noRetry) throw err; // retrying can't change this outcome
+        if (i < attempts - 1){
+          if (onRetry) onRetry(i + 1, err);
+          await sleep(1000 * Math.pow(2, i)); // 1s, 2s, 4s…
+        }
+      }
+    }
+    throw lastErr;
+  }
+
+  // fetch() gives no upload progress, so a big upload looks frozen right up until it fails.
+  // XHR does, which is the difference between "is this working?" and a visible percentage.
+  function uploadWithProgress(url, headers, body, onProgress){
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      Object.keys(headers).forEach(k => xhr.setRequestHeader(k, headers[k]));
+      xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+      xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body: xhr.responseText });
+      xhr.onerror = () => reject(new Error("Network connection lost"));
+      xhr.ontimeout = () => reject(new Error("Upload timed out"));
+      xhr.onabort = () => reject(new Error("Upload interrupted"));
+      xhr.timeout = 5 * 60 * 1000;
+      xhr.send(body);
+    });
+  }
+
+  function blobToBase64(blob){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => { const r = reader.result; resolve(r.slice(r.indexOf(",") + 1)); };
+      reader.onerror = () => reject(reader.error || new Error("Could not read file"));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function putBlob(b64){
+    const res = await relayFetch("/blob", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: b64, encoding: "base64" })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+    return (await res.json()).sha;
+  }
+
+  // Splits the file into part blobs and commits them plus a manifest in ONE commit, in the
+  // exact layout the player's reconstructBlob() already understands. Slower to start playing
+  // (the player must fetch every part before it can begin) but it's the only path that
+  // reliably completes over a connection that keeps dropping.
+  async function pdlUploadChunked(file, folder, statusFn){
+    const manifestPath = `${folder}/${file.name}${CHUNK_SUFFIX}`;
+    const chunkFolder = chunkFolderFor(manifestPath);
+    const parts = Math.ceil(file.size / CHUNK_SIZE);
+    const treeEntries = [];
+
+    for (let i = 0; i < parts; i++){
+      const slice = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
+      const b64 = await blobToBase64(slice);
+      const sha = await withRetry(
+        () => putBlob(b64), 4,
+        n => statusFn(`Part ${i + 1} of ${parts} — retry ${n}…`)
+      );
+      treeEntries.push({
+        path: `${chunkFolder}/part-${String(i + 1).padStart(3, "0")}`,
+        mode: "100644", type: "blob", sha
+      });
+      statusFn(`Uploaded part ${i + 1} of ${parts} (${Math.round(((i + 1) / parts) * 100)}%)`);
+    }
+
+    const manifest = JSON.stringify({ parts, size: file.size, name: file.name });
+    const manifestSha = await withRetry(
+      () => putBlob(btoa(unescape(encodeURIComponent(manifest)))), 4,
+      n => statusFn(`Finishing — retry ${n}…`)
+    );
+    treeEntries.push({ path: manifestPath, mode: "100644", type: "blob", sha: manifestSha });
+
+    statusFn("Saving…");
+    await withRetry(
+      () => commitTreeEntries(treeEntries, `Add ${file.name} (${parts} parts)`), 3,
+      n => statusFn(`Saving — retry ${n}…`)
+    );
+    purgeJsDelivr(manifestPath);
+    return manifestPath;
+  }
 
   async function pdlUploadOneFile(file, folder, statusFn){
     if (file.size >= BLOB_MAX_BYTES){
-      statusFn("Large file — using the reliable path…");
-      return await pdlUploadAsReleaseAsset(file, folder, statusFn);
+      // Release assets stream properly during playback, so they're worth trying first — but
+      // it's one long request, which is exactly what a dropping connection kills. Two tries,
+      // then switch to the chunked path that can actually survive a bad network.
+      try{
+        return await withRetry(
+          () => pdlUploadAsReleaseAsset(file, folder, statusFn), 2,
+          n => statusFn(`Connection dropped — retry ${n}…`)
+        );
+      } catch(err){
+        statusFn("Switching to chunked upload…");
+        return await pdlUploadChunked(file, folder, statusFn);
+      }
     }
 
     statusFn("Reading file…");
