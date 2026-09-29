@@ -371,6 +371,66 @@
   .tag-cancel{background:var(--bg-2); color:var(--text); border:1px solid var(--line) !important;}
   .tag-save{background:var(--brass); color:#221a0e;}
 
+  /* grid view */
+  .layout-toggle{
+    display:flex; gap:2px; background:var(--panel); border:1px solid var(--line);
+    border-radius:8px; padding:3px; margin-left:auto; flex-shrink:0;
+  }
+  .layout-btn{
+    background:none; border:none; color:var(--text-dim); font-size:13px; line-height:1;
+    padding:6px 10px; border-radius:6px; cursor:pointer; min-height:32px;
+  }
+  .layout-btn.active{background:var(--brass-dim); color:var(--brass);}
+
+  .grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;}
+  @media (min-width:560px){ .grid{grid-template-columns:repeat(3, 1fr);} }
+  @media (min-width:820px){ .grid{grid-template-columns:repeat(4, 1fr);} }
+  .tile{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; cursor:pointer; display:flex; flex-direction:column;
+  }
+  .tile-art{
+    position:relative; width:100%; aspect-ratio:1/1; background:var(--bg-2);
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  .tile-art img{width:100%; height:100%; object-fit:cover; display:block;}
+  .tile-art-placeholder{font-size:34px; color:var(--brass-dim);}
+  .tile-kind{
+    position:absolute; top:7px; left:7px; background:rgba(0,0,0,.55); color:#fff;
+    font-size:9px; font-weight:800; letter-spacing:.06em; padding:3px 7px; border-radius:10px;
+  }
+  .tile-summary{
+    position:absolute; top:6px; right:6px; background:rgba(0,0,0,.55);
+    width:28px; height:28px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:13px;
+  }
+  .tile-cover-hint{
+    position:absolute; inset:0; background:rgba(0,0,0,.45); color:var(--brass);
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
+  }
+  .tile-body{padding:9px 10px 11px;}
+  .tile-title{font-size:12.5px; line-height:1.35; color:var(--text); word-break:break-word;}
+  .tile-meta{font-size:10px; color:var(--text-dim); margin-top:3px;}
+  .tile.folder .tile-art-placeholder{font-size:30px;}
+
+  /* cover crop editor */
+  .cc-card{background:var(--panel); border:1px solid var(--line); border-radius:16px; width:100%; max-width:400px; padding:18px;}
+  .cc-title{font-family:var(--serif); font-size:17px; margin-bottom:3px;}
+  .cc-sub{font-size:11.5px; color:var(--text-dim); margin-bottom:14px;}
+  .cc-stage{
+    position:relative; width:100%; aspect-ratio:1/1; background:#000; border-radius:10px;
+    overflow:hidden; touch-action:none; cursor:grab;
+  }
+  .cc-stage canvas{width:100%; height:100%; display:block;}
+  .cc-zoom-row{display:flex; align-items:center; gap:10px; margin-top:12px;}
+  .cc-zoom-row input{flex:1;}
+  .cc-zoom-label{font-size:11px; color:var(--text-dim); white-space:nowrap;}
+  .cc-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;}
+  .cc-btn{padding:10px 16px; border-radius:9px; font-weight:700; font-size:13px; cursor:pointer; border:none; background:var(--brass); color:#221a0e;}
+  .cc-btn.secondary{background:var(--bg-2); color:var(--text); border:1px solid var(--line);}
+  .cc-btn.danger{background:none; color:#c97a6e; border:1px solid var(--line); margin-right:auto;}
+  .cc-btn:disabled{opacity:.5; cursor:not-allowed;}
+
   /* pull to refresh */
   .ptr-indicator{
     position:fixed; top:0; left:0; right:0; display:flex; align-items:center; justify-content:center;
@@ -634,6 +694,25 @@
   <div class="transcript-panel" id="transcriptPanel"><div id="transcriptText"></div></div>
 </div>
 <audio id="audioEl"></audio>
+
+<input type="file" id="coverInput" accept="image/*" style="display:none;">
+<div class="te-overlay" id="ccOverlay">
+  <div class="cc-card">
+    <div class="cc-title">Cover art</div>
+    <div class="cc-sub" id="ccFileName"></div>
+    <div class="cc-stage" id="ccStage"><canvas id="ccCanvas" width="600" height="600"></canvas></div>
+    <div class="cc-zoom-row">
+      <span class="cc-zoom-label">Zoom</span>
+      <input type="range" id="ccZoom" min="100" max="300" value="100">
+    </div>
+    <div class="cc-sub" style="margin:10px 0 0;">Drag the image to reposition. Saved as a 600×600 square.</div>
+    <div class="cc-actions">
+      <button class="cc-btn danger" id="ccRemove" type="button">Remove</button>
+      <button class="cc-btn secondary" id="ccCancel" type="button">Cancel</button>
+      <button class="cc-btn" id="ccSave" type="button">Save cover</button>
+    </div>
+  </div>
+</div>
 
 <div class="ptr-indicator" id="ptrIndicator">Release to refresh</div>
 
@@ -960,7 +1039,8 @@
   // Sidecars sit beside the media file they describe, so they move/rename/trash with it.
   // They're hidden from the listing (see loadCurrentFolder) — you see the media, not its notes.
   const SUMMARY_SUFFIX = ".summary.json";
-  const SIDECAR_SUFFIXES = [SUMMARY_SUFFIX, ".transcript.json", ".transcript.txt"];
+  const COVER_SUFFIX = ".cover.jpg";
+  const SIDECAR_SUFFIXES = [SUMMARY_SUFFIX, COVER_SUFFIX, ".transcript.json", ".transcript.txt"];
   function isSidecarName(name){ return SIDECAR_SUFFIXES.some(s => name.endsWith(s)); }
 
   const CHUNK_SUFFIX = ".chunked.json";
@@ -1324,6 +1404,21 @@
       btn.addEventListener("click", createFolder);
       box.appendChild(btn);
     }
+
+    const toggle = document.createElement("div");
+    toggle.className = "layout-toggle";
+    toggle.innerHTML = `
+      <button class="layout-btn ${browseLayout === "list" ? "active" : ""}" data-layout="list" type="button" title="List view">☰</button>
+      <button class="layout-btn ${browseLayout === "grid" ? "active" : ""}" data-layout="grid" type="button" title="Grid view">▦</button>`;
+    toggle.querySelectorAll(".layout-btn").forEach(b => {
+      b.addEventListener("click", () => {
+        browseLayout = b.dataset.layout;
+        localStorage.setItem(LS_LAYOUT, browseLayout);
+        buildCrumbs();
+        renderListing();
+      });
+    });
+    box.appendChild(toggle);
   }
 
   function iconFor(kind){
@@ -1360,10 +1455,116 @@
     const trash = visible.filter(isTrashEntry);
 
     const frag = document.createDocumentFragment();
-    folders.forEach(f => frag.appendChild(renderFolderRow(f, organizing)));
-    files.forEach(f => frag.appendChild(renderFileRow(f, organizing)));
-    trash.forEach(f => frag.appendChild(renderFolderRow(f, organizing)));
+    if (browseLayout === "grid"){
+      const grid = document.createElement("div");
+      grid.className = "grid";
+      folders.forEach(f => grid.appendChild(renderTile(f, organizing)));
+      files.forEach(f => grid.appendChild(renderTile(f, organizing)));
+      trash.forEach(f => grid.appendChild(renderTile(f, organizing)));
+      frag.appendChild(grid);
+    } else {
+      folders.forEach(f => frag.appendChild(renderFolderRow(f, organizing)));
+      files.forEach(f => frag.appendChild(renderFileRow(f, organizing)));
+      trash.forEach(f => frag.appendChild(renderFolderRow(f, organizing)));
+    }
     box.appendChild(frag);
+  }
+
+  function coverPathFor(entry){ return transcriptBase(entry) + COVER_SUFFIX; }
+  function hasCover(entry){ return coverPaths.has(transcriptBase(entry)); }
+
+  function renderTile(entry, organizing){
+    const isDir = entry.type === "dir";
+    const inTrash = isInTrash(entry.path);
+    const kind = isDir ? "folder" : kindOf(entry.name);
+    const tile = document.createElement("div");
+    tile.className = "tile" + (isDir ? " folder" : "");
+
+    const art = document.createElement("div");
+    art.className = "tile-art";
+    if (!isDir && hasCover(entry)){
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.alt = "";
+      img.src = jsDelivrUrl(coverPathFor(entry));
+      // The CDN won't have a cover uploaded moments ago; fall back once to the origin.
+      img.addEventListener("error", function once(){
+        img.removeEventListener("error", once);
+        img.src = rawUrl(coverPathFor(entry));
+      });
+      art.appendChild(img);
+    } else {
+      const ph = document.createElement("div");
+      ph.className = "tile-art-placeholder";
+      ph.textContent = isTrashEntry(entry) ? "🗑" : isDir ? "📁" : iconFor(kind);
+      art.appendChild(ph);
+    }
+    if (!isDir){
+      const badge = document.createElement("div");
+      badge.className = "tile-kind";
+      badge.textContent = kind.toUpperCase();
+      art.appendChild(badge);
+      if (!organizing && hasSummary(entry)){
+        const sum = document.createElement("div");
+        sum.className = "tile-summary";
+        sum.textContent = "📝";
+        sum.addEventListener("click", e => { e.stopPropagation(); openSummary(entry, false); });
+        art.appendChild(sum);
+      }
+      if (organizing && !inTrash){
+        const hint = document.createElement("div");
+        hint.className = "tile-cover-hint";
+        hint.textContent = hasCover(entry) ? "Change cover" : "+ Add cover";
+        art.appendChild(hint);
+      }
+    }
+    tile.appendChild(art);
+
+    const body = document.createElement("div");
+    body.className = "tile-body";
+    const title = document.createElement("div");
+    title.className = "tile-title";
+    title.textContent = isTrashEntry(entry) ? "Trash" : isDir ? entry.name : niceName(entry.name);
+    body.appendChild(title);
+    if (inTrash && !isDir){
+      const d = daysLeftFor(entry.name);
+      if (d !== null){
+        const meta = document.createElement("div");
+        meta.className = "tile-meta";
+        meta.textContent = `deletes in ${d} day${d === 1 ? "" : "s"}`;
+        body.appendChild(meta);
+      }
+    }
+    tile.appendChild(body);
+
+    tile.addEventListener("click", () => {
+      if (isDir){ currentPath = entry.path; loadCurrentFolder(); return; }
+      // In Organize mode the grid is where cover art is managed — that's the whole reason
+      // to be looking at covers — so a tap edits the cover rather than starting playback.
+      if (organizing && !inTrash){ openCoverEditor(entry); return; }
+      openEntry(entry);
+    });
+    return tile;
+  }
+
+  // Shared by the list rows and the grid tiles so both open things identically.
+  function openEntry(entry){
+    const kind = kindOf(entry.name);
+    const isChunked = entry.name.endsWith(CHUNK_SUFFIX);
+    const isPointer = entry.name.endsWith(POINTER_SUFFIX);
+    if (isChunked){
+      if (kind === "audio") playChunkedAudio(entry);
+      else if (kind === "video") playChunkedVideo(entry);
+      else openChunkedDoc(entry);
+    } else if (isPointer){
+      if (kind === "audio") playPointerAudio(entry);
+      else if (kind === "video") playPointerVideo(entry);
+      else openPointerDoc(entry);
+    } else {
+      if (kind === "audio") playAudio(entry);
+      else if (kind === "video") playVideo(entry);
+      else openDoc(entry);
+    }
   }
 
   function isTrashEntry(entry){
@@ -1424,19 +1625,7 @@
       if (e.target.closest(".organize-controls")) return;
       if (e.target.closest(".item-summary-badge")) return;
       if (e.target.closest(".rename-row")) return; // editing the title, not opening the item
-      if (isChunked){
-        if (kind === "audio") playChunkedAudio(entry);
-        else if (kind === "video") playChunkedVideo(entry);
-        else openChunkedDoc(entry);
-      } else if (isPointer){
-        if (kind === "audio") playPointerAudio(entry);
-        else if (kind === "video") playPointerVideo(entry);
-        else openPointerDoc(entry);
-      } else {
-        if (kind === "audio") playAudio(entry);
-        else if (kind === "video") playVideo(entry);
-        else openDoc(entry);
-      }
+      openEntry(entry);
     });
 
     if (inTrash){
@@ -1729,6 +1918,9 @@
 
   const folderCache = new Map(); // path -> sorted entries, cleared on any write action
   const summaryPaths = new Set(); // media paths (sans suffix) known to have a summary sidecar
+  const coverPaths = new Set();   // ...and which have cover art, for the grid view
+  const LS_LAYOUT = "pdl_layout_v1";
+  let browseLayout = localStorage.getItem(LS_LAYOUT) === "grid" ? "grid" : "list";
 
   // ---------- in-app media uploader (Browse + Collections) ----------
   // Same battle-tested blob/tree/commit flow as the standalone Uploader app, adapted to
@@ -2025,8 +2217,10 @@
       // The sidecars are in this same listing, so note which media already have a summary
       // before filtering them out — that's the 📝 marker, with no extra network calls.
       summaryPaths.clear();
+      coverPaths.clear();
       raw.forEach(e => {
         if (e.name.endsWith(SUMMARY_SUFFIX)) summaryPaths.add(e.path.slice(0, -SUMMARY_SUFFIX.length));
+        if (e.name.endsWith(COVER_SUFFIX)) coverPaths.add(e.path.slice(0, -COVER_SUFFIX.length));
       });
       const entries = raw.filter(e => !e.name.startsWith(".") && !isSidecarName(e.name));
       entries.sort((a,b) => {
@@ -3468,6 +3662,144 @@
     searchTerm = e.target.value.toLowerCase();
     if (currentView === "collections") renderCollectionsView(); else renderListing();
   });
+
+  // ---------- cover art (square, cropped in-browser) ----------
+  // The crop happens here rather than server-side so what gets uploaded is already a small
+  // 600×600 JPEG — a phone photo can be 5MB, and a grid of those would be unusable.
+  const COVER_PX = 600;
+  let ccEntry = null, ccImage = null, ccOffset = { x: 0, y: 0 }, ccScale = 1, ccBaseScale = 1;
+
+  function ccDraw(){
+    const cv = el("ccCanvas"), ctx = cv.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, COVER_PX, COVER_PX);
+    if (!ccImage) return;
+    const s = ccBaseScale * ccScale;
+    const w = ccImage.width * s, h = ccImage.height * s;
+    ctx.drawImage(ccImage, ccOffset.x + (COVER_PX - w) / 2, ccOffset.y + (COVER_PX - h) / 2, w, h);
+  }
+
+  function ccClampOffset(){
+    // Keep the frame covered — you can reposition, but never drag empty space into view.
+    const s = ccBaseScale * ccScale;
+    const maxX = Math.max(0, (ccImage.width * s - COVER_PX) / 2);
+    const maxY = Math.max(0, (ccImage.height * s - COVER_PX) / 2);
+    ccOffset.x = Math.max(-maxX, Math.min(maxX, ccOffset.x));
+    ccOffset.y = Math.max(-maxY, Math.min(maxY, ccOffset.y));
+  }
+
+  function openCoverEditor(entry){
+    ccEntry = entry;
+    el("ccFileName").textContent = niceName(entry.name);
+    el("ccRemove").style.display = hasCover(entry) ? "block" : "none";
+    ccImage = null; ccOffset = { x: 0, y: 0 }; ccScale = 1;
+    el("ccZoom").value = 100;
+    ccDraw();
+    el("ccOverlay").classList.add("show");
+    el("coverInput").value = "";
+    el("coverInput").click(); // straight to the picker — that's why you tapped
+  }
+
+  el("coverInput").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      ccImage = img;
+      // Start at "cover": the short edge exactly fills the square.
+      ccBaseScale = Math.max(COVER_PX / img.width, COVER_PX / img.height);
+      ccScale = 1; ccOffset = { x: 0, y: 0 };
+      el("ccZoom").value = 100;
+      ccDraw();
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => { alert("Couldn't read that image."); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+
+  el("ccZoom").addEventListener("input", e => {
+    if (!ccImage) return;
+    ccScale = Number(e.target.value) / 100;
+    ccClampOffset();
+    ccDraw();
+  });
+
+  (function ccDragging(){
+    const stage = el("ccStage");
+    let dragging = false, last = null;
+    stage.addEventListener("pointerdown", e => {
+      if (!ccImage) return;
+      dragging = true; last = { x: e.clientX, y: e.clientY };
+      stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener("pointermove", e => {
+      if (!dragging || !ccImage) return;
+      // Pointer moves in CSS pixels; the canvas is 600 wide, so scale the delta across.
+      const ratio = COVER_PX / stage.getBoundingClientRect().width;
+      ccOffset.x += (e.clientX - last.x) * ratio;
+      ccOffset.y += (e.clientY - last.y) * ratio;
+      last = { x: e.clientX, y: e.clientY };
+      ccClampOffset();
+      ccDraw();
+    });
+    ["pointerup", "pointercancel"].forEach(ev => stage.addEventListener(ev, () => { dragging = false; }));
+  })();
+
+  function canvasToBase64Jpeg(){
+    const dataUrl = el("ccCanvas").toDataURL("image/jpeg", 0.82);
+    return dataUrl.slice(dataUrl.indexOf(",") + 1);
+  }
+
+  async function putCoverFile(path, base64, message){
+    let sha = null;
+    try{
+      const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, { method: "GET" });
+      if (res.ok) sha = (await res.json()).sha;
+    } catch(e){}
+    const body = { message, content: base64 };
+    if (sha) body.sha = sha;
+    const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  }
+
+  el("ccSave").addEventListener("click", async () => {
+    if (!ccImage){ alert("Choose an image first."); return; }
+    const btn = el("ccSave");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try{
+      await putCoverFile(coverPathFor(ccEntry), canvasToBase64Jpeg(), `Cover art: ${ccEntry.name}`);
+      coverPaths.add(transcriptBase(ccEntry));
+      purgeJsDelivr(coverPathFor(ccEntry));
+      el("ccOverlay").classList.remove("show");
+      folderCache.clear();
+      loadCurrentFolder(true);
+    } catch(err){
+      alert("Couldn't save the cover: " + err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Save cover";
+    }
+  });
+
+  el("ccRemove").addEventListener("click", async () => {
+    if (!confirm(`Remove the cover art for "${niceName(ccEntry.name)}"?`)) return;
+    try{
+      await commitTreeEntries(
+        [{ path: coverPathFor(ccEntry), mode: "100644", type: "blob", sha: null }],
+        `Remove cover art: ${ccEntry.name}`
+      );
+      coverPaths.delete(transcriptBase(ccEntry));
+      el("ccOverlay").classList.remove("show");
+      folderCache.clear();
+      loadCurrentFolder(true);
+    } catch(err){
+      alert("Couldn't remove the cover: " + err.message);
+    }
+  });
+
+  el("ccCancel").addEventListener("click", () => el("ccOverlay").classList.remove("show"));
 
   // ---------- pull to refresh ----------
   // Only arms when the page is already scrolled to the very top and the finger travels far
