@@ -211,7 +211,8 @@
   .mini-times{display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-dim); font-family:var(--sans); font-variant-numeric:tabular-nums; margin-top:-2px;}
   .mini-close{background:none; border:none; color:var(--text-dim); font-size:16px; cursor:pointer; flex-shrink:0; padding:8px;}
 
-  .mini-controls{display:flex; align-items:center; justify-content:center; gap:8px;}
+  /* wraps so the pill buttons drop to a second line on narrow phones rather than overflowing */
+  .mini-controls{display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; row-gap:8px;}
   .mini-skip{
     background:none; border:none; color:var(--text); font-size:11px; font-weight:700; cursor:pointer;
     width:46px; height:44px; border-radius:10px; flex-shrink:0;
@@ -226,6 +227,27 @@
     padding:0 12px; height:36px; border-radius:20px; cursor:pointer; white-space:nowrap; flex-shrink:0;
   }
   .mini-speed.active, .mini-transcript.active{color:var(--brass); border-color:var(--brass-dim); background:var(--brass-soft);}
+
+  /* summary — one overlay serves audio, video and documents alike */
+  .item-summary-badge{
+    flex-shrink:0; font-size:15px; opacity:.8; padding:6px 4px; cursor:pointer; line-height:1;
+  }
+  .su-card{background:var(--panel); border:1px solid var(--line); border-radius:16px; width:100%; max-width:560px; max-height:86vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:20px;}
+  .su-header{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px;}
+  .su-title{font-family:var(--serif); font-size:18px;}
+  .su-file{font-size:11.5px; color:var(--text-dim); margin-bottom:14px; word-break:break-word;}
+  .su-close{background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; line-height:1; padding:0 4px;}
+  .su-body{font-size:13.5px; line-height:1.7; color:var(--text); white-space:pre-wrap; min-height:60px;}
+  .su-empty{font-size:13px; color:var(--text-dim); font-style:italic;}
+  .su-body textarea{
+    width:100%; box-sizing:border-box; background:var(--bg-2); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; padding:12px; font-size:16px; line-height:1.6; font-family:inherit; resize:vertical;
+  }
+  .su-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;}
+  .su-btn{padding:10px 16px; border-radius:9px; font-weight:700; font-size:13px; cursor:pointer; border:none; background:var(--brass); color:#221a0e;}
+  .su-btn.secondary{background:var(--bg-2); color:var(--text); border:1px solid var(--line);}
+  .su-btn.ai{background:none; color:var(--brass); border:1px dashed var(--brass-dim); margin-right:auto;}
+  .su-btn:disabled{opacity:.5; cursor:not-allowed;}
 
   .transcript-panel{display:none; max-height:32vh; overflow-y:auto; background:var(--bg-2); border-radius:10px; padding:10px 12px; font-size:12.5px; line-height:1.6; color:var(--text-dim);}
   .transcript-panel.show{display:block;}
@@ -371,6 +393,10 @@
   .vault-detail-text{color:var(--text); margin-top:3px; white-space:pre-wrap;}
   .idea-no-summary-hint{font-size:11px; color:var(--text-dim); font-style:italic; margin-top:6px;}
   .ve-field-ai textarea{border-style:dashed; border-color:var(--brass-dim);}
+  .upload-note{
+    display:none; font-size:11.5px; color:var(--brass); background:var(--brass-soft);
+    border-radius:8px; padding:9px 11px; margin:4px 0 2px; line-height:1.45;
+  }
   .upload-list{max-height:50vh; overflow-y:auto; -webkit-overflow-scrolling:touch; margin:4px 0 6px;}
   .upload-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:12.5px;}
   .upload-row:last-child{border-bottom:none;}
@@ -593,6 +619,7 @@
     <button class="mini-skip" id="miniForward" title="Forward 15s">+15s</button>
     <button class="mini-speed" id="miniSpeed">1x</button>
     <button class="mini-transcript" id="miniTranscript">Transcript</button>
+    <button class="mini-transcript" id="miniSummary">Summary</button>
   </div>
   <div class="transcript-panel" id="transcriptPanel"><div id="transcriptText"></div></div>
 </div>
@@ -617,6 +644,18 @@
       <button class="tag-cancel" id="tagModalCancel">Cancel</button>
       <button class="tag-save" id="tagModalSave">Save</button>
     </div>
+  </div>
+</div>
+
+<div class="te-overlay" id="suOverlay">
+  <div class="su-card">
+    <div class="su-header">
+      <div class="su-title">Summary</div>
+      <button class="su-close" id="suClose">✕</button>
+    </div>
+    <div class="su-file" id="suFileName"></div>
+    <div class="su-body" id="suBody"></div>
+    <div class="su-actions" id="suActions"></div>
   </div>
 </div>
 
@@ -836,6 +875,7 @@
       <div class="ve-title">Uploading to <span id="uploadDestLabel"></span></div>
       <button class="ve-close" id="uploadOverlayClose">✕</button>
     </div>
+    <div class="upload-note" id="uploadNote">Keep this screen on until it finishes — locking the phone can interrupt the upload.</div>
     <div class="upload-list" id="uploadList"></div>
     <div class="ve-actions">
       <button class="ve-save-btn" id="uploadDoneBtn" type="button">Done</button>
@@ -905,6 +945,12 @@
   // well before GitHub's documented 100MB ceiling). A "<name>.chunked.json" file stands in for
   // the real file; the actual parts live in a sibling hidden folder derived from its own path,
   // so moving/renaming/trashing the pointer transparently moves the whole file — see chunkFolderFor.
+  // Sidecars sit beside the media file they describe, so they move/rename/trash with it.
+  // They're hidden from the listing (see loadCurrentFolder) — you see the media, not its notes.
+  const SUMMARY_SUFFIX = ".summary.json";
+  const SIDECAR_SUFFIXES = [SUMMARY_SUFFIX, ".transcript.json", ".transcript.txt"];
+  function isSidecarName(name){ return SIDECAR_SUFFIXES.some(s => name.endsWith(s)); }
+
   const CHUNK_SUFFIX = ".chunked.json";
   const POINTER_SUFFIX = ".ghrelease.json"; // large files the Uploader stored as a GitHub
                                              // Release asset instead of a repo blob — this
@@ -1341,11 +1387,18 @@
         <div class="item-title">${niceName(entry.name)}</div>
         <div class="item-meta">${kind.toUpperCase()}${sizeStr}${tagStr}</div>
       </div>
-      ${organizing ? '<div class="organize-controls"><div class="icon-btn" data-act="tag" title="Collections">🏷</div><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div><div class="icon-btn danger" data-act="trash" title="Move to trash">🗑</div></div>' : ""}
+      ${!organizing && hasSummary(entry) ? '<div class="item-summary-badge" data-act="summary" title="Read summary">📝</div>' : ""}
+      ${organizing ? '<div class="organize-controls"><div class="icon-btn" data-act="summary" title="Summary">📝</div><div class="icon-btn" data-act="tag" title="Collections">🏷</div><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div><div class="icon-btn danger" data-act="trash" title="Move to trash">🗑</div></div>' : ""}
     `;
+
+    row.querySelector('.item-summary-badge')?.addEventListener("click", (e) => {
+      e.stopPropagation(); // reading the summary shouldn't also start playback
+      openSummary(entry, false);
+    });
 
     row.addEventListener("click", (e) => {
       if (e.target.closest(".organize-controls")) return;
+      if (e.target.closest(".item-summary-badge")) return;
       if (isChunked){
         if (kind === "audio") playChunkedAudio(entry);
         else if (kind === "video") playChunkedVideo(entry);
@@ -1362,6 +1415,10 @@
     });
 
     if (organizing){
+      row.querySelector('[data-act="summary"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        openSummary(entry, true); // straight into edit — that's why you're in Organize mode
+      });
       row.querySelector('[data-act="tag"]').addEventListener("click", (e) => {
         e.stopPropagation();
         openTagModal(entry);
@@ -1520,6 +1577,7 @@
   }
 
   const folderCache = new Map(); // path -> sorted entries, cleared on any write action
+  const summaryPaths = new Set(); // media paths (sans suffix) known to have a summary sidecar
 
   // ---------- in-app media uploader (Browse + Collections) ----------
   // Same battle-tested blob/tree/commit flow as the standalone Uploader app, adapted to
@@ -1770,6 +1828,27 @@
     return path;
   }
 
+  // A locked screen suspends JavaScript timers and kills the in-flight request, which is why
+  // a long upload dies the moment the phone sleeps. The Wake Lock API is the only thing a web
+  // page can do about it — hold the screen on for the duration, release it the moment we're
+  // done. Not supported everywhere, hence the on-screen "keep this screen on" note as backup.
+  let uploadWakeLock = null;
+  let uploadInProgress = false;
+  async function acquireUploadWakeLock(){
+    try{
+      if ("wakeLock" in navigator) uploadWakeLock = await navigator.wakeLock.request("screen");
+    } catch(e){ /* denied or unsupported — the warning note covers this case */ }
+  }
+  async function releaseUploadWakeLock(){
+    try{ if (uploadWakeLock){ await uploadWakeLock.release(); } } catch(e){}
+    uploadWakeLock = null;
+  }
+  // The lock is dropped automatically whenever the page is hidden, so it has to be retaken
+  // each time the person comes back while an upload is still running.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && uploadInProgress && !uploadWakeLock) acquireUploadWakeLock();
+  });
+
   el("pdlUploadInput").addEventListener("change", async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -1780,7 +1859,10 @@
     listBox.innerHTML = "";
     el("uploadDoneBtn").textContent = "Uploading…";
     el("uploadDoneBtn").disabled = true;
+    el("uploadNote").style.display = "block";
     el("uploadOverlay").classList.add("show");
+    uploadInProgress = true;
+    await acquireUploadWakeLock();
 
     const rows = files.map(file => {
       const row = document.createElement("div");
@@ -1819,6 +1901,9 @@
 
     el("uploadDoneBtn").textContent = "Done";
     el("uploadDoneBtn").disabled = false;
+    el("uploadNote").style.display = "none";
+    uploadInProgress = false;
+    await releaseUploadWakeLock();
   });
   el("uploadOverlayClose").addEventListener("click", () => el("uploadOverlay").classList.remove("show"));
   el("uploadDoneBtn").addEventListener("click", () => el("uploadOverlay").classList.remove("show"));
@@ -1835,7 +1920,13 @@
     }
     try{
       const raw = await fetchFolder(currentPath);
-      const entries = raw.filter(e => !e.name.startsWith("."));
+      // The sidecars are in this same listing, so note which media already have a summary
+      // before filtering them out — that's the 📝 marker, with no extra network calls.
+      summaryPaths.clear();
+      raw.forEach(e => {
+        if (e.name.endsWith(SUMMARY_SUFFIX)) summaryPaths.add(e.path.slice(0, -SUMMARY_SUFFIX.length));
+      });
+      const entries = raw.filter(e => !e.name.startsWith(".") && !isSidecarName(e.name));
       entries.sort((a,b) => {
         if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
         return a.name.localeCompare(b.name);
@@ -3301,6 +3392,7 @@
     updatePlayPauseIcon(true);
     setSpeedLabel();
     highlightPlaying(entry.path);
+    setMediaSessionMetadata(niceName(entry.name));
   }
   function highlightPlaying(path){
     document.querySelectorAll(".item").forEach(r => r.classList.toggle("playing", r.dataset.path === path));
@@ -3406,6 +3498,7 @@
   }
   function transcriptJsonPath(entry){ return transcriptBase(entry) + ".transcript.json"; }
   function transcriptTxtPath(entry){ return transcriptBase(entry) + ".transcript.txt"; }
+  function summaryPath(entry){ return transcriptBase(entry) + SUMMARY_SUFFIX; }
 
   function formatTime(sec){
     sec = Math.max(0, Math.floor(sec || 0));
@@ -3431,7 +3524,9 @@
       const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, { method: "GET" });
       if (res.ok) sha = (await res.json()).sha;
     } catch(e){}
-    const body = { message: `Update transcript: ${path}`, content: utf8ToB64(JSON.stringify(contentObj, null, 2)) };
+    // Same writer serves transcripts and summaries, so the commit names whichever it is.
+    const kindLabel = path.endsWith(SUMMARY_SUFFIX) ? "summary" : "transcript";
+    const body = { message: `Update ${kindLabel}: ${path}`, content: utf8ToB64(JSON.stringify(contentObj, null, 2)) };
     if (sha) body.sha = sha;
     const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
@@ -3514,6 +3609,137 @@
     renderTranscriptPanel(data, entry);
     updateActiveTranscriptLine();
   }
+
+  // ---------- summaries ----------
+  // One overlay serves audio, video and documents, reached from the row marker, Organize
+  // mode, and the player — so a summary means the same thing wherever you meet it.
+  let suEntry = null;
+
+  async function loadSummaryData(entry){
+    try{
+      const res = await fetch(rawUrl(summaryPath(entry)) + `?t=${Date.now()}`);
+      if (res.ok) return await res.json();
+    } catch(e){}
+    return null;
+  }
+
+  function hasSummary(entry){
+    return summaryPaths.has(transcriptBase(entry));
+  }
+
+  async function openSummary(entry, startInEdit){
+    suEntry = entry;
+    el("suFileName").textContent = niceName(entry.name);
+    el("suBody").innerHTML = '<div class="su-empty">Loading…</div>';
+    el("suActions").innerHTML = "";
+    el("suOverlay").classList.add("show");
+    const data = await loadSummaryData(entry);
+    if (startInEdit) renderSummaryEdit(entry, (data && data.text) || "");
+    else renderSummaryRead(entry, data);
+  }
+
+  function renderSummaryRead(entry, data){
+    const text = data && data.text ? data.text : "";
+    el("suBody").innerHTML = "";
+    if (text){
+      const d = document.createElement("div");
+      d.textContent = text;
+      el("suBody").appendChild(d);
+    } else {
+      el("suBody").innerHTML = '<div class="su-empty">No summary yet for this item.</div>';
+    }
+    el("suActions").innerHTML = `<button class="su-btn" id="suEditBtn" type="button">${text ? "✎ Edit" : "+ Add summary"}</button>`;
+    el("suEditBtn").addEventListener("click", () => renderSummaryEdit(entry, text));
+  }
+
+  function renderSummaryEdit(entry, text){
+    el("suBody").innerHTML = `<textarea id="suInput" rows="9" placeholder="What this covers, and why it's worth your time…"></textarea>`;
+    el("suInput").value = text || "";
+    el("suActions").innerHTML = `
+      <button class="su-btn ai" id="suAiBtn" type="button">✨ Summarize</button>
+      <button class="su-btn secondary" id="suCancelBtn" type="button">Cancel</button>
+      <button class="su-btn" id="suSaveBtn" type="button">Save</button>`;
+    el("suCancelBtn").addEventListener("click", () => openSummary(entry, false));
+    el("suSaveBtn").addEventListener("click", () => saveSummary(entry));
+    el("suAiBtn").addEventListener("click", () => generateSummary(entry));
+  }
+
+  async function saveSummary(entry){
+    const text = el("suInput").value.trim();
+    const btn = el("suSaveBtn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try{
+      await saveTranscriptFile(summaryPath(entry), { text });
+      if (text) summaryPaths.add(transcriptBase(entry));
+      else summaryPaths.delete(transcriptBase(entry));
+      folderCache.clear();
+      el("suOverlay").classList.remove("show");
+      if (currentView === "browse") loadCurrentFolder();
+    } catch(err){
+      alert("Couldn't save the summary: " + err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Save";
+    }
+  }
+
+  // The AI can only summarise text it can actually read: a transcript for audio/video, or
+  // the file itself for plain-text documents. There's no speech-to-text here, so for a
+  // media file with no transcript we say so plainly rather than inventing something.
+  async function sourceTextFor(entry){
+    const t = await loadTranscriptData(entry);
+    if (t){
+      if (t.text) return t.text;
+      if (Array.isArray(t.cues)) return t.cues.map(c => c.text).join("\n");
+    }
+    const ext = realNameOf(entry.name).split(".").pop().toLowerCase();
+    if (ext === "txt" || ext === "md"){
+      try{
+        const res = await fetch(rawUrl(entry.path));
+        if (res.ok) return await res.text();
+      } catch(e){}
+    }
+    return null;
+  }
+
+  async function generateSummary(entry){
+    const btn = el("suAiBtn");
+    btn.disabled = true; btn.textContent = "✨ Reading…";
+    try{
+      const source = await sourceTextFor(entry);
+      if (!source){
+        alert("There's nothing for the AI to read yet.\n\nIt can summarize from a transcript, or from a .txt/.md file. Add a transcript for this item first, or write the summary yourself.");
+        return;
+      }
+      btn.textContent = "✨ Summarizing…";
+      let res = await relayFetch("/summarize-media", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: niceName(entry.name), text: source.slice(0, 40000) })
+      });
+      // Relay not updated yet? The Ideas summariser takes free text too — shorter result,
+      // but it means this works without waiting on a Worker deploy.
+      if (res.status === 404){
+        res = await relayFetch("/summarize-idea", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: niceName(entry.name), original_note: source.slice(0, 8000) })
+        });
+      }
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.summary) el("suInput").value = data.summary;
+    } catch(err){
+      alert("Couldn't summarize: " + err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "✨ Summarize";
+    }
+  }
+
+  el("suClose").addEventListener("click", () => el("suOverlay").classList.remove("show"));
+  el("suOverlay").addEventListener("click", e => {
+    if (e.target === el("suOverlay")) el("suOverlay").classList.remove("show");
+  });
+  el("miniSummary").addEventListener("click", () => {
+    if (currentAudioEntry) openSummary(currentAudioEntry, false);
+  });
 
   // ---------- transcript editor (tap-along + paste/import) ----------
   let teEntry = null;
@@ -3642,8 +3868,74 @@
     el("modalContent").innerHTML = `<video controls autoplay playsinline></video>`;
     el("modalOverlay").classList.add("show");
     setMediaSrcWithFallback(el("modalContent").querySelector("video"), entry.path);
+    currentVideoEntry = entry;
     wireVideoSpeed();
+    setMediaSessionMetadata(niceName(entry.name));
   }
+
+  // ---------- keep a video's audio going when the screen locks ----------
+  // iOS suspends <video> the moment the page is hidden, but it permits <audio> to keep
+  // playing — and an <audio> element will happily play just the audio track of an .mp4.
+  // So on hide we hand playback over to the mini-player's audio element at the same
+  // position, and hand it back to the video on return. The picture obviously can't play
+  // to a locked screen; what carries over is the listening.
+  let currentVideoEntry = null;
+  let videoHandoff = null; // { wasPlaying, rate }
+
+  function activeVideoEl(){ return el("modalContent").querySelector("video"); }
+
+  function setMediaSessionMetadata(title){
+    // Gives the lock screen / control centre a real title and working play-pause buttons
+    // instead of a blank "web page" tile.
+    if (!("mediaSession" in navigator)) return;
+    try{
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title, artist: "Personal Development Library"
+      });
+      navigator.mediaSession.setActionHandler("play", () => audioEl.play().catch(() => {}));
+      navigator.mediaSession.setActionHandler("pause", () => audioEl.pause());
+      navigator.mediaSession.setActionHandler("seekbackward", () => { audioEl.currentTime = Math.max(0, audioEl.currentTime - 15); });
+      navigator.mediaSession.setActionHandler("seekforward", () => { audioEl.currentTime = Math.min(audioEl.duration || 0, audioEl.currentTime + 15); });
+    } catch(e){}
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    const v = activeVideoEl();
+
+    if (document.visibilityState === "hidden"){
+      // Only take over if a video is actually playing and the audio element is free —
+      // if something else is already playing we'd be stealing its playback.
+      if (!v || v.paused || !audioEl.paused || videoHandoff) return;
+      const pos = v.currentTime;
+      videoHandoff = { rate: v.playbackRate };
+      const src = v.currentSrc || v.src;
+      if (!src) { videoHandoff = null; return; }
+      audioEl.src = src;
+      audioEl.addEventListener("loadedmetadata", function once(){
+        audioEl.removeEventListener("loadedmetadata", once);
+        try { audioEl.currentTime = pos; } catch(e){}
+        audioEl.playbackRate = videoHandoff ? videoHandoff.rate : 1;
+        audioEl.play().catch(() => {}); // iOS can still refuse; the video just stays paused
+      });
+      v.pause();
+      return;
+    }
+
+    if (videoHandoff){
+      const pos = audioEl.currentTime;
+      const rate = videoHandoff.rate;
+      videoHandoff = null;
+      audioEl.pause();
+      audioEl.removeAttribute("src");
+      audioEl.load(); // drop the buffered video so the mini-player isn't left holding it
+      const vid = activeVideoEl();
+      if (vid){
+        try { vid.currentTime = pos; } catch(e){}
+        vid.playbackRate = rate;
+        vid.play().catch(() => {});
+      }
+    }
+  });
   // Documents can't be shown straight from GitHub: the github.com blob page sends
   // X-Frame-Options: deny so an iframe of it renders blank, and raw.githubusercontent.com
   // sends application/octet-stream + nosniff, which forces a download instead of rendering.
@@ -3772,6 +4064,15 @@
     el("modalOverlay").classList.remove("show");
     el("modalSpeed").classList.remove("show");
     releaseDocObjectUrls();
+    // If the screen locked mid-video and audio took over, closing the player should stop it
+    // too — otherwise the mini-player is left showing nothing while sound keeps coming out.
+    if (videoHandoff){
+      videoHandoff = null;
+      audioEl.pause();
+      audioEl.removeAttribute("src");
+      audioEl.load();
+    }
+    currentVideoEntry = null;
   });
 
   // ---------- chunked file reconstruction ----------
