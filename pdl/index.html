@@ -413,6 +413,30 @@
   .tile-meta{font-size:10px; color:var(--text-dim); margin-top:3px;}
   .tile.folder .tile-art-placeholder{font-size:30px;}
 
+  /* collection header banner — collapsed until an image actually loads */
+  .coll-header{
+    position:relative; width:100%; border-radius:14px; overflow:hidden; margin-bottom:14px;
+    display:none; background:var(--bg-2);
+  }
+  .coll-header.has-image{display:block; aspect-ratio:16/9;}
+  .coll-header img{width:100%; height:100%; object-fit:cover; display:block;}
+  .coll-header-name{
+    position:absolute; left:0; right:0; bottom:0; padding:26px 16px 13px;
+    font-family:var(--serif); font-size:20px; color:#fff;
+    background:linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0));
+  }
+  .coll-header-edit{
+    position:absolute; top:10px; right:10px; background:rgba(0,0,0,.55); color:#fff;
+    border:none; border-radius:16px; padding:7px 13px; font-size:11.5px; font-weight:700; cursor:pointer;
+  }
+  /* with no image there's nothing to sit on, so the edit button becomes a plain pill */
+  .coll-header:not(.has-image){display:block; aspect-ratio:auto; background:none;}
+  .coll-header:not(.has-image) .coll-header-name{display:none;}
+  .coll-header:not(.has-image) .coll-header-edit{
+    position:static; background:var(--panel); color:var(--brass); border:1px dashed var(--brass-dim);
+    margin-bottom:12px; display:inline-block;
+  }
+
   /* cover crop editor */
   .cc-card{background:var(--panel); border:1px solid var(--line); border-radius:16px; width:100%; max-width:400px; padding:18px;}
   .cc-title{font-family:var(--serif); font-size:17px; margin-bottom:3px;}
@@ -698,14 +722,14 @@
 <input type="file" id="coverInput" accept="image/*" style="display:none;">
 <div class="te-overlay" id="ccOverlay">
   <div class="cc-card">
-    <div class="cc-title">Cover art</div>
+    <div class="cc-title" id="ccTitle">Cover art</div>
     <div class="cc-sub" id="ccFileName"></div>
     <div class="cc-stage" id="ccStage"><canvas id="ccCanvas" width="600" height="600"></canvas></div>
     <div class="cc-zoom-row">
       <span class="cc-zoom-label">Zoom</span>
       <input type="range" id="ccZoom" min="100" max="300" value="100">
     </div>
-    <div class="cc-sub" style="margin:10px 0 0;">Drag the image to reposition. Saved as a 600×600 square.</div>
+    <div class="cc-sub" id="ccHint" style="margin:10px 0 0;"></div>
     <div class="cc-actions">
       <button class="cc-btn danger" id="ccRemove" type="button">Remove</button>
       <button class="cc-btn secondary" id="ccCancel" type="button">Cancel</button>
@@ -1473,6 +1497,25 @@
   function coverPathFor(entry){ return transcriptBase(entry) + COVER_SUFFIX; }
   function hasCover(entry){ return coverPaths.has(transcriptBase(entry)); }
 
+  // Tries the CDN, falls back to the origin (a cover saved moments ago won't be on the CDN
+  // yet), and quietly removes itself if there's no cover at all — leaving the placeholder.
+  function attachCoverImage(container, path, onFound){
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = "";
+    img.style.position = "absolute";
+    img.style.inset = "0";
+    let triedOrigin = false;
+    img.addEventListener("error", () => {
+      if (!triedOrigin){ triedOrigin = true; img.src = rawUrl(path); return; }
+      img.remove();
+    });
+    if (onFound) img.addEventListener("load", onFound);
+    img.src = jsDelivrUrl(path);
+    container.appendChild(img);
+    return img;
+  }
+
   function renderTile(entry, organizing){
     const isDir = entry.type === "dir";
     const inTrash = isInTrash(entry.path);
@@ -1482,23 +1525,14 @@
 
     const art = document.createElement("div");
     art.className = "tile-art";
-    if (!isDir && hasCover(entry)){
-      const img = document.createElement("img");
-      img.loading = "lazy";
-      img.alt = "";
-      img.src = jsDelivrUrl(coverPathFor(entry));
-      // The CDN won't have a cover uploaded moments ago; fall back once to the origin.
-      img.addEventListener("error", function once(){
-        img.removeEventListener("error", once);
-        img.src = rawUrl(coverPathFor(entry));
-      });
-      art.appendChild(img);
-    } else {
-      const ph = document.createElement("div");
-      ph.className = "tile-art-placeholder";
-      ph.textContent = isTrashEntry(entry) ? "🗑" : isDir ? "📁" : iconFor(kind);
-      art.appendChild(ph);
-    }
+    // The placeholder is always laid down first and the cover simply covers it if one loads.
+    // Collections show items from folders we haven't listed, so we can't know up front
+    // whether a cover exists — letting the image answer that works everywhere.
+    const ph = document.createElement("div");
+    ph.className = "tile-art-placeholder";
+    ph.textContent = isTrashEntry(entry) ? "🗑" : isDir ? "📁" : iconFor(kind);
+    art.appendChild(ph);
+    if (!isDir) attachCoverImage(art, coverPathFor(entry));
     if (!isDir){
       const badge = document.createElement("div");
       badge.className = "tile-kind";
@@ -2279,6 +2313,21 @@
       bar.appendChild(addChip);
     }
 
+    // Same list/grid switch as Browse, so the two views behave identically.
+    const toggle = document.createElement("div");
+    toggle.className = "layout-toggle";
+    toggle.innerHTML = `
+      <button class="layout-btn ${browseLayout === "list" ? "active" : ""}" data-layout="list" type="button" title="List view">☰</button>
+      <button class="layout-btn ${browseLayout === "grid" ? "active" : ""}" data-layout="grid" type="button" title="Grid view">▦</button>`;
+    toggle.querySelectorAll(".layout-btn").forEach(b => {
+      b.addEventListener("click", () => {
+        browseLayout = b.dataset.layout;
+        localStorage.setItem(LS_LAYOUT, browseLayout);
+        renderCollectionsView();
+      });
+    });
+    bar.appendChild(toggle);
+
     const box = el("listing");
     box.innerHTML = "";
     if (!selectedCollectionId){
@@ -2287,6 +2336,31 @@
         : '<div class="empty">No collections yet. Turn on Organize, tap the tag icon on any file, or use "+ New collection".</div>';
       return;
     }
+
+    const organizing = el("organizeToggle").checked;
+    const collection = collectionsData.collections.find(c => c.id === selectedCollectionId);
+
+    // Header banner. It only takes up space once an image actually loads, so a collection
+    // without one looks the same as it always did rather than leaving a grey gap.
+    if (collection){
+      const header = document.createElement("div");
+      header.className = "coll-header";
+      attachCoverImage(header, collectionCoverPath(collection.id), () => header.classList.add("has-image"));
+      const label = document.createElement("div");
+      label.className = "coll-header-name";
+      label.textContent = collection.name;
+      header.appendChild(label);
+      if (organizing){
+        const editBtn = document.createElement("button");
+        editBtn.className = "coll-header-edit";
+        editBtn.type = "button";
+        editBtn.textContent = "Edit header";
+        editBtn.addEventListener("click", () => openCollectionCoverEditor(collection));
+        header.appendChild(editBtn);
+      }
+      box.appendChild(header);
+    }
+
     let paths = Object.keys(collectionsData.assignments).filter(p => collectionsData.assignments[p].includes(selectedCollectionId));
     paths = paths.filter(p => {
       const name = p.split("/").pop();
@@ -2296,13 +2370,18 @@
       return true;
     });
     if (!paths.length){
-      box.innerHTML = '<div class="empty">Nothing tagged here yet.</div>';
+      box.appendChild(Object.assign(document.createElement("div"), { className: "empty", textContent: "Nothing tagged here yet." }));
       return;
     }
-    const organizing = el("organizeToggle").checked;
-    paths.sort().forEach(p => {
-      box.appendChild(renderFileRow({ name: p.split("/").pop(), path: p }, organizing));
-    });
+    const entries = paths.sort().map(p => ({ name: p.split("/").pop(), path: p }));
+    if (browseLayout === "grid"){
+      const grid = document.createElement("div");
+      grid.className = "grid";
+      entries.forEach(e => grid.appendChild(renderTile(e, organizing)));
+      box.appendChild(grid);
+    } else {
+      entries.forEach(e => box.appendChild(renderFileRow(e, organizing)));
+    }
   }
 
   // ---------- Vault (vocabulary / concepts) ----------
@@ -3666,38 +3745,72 @@
   // ---------- cover art (square, cropped in-browser) ----------
   // The crop happens here rather than server-side so what gets uploaded is already a small
   // 600×600 JPEG — a phone photo can be 5MB, and a grid of those would be unusable.
-  const COVER_PX = 600;
-  let ccEntry = null, ccImage = null, ccOffset = { x: 0, y: 0 }, ccScale = 1, ccBaseScale = 1;
+  // One crop editor serves both shapes: a square tile cover and a wide collection header.
+  const COVER_SQUARE = { w: 600, h: 600, label: "600×600 square" };
+  const COVER_BANNER = { w: 1200, h: 675, label: "1200×675 (16:9)" };
+  let ccImage = null, ccOffset = { x: 0, y: 0 }, ccScale = 1, ccBaseScale = 1;
+  let ccShape = COVER_SQUARE, ccTargetPath = null, ccOnSaved = null;
 
   function ccDraw(){
     const cv = el("ccCanvas"), ctx = cv.getContext("2d");
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, COVER_PX, COVER_PX);
+    ctx.fillRect(0, 0, ccShape.w, ccShape.h);
     if (!ccImage) return;
     const s = ccBaseScale * ccScale;
     const w = ccImage.width * s, h = ccImage.height * s;
-    ctx.drawImage(ccImage, ccOffset.x + (COVER_PX - w) / 2, ccOffset.y + (COVER_PX - h) / 2, w, h);
+    ctx.drawImage(ccImage, ccOffset.x + (ccShape.w - w) / 2, ccOffset.y + (ccShape.h - h) / 2, w, h);
   }
 
   function ccClampOffset(){
     // Keep the frame covered — you can reposition, but never drag empty space into view.
     const s = ccBaseScale * ccScale;
-    const maxX = Math.max(0, (ccImage.width * s - COVER_PX) / 2);
-    const maxY = Math.max(0, (ccImage.height * s - COVER_PX) / 2);
+    const maxX = Math.max(0, (ccImage.width * s - ccShape.w) / 2);
+    const maxY = Math.max(0, (ccImage.height * s - ccShape.h) / 2);
     ccOffset.x = Math.max(-maxX, Math.min(maxX, ccOffset.x));
     ccOffset.y = Math.max(-maxY, Math.min(maxY, ccOffset.y));
   }
 
-  function openCoverEditor(entry){
-    ccEntry = entry;
-    el("ccFileName").textContent = niceName(entry.name);
-    el("ccRemove").style.display = hasCover(entry) ? "block" : "none";
+  function openCropEditor({ title, subtitle, shape, targetPath, canRemove, onSaved }){
+    ccShape = shape;
+    ccTargetPath = targetPath;
+    ccOnSaved = onSaved;
+    el("ccTitle").textContent = title;
+    el("ccFileName").textContent = subtitle;
+    el("ccHint").textContent = `Drag the image to reposition. Saved as ${shape.label}.`;
+    el("ccRemove").style.display = canRemove ? "block" : "none";
+    const cv = el("ccCanvas");
+    cv.width = shape.w; cv.height = shape.h;
+    el("ccStage").style.aspectRatio = `${shape.w}/${shape.h}`;
     ccImage = null; ccOffset = { x: 0, y: 0 }; ccScale = 1;
     el("ccZoom").value = 100;
     ccDraw();
     el("ccOverlay").classList.add("show");
     el("coverInput").value = "";
     el("coverInput").click(); // straight to the picker — that's why you tapped
+  }
+
+  function openCoverEditor(entry){
+    openCropEditor({
+      title: "Cover art",
+      subtitle: niceName(entry.name),
+      shape: COVER_SQUARE,
+      targetPath: coverPathFor(entry),
+      canRemove: hasCover(entry),
+      onSaved: () => { coverPaths.add(transcriptBase(entry)); }
+    });
+  }
+
+  function collectionCoverPath(id){ return `${MEDIA_PATH}/.collection-covers/${id}.jpg`; }
+
+  function openCollectionCoverEditor(collection){
+    openCropEditor({
+      title: "Collection header",
+      subtitle: collection.name,
+      shape: COVER_BANNER,
+      targetPath: collectionCoverPath(collection.id),
+      canRemove: true,
+      onSaved: null
+    });
   }
 
   el("coverInput").addEventListener("change", e => {
@@ -3707,8 +3820,8 @@
     const img = new Image();
     img.onload = () => {
       ccImage = img;
-      // Start at "cover": the short edge exactly fills the square.
-      ccBaseScale = Math.max(COVER_PX / img.width, COVER_PX / img.height);
+      // Start at "cover": the image exactly fills the frame with no empty edge.
+      ccBaseScale = Math.max(ccShape.w / img.width, ccShape.h / img.height);
       ccScale = 1; ccOffset = { x: 0, y: 0 };
       el("ccZoom").value = 100;
       ccDraw();
@@ -3736,7 +3849,7 @@
     stage.addEventListener("pointermove", e => {
       if (!dragging || !ccImage) return;
       // Pointer moves in CSS pixels; the canvas is 600 wide, so scale the delta across.
-      const ratio = COVER_PX / stage.getBoundingClientRect().width;
+      const ratio = ccShape.w / stage.getBoundingClientRect().width;
       ccOffset.x += (e.clientX - last.x) * ratio;
       ccOffset.y += (e.clientY - last.y) * ratio;
       last = { x: e.clientX, y: e.clientY };
@@ -3765,17 +3878,22 @@
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
   }
 
+  function ccRefreshAfterWrite(){
+    folderCache.clear();
+    if (currentView === "collections") renderCollectionsView();
+    else loadCurrentFolder(true);
+  }
+
   el("ccSave").addEventListener("click", async () => {
     if (!ccImage){ alert("Choose an image first."); return; }
     const btn = el("ccSave");
     btn.disabled = true; btn.textContent = "Saving…";
     try{
-      await putCoverFile(coverPathFor(ccEntry), canvasToBase64Jpeg(), `Cover art: ${ccEntry.name}`);
-      coverPaths.add(transcriptBase(ccEntry));
-      purgeJsDelivr(coverPathFor(ccEntry));
+      await putCoverFile(ccTargetPath, canvasToBase64Jpeg(), `Cover art: ${ccTargetPath}`);
+      if (ccOnSaved) ccOnSaved();
+      purgeJsDelivr(ccTargetPath);
       el("ccOverlay").classList.remove("show");
-      folderCache.clear();
-      loadCurrentFolder(true);
+      ccRefreshAfterWrite();
     } catch(err){
       alert("Couldn't save the cover: " + err.message);
     } finally {
@@ -3784,16 +3902,16 @@
   });
 
   el("ccRemove").addEventListener("click", async () => {
-    if (!confirm(`Remove the cover art for "${niceName(ccEntry.name)}"?`)) return;
+    if (!confirm("Remove this cover image?")) return;
     try{
       await commitTreeEntries(
-        [{ path: coverPathFor(ccEntry), mode: "100644", type: "blob", sha: null }],
-        `Remove cover art: ${ccEntry.name}`
+        [{ path: ccTargetPath, mode: "100644", type: "blob", sha: null }],
+        `Remove cover art: ${ccTargetPath}`
       );
-      coverPaths.delete(transcriptBase(ccEntry));
+      coverPaths.delete(ccTargetPath.replace(COVER_SUFFIX, ""));
+      purgeJsDelivr(ccTargetPath);
       el("ccOverlay").classList.remove("show");
-      folderCache.clear();
-      loadCurrentFolder(true);
+      ccRefreshAfterWrite();
     } catch(err){
       alert("Couldn't remove the cover: " + err.message);
     }
