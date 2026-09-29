@@ -1151,13 +1151,12 @@
   // closed and reopened. After any write (or a deliberate pull-to-refresh) we bypass it.
   async function fetchFolder(path, fresh){
     const base = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`;
+    // Cache-busting is done purely with a unique query string. Sending Cache-Control or
+    // Pragma as request headers would make this a non-simple cross-origin request, and
+    // api.github.com answers that CORS preflight with 400 — so the request would never be
+    // sent at all ("Failed to fetch"). A distinct URL is a different cache key anyway.
     const url = fresh ? `${base}&_=${Date.now()}` : base;
-    const res = await fetch(url, {
-      headers: fresh
-        ? { "Accept": "application/vnd.github+json", "Cache-Control": "no-cache", "Pragma": "no-cache" }
-        : { "Accept": "application/vnd.github+json" },
-      cache: fresh ? "reload" : "default"
-    });
+    const res = await fetch(url, { headers: { "Accept": "application/vnd.github+json" } });
     if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
     return res.json();
   }
