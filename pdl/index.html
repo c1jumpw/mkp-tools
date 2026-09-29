@@ -1171,6 +1171,15 @@
   // uses it also gets a one-shot fallback wired up to the raw URL if it 404s — meaning a
   // file uploaded moments ago still plays instantly, just without the CDN speed boost
   // until jsDelivr catches up on its own.
+  // The relay can serve any library file as a normal, seekable media stream — stitching
+  // chunk parts on the fly, and re-serving release assets without GitHub's forced
+  // attachment headers. That's what lets large media play in the app instead of having to
+  // download completely first. Keyed by query string because <video src> can't send headers.
+  function streamUrl(path){
+    return CONFIG.WORKER_URL.replace(/\/+$/, "")
+      + "/stream/" + path.split("/").map(encodeURIComponent).join("/")
+      + "?k=" + encodeURIComponent(CONFIG.APP_KEY);
+  }
   function jsDelivrUrl(path){
     return `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@${BRANCH}/${path.split("/").map(encodeURIComponent).join("/")}`;
   }
@@ -2130,7 +2139,8 @@
       statusFn(`Uploaded part ${i + 1} of ${parts} (${Math.round(((i + 1) / parts) * 100)}%)`);
     }
 
-    const manifest = JSON.stringify({ parts, size: file.size, name: file.name });
+    // chunkSize is recorded so the relay's streamer never has to assume the part size.
+    const manifest = JSON.stringify({ parts, size: file.size, name: file.name, chunkSize: CHUNK_SIZE });
     const manifestSha = await withRetry(
       () => putBlob(btoa(unescape(encodeURIComponent(manifest)))), 4,
       n => statusFn(`Finishing — retry ${n}…`)
@@ -4798,13 +4808,9 @@
     return new Blob(buffers, { type: mimeType });
   }
 
-  async function playChunkedAudio(entry){
-    currentAudioEntry = entry;
-    el("miniTitle").textContent = "Loading " + niceName(entry.name) + "…";
-    el("miniPlayer").classList.add("show");
-    el("transcriptPanel").classList.remove("show");
-    el("miniTranscript").classList.remove("active");
-    highlightPlaying(entry.path);
+  // Falls back to the old download-then-play path if the relay has no /stream route yet,
+  // so playback keeps working whether or not the Worker has been updated.
+  async function playChunkedAudioViaDownload(entry){
     try{
       const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)),
         (done, total) => { el("miniTitle").textContent = `Loading ${niceName(entry.name)}… ${Math.round((done/total)*100)}%`; });
@@ -4818,9 +4824,27 @@
     }
   }
 
-  async function playChunkedVideo(entry){
+  async function playChunkedAudio(entry){
+    currentAudioEntry = entry;
+    el("miniTitle").textContent = niceName(entry.name);
+    el("miniPlayer").classList.add("show");
+    el("transcriptPanel").classList.remove("show");
+    el("miniTranscript").classList.remove("active");
+    highlightPlaying(entry.path);
+    audioEl.src = streamUrl(entry.path);
+    audioEl.playbackRate = SPEEDS[speedIndex];
+    audioEl.addEventListener("error", function once(){
+      audioEl.removeEventListener("error", once);
+      el("miniTitle").textContent = "Loading " + niceName(entry.name) + "…";
+      playChunkedAudioViaDownload(entry);
+    }, { once: true });
+    audioEl.play().catch(() => {});
+    setSpeedLabel();
+    setMediaSessionMetadata(niceName(entry.name));
+  }
+
+  async function playChunkedVideoViaDownload(entry){
     el("modalContent").innerHTML = `<div style="color:var(--text-dim); font-size:13px;">Loading ${niceName(entry.name)}…</div>`;
-    el("modalOverlay").classList.add("show");
     try{
       const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)),
         (done, total) => {
@@ -4838,6 +4862,20 @@
     } catch(err){
       el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
     }
+  }
+
+  function playChunkedVideo(entry){
+    el("modalContent").innerHTML = `<video controls autoplay playsinline></video>`;
+    el("modalOverlay").classList.add("show");
+    const v = el("modalContent").querySelector("video");
+    v.addEventListener("error", function once(){
+      v.removeEventListener("error", once);
+      playChunkedVideoViaDownload(entry); // relay has no /stream route yet
+    }, { once: true });
+    v.src = streamUrl(entry.path);
+    currentVideoEntry = entry;
+    wireVideoSpeed();
+    setMediaSessionMetadata(niceName(entry.name));
   }
 
   async function openChunkedDoc(entry){
@@ -4863,29 +4901,24 @@
     return res.json();
   }
 
-  async function playPointerAudio(entry){
+  function playPointerAudio(entry){
+    // Served through the relay, which strips GitHub's attachment headers and gives the
+    // player a real content type — so these now stream in-app like anything else.
     currentAudioEntry = entry;
-    el("miniTitle").textContent = "Loading " + niceName(entry.name) + "…";
+    el("miniTitle").textContent = niceName(entry.name);
     el("miniPlayer").classList.add("show");
     el("transcriptPanel").classList.remove("show");
     el("miniTranscript").classList.remove("active");
     highlightPlaying(entry.path);
-    try{
-      const pointer = await fetchPointer(entry.path);
-      audioEl.src = pointer.url;
-      audioEl.playbackRate = SPEEDS[speedIndex];
-      // Release assets are served as attachments, so this often can't play — if it fails,
-      // say why instead of leaving a silent player sitting there.
-      audioEl.addEventListener("error", function once(){
-        audioEl.removeEventListener("error", once);
-        el("miniTitle").textContent = "Stored as a release asset — can't stream. Re-upload to play.";
-      }, { once: true });
-      audioEl.play().catch(() => {});
-      el("miniTitle").textContent = niceName(entry.name);
-      setSpeedLabel();
-    } catch(err){
-      el("miniTitle").textContent = "Couldn't load: " + err.message;
-    }
+    audioEl.src = streamUrl(entry.path);
+    audioEl.playbackRate = SPEEDS[speedIndex];
+    audioEl.addEventListener("error", function once(){
+      audioEl.removeEventListener("error", once);
+      el("miniTitle").textContent = "Couldn't play this — the relay may need updating.";
+    }, { once: true });
+    audioEl.play().catch(() => {});
+    setSpeedLabel();
+    setMediaSessionMetadata(niceName(entry.name));
   }
 
   // A <video> that fails reports it through an 'error' event, not an exception — without a
@@ -4912,24 +4945,26 @@
   }
 
   async function playPointerVideo(entry){
-    el("modalContent").innerHTML = `<div style="color:var(--text-dim); font-size:13px;">Loading ${niceName(entry.name)}…</div>`;
+    el("modalContent").innerHTML = `<video controls autoplay playsinline></video>`;
     el("modalOverlay").classList.add("show");
-    try{
-      const pointer = await fetchPointer(entry.path);
-      // Inline playback can't work for these: GitHub's release-download redirect rewrites
-      // the response to application/octet-stream + Content-Disposition: attachment, and
-      // sends no CORS header, so we can't repair the type client-side either. Rather than
-      // show a player that will certainly fail, offer the two things that do work.
+    const v = el("modalContent").querySelector("video");
+    // If the relay can't serve it, fall back to the direct link rather than a dead player.
+    v.addEventListener("error", async function once(){
+      v.removeEventListener("error", once);
+      let direct = null;
+      try { direct = (await fetchPointer(entry.path)).url; } catch(e){}
       el("modalContent").innerHTML = docPanel({
-        icon: "▶",
+        icon: "⚠",
         name: niceName(entry.name),
-        meta: `This file is stored as a GitHub release asset, which browsers can only download, not stream. Re-upload it to play it in the app.${pointer.size ? " · " + fmtBytes(pointer.size) : ""}`,
-        buttons: `<a class="doc-btn" href="${pointer.url}" target="_blank" rel="noopener">Open / Download</a>`
+        meta: "Couldn't stream this file — the relay may need updating.",
+        buttons: direct ? `<a class="doc-btn secondary" href="${direct}" target="_blank" rel="noopener">Open / Download</a>` : ""
       });
       el("modalSpeed").classList.remove("show");
-    } catch(err){
-      el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
-    }
+    }, { once: true });
+    v.src = streamUrl(entry.path);
+    currentVideoEntry = entry;
+    wireVideoSpeed();
+    setMediaSessionMetadata(niceName(entry.name));
   }
 
   async function openPointerDoc(entry){
