@@ -371,7 +371,17 @@
   .tag-cancel{background:var(--bg-2); color:var(--text); border:1px solid var(--line) !important;}
   .tag-save{background:var(--brass); color:#221a0e;}
 
+  /* pull to refresh */
+  .ptr-indicator{
+    position:fixed; top:0; left:0; right:0; display:flex; align-items:center; justify-content:center;
+    height:0; overflow:hidden; color:var(--brass); font-size:12px; font-weight:700;
+    background:var(--panel); z-index:40; transition:height .15s; pointer-events:none;
+  }
+  .ptr-indicator.armed{height:44px;}
+  .ptr-indicator.spinning{height:44px;}
+
   .rename-row{display:flex; gap:6px; align-items:center; margin-top:8px;}
+  .rename-ext{font-size:12px; color:var(--text-dim); font-weight:600; flex-shrink:0;}
   .rename-row input{flex:1; background:var(--bg-2); border:1px solid var(--line); color:var(--text); padding:7px 9px; border-radius:7px; font-size:16px;}
   .rename-row button{padding:7px 10px; border-radius:7px; border:none; background:var(--brass); color:#221a0e; font-weight:700; font-size:11.5px; cursor:pointer;}
 
@@ -624,6 +634,8 @@
   <div class="transcript-panel" id="transcriptPanel"><div id="transcriptText"></div></div>
 </div>
 <audio id="audioEl"></audio>
+
+<div class="ptr-indicator" id="ptrIndicator">Release to refresh</div>
 
 <div class="modal-overlay" id="modalOverlay">
   <button class="modal-speed" id="modalSpeed">1x</button>
@@ -1030,9 +1042,17 @@
   let ideaAskThread = [];
   let selectedSubjectFilters = new Set();
 
-  async function fetchFolder(path){
-    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`, {
-      headers: { "Accept": "application/vnd.github+json" }
+  // GitHub's unauthenticated contents API sits behind an edge cache that can serve a stale
+  // listing for minutes — which is why a just-uploaded file wouldn't appear until the app was
+  // closed and reopened. After any write (or a deliberate pull-to-refresh) we bypass it.
+  async function fetchFolder(path, fresh){
+    const base = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${BRANCH}`;
+    const url = fresh ? `${base}&_=${Date.now()}` : base;
+    const res = await fetch(url, {
+      headers: fresh
+        ? { "Accept": "application/vnd.github+json", "Cache-Control": "no-cache", "Pragma": "no-cache" }
+        : { "Accept": "application/vnd.github+json" },
+      cache: fresh ? "reload" : "default"
     });
     if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
     return res.json();
@@ -1377,18 +1397,22 @@
     row.className = "item";
     row.dataset.path = entry.path;
 
+    const inTrash = isInTrash(entry.path);
     const tags = collectionsData.assignments[entry.path];
     const tagStr = tags && tags.length ? " · " + tags.map(collectionName).join(", ") : "";
     const sizeStr = isChunked ? " · multi-part" : isPointer ? " · hosted" : (entry.size ? " · " + (entry.size/(1024*1024)).toFixed(1) + " MB" : "");
+    const daysLeft = inTrash ? daysLeftFor(entry.name) : null;
+    const trashStr = daysLeft === null ? "" : ` · deletes in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`;
 
     row.innerHTML = `
       <div class="item-icon">${iconFor(kind)}</div>
       <div class="item-body">
         <div class="item-title">${niceName(entry.name)}</div>
-        <div class="item-meta">${kind.toUpperCase()}${sizeStr}${tagStr}</div>
+        <div class="item-meta">${kind.toUpperCase()}${sizeStr}${tagStr}${trashStr}</div>
       </div>
-      ${!organizing && hasSummary(entry) ? '<div class="item-summary-badge" data-act="summary" title="Read summary">📝</div>' : ""}
-      ${organizing ? '<div class="organize-controls"><div class="icon-btn" data-act="summary" title="Summary">📝</div><div class="icon-btn" data-act="tag" title="Collections">🏷</div><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div><div class="icon-btn danger" data-act="trash" title="Move to trash">🗑</div></div>' : ""}
+      ${!organizing && !inTrash && hasSummary(entry) ? '<div class="item-summary-badge" data-act="summary" title="Read summary">📝</div>' : ""}
+      ${inTrash ? '<div class="organize-controls"><div class="icon-btn" data-act="restore" title="Restore">↩</div><div class="icon-btn danger" data-act="delete" title="Delete permanently">✕</div></div>' : ""}
+      ${organizing && !inTrash ? '<div class="organize-controls"><div class="icon-btn" data-act="summary" title="Summary">📝</div><div class="icon-btn" data-act="tag" title="Collections">🏷</div><div class="icon-btn" data-act="rename" title="Rename">✎</div><div class="icon-btn" data-act="move" title="Move">⇄</div><div class="icon-btn danger" data-act="trash" title="Move to trash">🗑</div></div>' : ""}
     `;
 
     row.querySelector('.item-summary-badge')?.addEventListener("click", (e) => {
@@ -1399,6 +1423,7 @@
     row.addEventListener("click", (e) => {
       if (e.target.closest(".organize-controls")) return;
       if (e.target.closest(".item-summary-badge")) return;
+      if (e.target.closest(".rename-row")) return; // editing the title, not opening the item
       if (isChunked){
         if (kind === "audio") playChunkedAudio(entry);
         else if (kind === "video") playChunkedVideo(entry);
@@ -1414,7 +1439,18 @@
       }
     });
 
-    if (organizing){
+    if (inTrash){
+      row.querySelector('[data-act="restore"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        restoreFromTrash(entry);
+      });
+      row.querySelector('[data-act="delete"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteForever(entry);
+      });
+    }
+
+    if (organizing && !inTrash){
       row.querySelector('[data-act="summary"]').addEventListener("click", (e) => {
         e.stopPropagation();
         openSummary(entry, true); // straight into edit — that's why you're in Organize mode
@@ -1441,28 +1477,143 @@
 
   function startRename(row, entry){
     if (row.querySelector(".rename-row")) return;
+    // Two things are held back from the editable field: the chunked/pointer suffix (internal
+    // plumbing) and the real file extension. Renaming is for the title, and losing ".mp4"
+    // would change what the app thinks the file IS — kind, player, everything.
     const suffix = suffixOf(entry.name);
-    const displayName = suffix ? entry.name.slice(0, -suffix.length) : entry.name;
+    const realName = realNameOf(entry.name);
+    const dot = realName.lastIndexOf(".");
+    const ext = dot > 0 ? realName.slice(dot) : "";
+    const baseName = dot > 0 ? realName.slice(0, dot) : realName;
+
     const wrap = document.createElement("div");
     wrap.className = "rename-row";
-    wrap.innerHTML = `<input type="text" value="${displayName}"><button>Save</button>`;
-    row.appendChild(wrap);
+    wrap.innerHTML = `<input type="text"><span class="rename-ext"></span><button>Save</button>`;
     const input = wrap.querySelector("input");
+    input.value = baseName; // set as a property so quotes/specials in the name can't break out
+    wrap.querySelector(".rename-ext").textContent = ext;
+    if (!ext) wrap.querySelector(".rename-ext").style.display = "none";
+    row.appendChild(wrap);
     input.focus();
-    wrap.querySelector("button").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      let newName = input.value.trim();
-      if (!newName || newName === displayName) { wrap.remove(); return; }
-      if (suffix) newName = newName + suffix;
+
+    // Taps inside the rename field would otherwise bubble to the row and start playback,
+    // which on a phone makes the field almost impossible to use.
+    wrap.addEventListener("click", e => e.stopPropagation());
+
+    async function commit(){
+      const typed = input.value.trim();
+      if (!typed || typed === baseName) { wrap.remove(); return; }
+      const newName = typed + ext + suffix;
       const newPath = entry.path.replace(/[^/]+$/, newName);
       await moveFile(entry, newPath);
-    });
+    }
+    wrap.querySelector("button").addEventListener("click", (e) => { e.stopPropagation(); commit(); });
+    input.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); commit(); } });
   }
 
-  function trashFile(entry){
-    if (!confirm(`Move "${niceName(entry.name)}" to trash?`)) return;
-    const newPath = `${MEDIA_PATH}/trash/${entry.name}`;
-    moveFile(entry, newPath);
+  // ---------- trash ----------
+  const TRASH_PATH = `${MEDIA_PATH}/trash`;
+  const TRASH_META_PATH = `${TRASH_PATH}/.trash-meta.json`;
+  const TRASH_RETENTION_DAYS = 30;
+  let trashMeta = {}; // name -> { trashedAt, originalPath }
+
+  function isInTrash(path){ return path.startsWith(TRASH_PATH + "/"); }
+
+  async function loadTrashMeta(){
+    try{
+      const res = await relayFetch(`/contents/${TRASH_META_PATH.split("/").map(encodeURIComponent).join("/")}`, { method: "GET" });
+      if (res.status === 404){ trashMeta = {}; return; }
+      if (!res.ok) return;
+      trashMeta = JSON.parse(b64ToUtf8((await res.json()).content)) || {};
+    } catch(e){ /* keep whatever we had; trash still works, just without dates */ }
+  }
+  async function saveTrashMeta(){
+    try{ await saveTranscriptFile(TRASH_META_PATH, trashMeta); } catch(e){}
+  }
+
+  function daysLeftFor(name){
+    const rec = trashMeta[name];
+    if (!rec || !rec.trashedAt) return null;
+    const elapsed = (Date.now() - new Date(rec.trashedAt).getTime()) / 86400000;
+    return Math.max(0, Math.ceil(TRASH_RETENTION_DAYS - elapsed));
+  }
+
+  async function trashFile(entry){
+    if (!confirm(`Move "${niceName(entry.name)}" to Trash?\n\nIt will be deleted permanently after ${TRASH_RETENTION_DAYS} days.`)) return;
+    const newPath = `${TRASH_PATH}/${entry.name}`;
+    await moveFile(entry, newPath);
+    await loadTrashMeta();
+    trashMeta[entry.name] = { trashedAt: new Date().toISOString(), originalPath: entry.path };
+    await saveTrashMeta();
+  }
+
+  async function restoreFromTrash(entry){
+    const rec = trashMeta[entry.name];
+    const target = rec && rec.originalPath ? rec.originalPath : `${MEDIA_PATH}/${entry.name}`;
+    const whereLabel = target.slice(MEDIA_PATH.length).replace(/^\/+/, "").replace(/\/[^/]+$/, "") || "Library";
+    if (!confirm(`Restore "${niceName(entry.name)}" to ${whereLabel}?`)) return;
+    await moveFile(entry, target);
+    delete trashMeta[entry.name];
+    await saveTrashMeta();
+  }
+
+  // Collects every blob that makes up an item — the file itself, its sidecars, and for a
+  // chunked file every part — so "delete permanently" doesn't leave orphans behind.
+  async function deletionEntriesFor(entry){
+    const tree = [{ path: entry.path, mode: "100644", type: "blob", sha: null }];
+    const base = transcriptBase(entry);
+    [SUMMARY_SUFFIX, ".transcript.json", ".transcript.txt"].forEach(sfx => {
+      tree.push({ path: base + sfx, mode: "100644", type: "blob", sha: null });
+    });
+    if (entry.name.endsWith(CHUNK_SUFFIX)){
+      try{
+        const parts = await fetchFolder(chunkFolderFor(entry.path), true);
+        parts.forEach(p => tree.push({ path: p.path, mode: "100644", type: "blob", sha: null }));
+      } catch(e){ /* folder already gone */ }
+    }
+    return tree;
+  }
+
+  async function deleteForever(entry){
+    if (!confirm(`Permanently delete "${niceName(entry.name)}"?\n\nThis cannot be undone.`)) return;
+    try{
+      const tree = await deletionEntriesFor(entry);
+      // Deleting a path that doesn't exist fails the whole commit, so sidecars are filtered
+      // down to the ones actually present in this folder listing.
+      const present = new Set((await fetchFolder(TRASH_PATH, true)).map(e => e.path));
+      const filtered = tree.filter(t => present.has(t.path) || t.path.indexOf("/.chunks-") !== -1);
+      await commitTreeEntries(filtered, `Delete ${entry.name}`);
+      delete trashMeta[entry.name];
+      await saveTrashMeta();
+      folderCache.clear();
+      loadCurrentFolder(true);
+    } catch(err){
+      alert("Couldn't delete: " + err.message);
+    }
+  }
+
+  // Runs when the Trash folder is opened. Deletion is automatic by design (that's the point
+  // of a retention window) but never silent — it reports what it removed.
+  async function purgeExpiredTrash(entries){
+    const expired = entries.filter(e => {
+      const rec = trashMeta[e.name];
+      if (!rec || !rec.trashedAt) return false;
+      return (Date.now() - new Date(rec.trashedAt).getTime()) / 86400000 >= TRASH_RETENTION_DAYS;
+    });
+    if (!expired.length) return false;
+    try{
+      let tree = [];
+      for (const e of expired) tree = tree.concat(await deletionEntriesFor(e));
+      const present = new Set(entries.map(e => e.path));
+      const filtered = tree.filter(t => present.has(t.path) || t.path.indexOf("/.chunks-") !== -1);
+      await commitTreeEntries(filtered, `Auto-remove ${expired.length} expired trash item(s)`);
+      expired.forEach(e => delete trashMeta[e.name]);
+      await saveTrashMeta();
+      alert(`Removed ${expired.length} item(s) that had been in Trash for over ${TRASH_RETENTION_DAYS} days.`);
+      return true;
+    } catch(err){
+      return false;
+    }
   }
 
   function startMove(entry){
@@ -1529,7 +1680,7 @@
         await saveCollectionsData();
       }
       folderCache.clear();
-      loadCurrentFolder();
+      loadCurrentFolder(true);
       try { localStorage.removeItem(LS_PRACTICE_CACHE); } catch(e){}
     } catch(err){
       alert("Move failed: " + err.message + "\n\nGitHub can have a brief replication delay — try again in a few seconds.");
@@ -1570,7 +1721,7 @@
         throw new Error(errBody.message || `HTTP ${res.status}`);
       }
       folderCache.clear();
-      loadCurrentFolder();
+      loadCurrentFolder(true);
     } catch(err){
       alert("Couldn't create the folder: " + err.message);
     }
@@ -1626,34 +1777,6 @@
     if (!updateRes.ok) throw new Error((await updateRes.json().catch(() => ({}))).message || "ref update error");
   }
 
-  async function pdlUploadAsReleaseAsset(file, folder, statusFn){
-    statusFn("Uploading 0%…");
-    const url = CONFIG.WORKER_URL.replace(/\/+$/, "") + `/release-asset?name=${encodeURIComponent(file.name)}`;
-    const raw = await uploadWithProgress(
-      url,
-      { "X-App-Key": CONFIG.APP_KEY, "Content-Type": file.type || "application/octet-stream" },
-      file,
-      pct => statusFn(`Uploading ${Math.round(pct * 100)}%…`)
-    );
-    const res = { ok: raw.ok, status: raw.status, json: async () => JSON.parse(raw.body || "{}") };
-    if (!res.ok){
-      const msg = (await res.json().catch(() => ({}))).message || `HTTP ${res.status}`;
-      // This route was added to the relay alongside the in-app uploader, so a 404 means the
-      // Worker is still on an older version. Not worth retrying — but not fatal either: the
-      // chunked path the caller falls back to uses only routes the relay has always had.
-      if (res.status === 404){
-        const e = new Error("Relay has no large-file route (older Worker version)");
-        e.noRetry = true;
-        throw e;
-      }
-      throw new Error(msg);
-    }
-    const data = await res.json();
-    const pointerPath = `${folder}/${file.name}.ghrelease.json`;
-    statusFn("Linking file into the folder…");
-    await pdlWritePointerFile(pointerPath, { url: data.browser_download_url, size: file.size }, `Add ${pointerPath}`);
-    return pointerPath;
-  }
 
   // Anything at or above this goes straight to the Release-asset path instead of the blob
   // API. Base64 inflates a file by ~33%, so a 35MB video becomes a ~47MB JSON body that the
@@ -1685,22 +1808,6 @@
     throw lastErr;
   }
 
-  // fetch() gives no upload progress, so a big upload looks frozen right up until it fails.
-  // XHR does, which is the difference between "is this working?" and a visible percentage.
-  function uploadWithProgress(url, headers, body, onProgress){
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", url);
-      Object.keys(headers).forEach(k => xhr.setRequestHeader(k, headers[k]));
-      xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
-      xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body: xhr.responseText });
-      xhr.onerror = () => reject(new Error("Network connection lost"));
-      xhr.ontimeout = () => reject(new Error("Upload timed out"));
-      xhr.onabort = () => reject(new Error("Upload interrupted"));
-      xhr.timeout = 5 * 60 * 1000;
-      xhr.send(body);
-    });
-  }
 
   function blobToBase64(blob){
     return new Promise((resolve, reject) => {
@@ -1762,18 +1869,13 @@
 
   async function pdlUploadOneFile(file, folder, statusFn){
     if (file.size >= BLOB_MAX_BYTES){
-      // Release assets stream properly during playback, so they're worth trying first — but
-      // it's one long request, which is exactly what a dropping connection kills. Two tries,
-      // then switch to the chunked path that can actually survive a bad network.
-      try{
-        return await withRetry(
-          () => pdlUploadAsReleaseAsset(file, folder, statusFn), 2,
-          n => statusFn(`Connection dropped — retry ${n}…`)
-        );
-      } catch(err){
-        statusFn("Switching to chunked upload…");
-        return await pdlUploadChunked(file, folder, statusFn);
-      }
+      // Release assets were tried here first because they stream during playback — but they
+      // can't actually be played. GitHub's release-download redirect forcibly rewrites the
+      // response to Content-Type: application/octet-stream with Content-Disposition:
+      // attachment, so browsers download rather than play them, and there's no CORS header
+      // to let us fetch the bytes and fix the type ourselves. Chunked parts are ordinary
+      // repo blobs with none of those problems, so large files go straight there.
+      return await pdlUploadChunked(file, folder, statusFn);
     }
 
     statusFn("Reading file…");
@@ -1791,8 +1893,8 @@
     } catch(err){
       // Timed out or the connection dropped mid-upload — retry it the reliable way rather
       // than surfacing a dead end.
-      statusFn("Upload stalled — retrying the reliable way…");
-      return await pdlUploadAsReleaseAsset(file, folder, statusFn);
+      statusFn("Upload stalled — retrying in parts…");
+      return await pdlUploadChunked(file, folder, statusFn);
     } finally {
       clearTimeout(timer);
     }
@@ -1800,7 +1902,7 @@
     if (!blobRes.ok){
       const errBody = await blobRes.json().catch(() => ({}));
       const msg = errBody.message || `HTTP ${blobRes.status}`;
-      if (blobRes.status === 422 && /too large/i.test(msg)) return await pdlUploadAsReleaseAsset(file, folder, statusFn);
+      if (blobRes.status === 422 && /too large/i.test(msg)) return await pdlUploadChunked(file, folder, statusFn);
       throw new Error(msg);
     }
     const blobSha = (await blobRes.json()).sha;
@@ -1896,7 +1998,7 @@
     if (shouldTag && anyOk) await saveCollectionsData();
 
     folderCache.clear();
-    if (currentView === "browse" && currentPath === dest) loadCurrentFolder();
+    if (currentView === "browse" && currentPath === dest) loadCurrentFolder(true);
     else if (currentView === "collections") renderCollectionsView();
 
     el("uploadDoneBtn").textContent = "Done";
@@ -1909,17 +2011,17 @@
   el("uploadDoneBtn").addEventListener("click", () => el("uploadOverlay").classList.remove("show"));
 
 
-  async function loadCurrentFolder(){
+  async function loadCurrentFolder(fresh){
     buildCrumbs();
     const cached = folderCache.get(currentPath);
-    if (cached){
+    if (cached && !fresh){
       allEntries = cached;
       renderListing(); // show instantly, then quietly refresh below
-    } else {
+    } else if (!cached) {
       el("listing").innerHTML = '<div class="loading">Loading…</div>';
     }
     try{
-      const raw = await fetchFolder(currentPath);
+      const raw = await fetchFolder(currentPath, fresh);
       // The sidecars are in this same listing, so note which media already have a summary
       // before filtering them out — that's the 📝 marker, with no extra network calls.
       summaryPaths.clear();
@@ -1931,6 +2033,17 @@
         if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
         return a.name.localeCompare(b.name);
       });
+
+      // Entering Trash: read when each item was thrown away, expire anything past the
+      // retention window, then re-read so the listing reflects the purge.
+      if (currentPath === TRASH_PATH){
+        await loadTrashMeta();
+        if (await purgeExpiredTrash(entries)){
+          folderCache.clear();
+          return loadCurrentFolder(true);
+        }
+      }
+
       folderCache.set(currentPath, entries);
       allEntries = entries;
       renderListing();
@@ -3356,6 +3469,58 @@
     if (currentView === "collections") renderCollectionsView(); else renderListing();
   });
 
+  // ---------- pull to refresh ----------
+  // Only arms when the page is already scrolled to the very top and the finger travels far
+  // enough downward, so it can't hijack ordinary scrolling. Refreshes whichever view is open.
+  (function setupPullToRefresh(){
+    const PULL_THRESHOLD = 70;
+    const ind = el("ptrIndicator");
+    let startY = null, armed = false, refreshing = false;
+
+    function refreshCurrentView(){
+      if (currentView === "collections"){ loadCollectionsData().then(renderCollectionsView); return; }
+      if (currentView === "vault"){
+        if (vaultSubTab === "ideas") loadIdeaEntries(el("search").value.trim());
+        else if (vaultSubTab === "topics") loadTopicEntries(el("search").value.trim());
+        else loadVaultEntries(el("search").value.trim());
+        return;
+      }
+      folderCache.clear();
+      loadCurrentFolder(true);
+    }
+
+    document.addEventListener("touchstart", e => {
+      if (refreshing || e.touches.length !== 1) return;
+      startY = window.scrollY <= 0 ? e.touches[0].clientY : null;
+    }, { passive: true });
+
+    document.addEventListener("touchmove", e => {
+      if (startY === null || refreshing) return;
+      const dy = e.touches[0].clientY - startY;
+      armed = dy > PULL_THRESHOLD && window.scrollY <= 0;
+      ind.classList.toggle("armed", armed);
+    }, { passive: true });
+
+    document.addEventListener("touchend", () => {
+      if (startY === null) return;
+      startY = null;
+      if (!armed || refreshing){ ind.classList.remove("armed"); armed = false; return; }
+      armed = false;
+      refreshing = true;
+      ind.textContent = "Refreshing…";
+      ind.classList.remove("armed");
+      ind.classList.add("spinning");
+      Promise.resolve(refreshCurrentView()).finally(() => {
+        // A brief hold so the refresh reads as deliberate rather than a flicker.
+        setTimeout(() => {
+          ind.classList.remove("spinning");
+          ind.textContent = "Release to refresh";
+          refreshing = false;
+        }, 450);
+      });
+    }, { passive: true });
+  })();
+
   // ---------- organize toggle ----------
   el("organizeToggle").addEventListener("change", () => {
     if (currentView === "collections") renderCollectionsView();
@@ -3524,8 +3689,10 @@
       const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, { method: "GET" });
       if (res.ok) sha = (await res.json()).sha;
     } catch(e){}
-    // Same writer serves transcripts and summaries, so the commit names whichever it is.
-    const kindLabel = path.endsWith(SUMMARY_SUFFIX) ? "summary" : "transcript";
+    // Same writer serves several small JSON sidecars, so the commit names whichever it is.
+    const kindLabel = path.endsWith(SUMMARY_SUFFIX) ? "summary"
+      : path.endsWith(".trash-meta.json") ? "trash record"
+      : "transcript";
     const body = { message: `Update ${kindLabel}: ${path}`, content: utf8ToB64(JSON.stringify(contentObj, null, 2)) };
     if (sha) body.sha = sha;
     const res = await relayFetch(`/contents/${path.split("/").map(encodeURIComponent).join("/")}`, {
@@ -3674,7 +3841,7 @@
       else summaryPaths.delete(transcriptBase(entry));
       folderCache.clear();
       el("suOverlay").classList.remove("show");
-      if (currentView === "browse") loadCurrentFolder();
+      if (currentView === "browse") loadCurrentFolder(true);
     } catch(err){
       alert("Couldn't save the summary: " + err.message);
     } finally {
@@ -3867,7 +4034,16 @@
   function playVideo(entry){
     el("modalContent").innerHTML = `<video controls autoplay playsinline></video>`;
     el("modalOverlay").classList.add("show");
-    setMediaSrcWithFallback(el("modalContent").querySelector("video"), entry.path);
+    const v = el("modalContent").querySelector("video");
+    setMediaSrcWithFallback(v, entry.path);
+    // Only report a failure once the raw-URL fallback has also been tried, otherwise the
+    // CDN's miss would look like a broken file.
+    v.addEventListener("error", function afterFallback(){
+      if (v.src.indexOf("raw.githubusercontent.com") === -1) return; // still on the CDN attempt
+      v.removeEventListener("error", afterFallback);
+      wireVideoErrors(v, entry, rawUrl(entry.path));
+      v.dispatchEvent(new Event("error"));
+    });
     currentVideoEntry = entry;
     wireVideoSpeed();
     setMediaSessionMetadata(niceName(entry.name));
@@ -4082,16 +4258,23 @@
     return res.json();
   }
 
-  async function reconstructBlob(manifestPath, mimeType){
+  // Parts are fetched in parallel rather than one after another — on a 7-part file that's
+  // the difference between seven sequential round-trips and roughly one. Results are placed
+  // by index, so arrival order doesn't matter.
+  async function reconstructBlob(manifestPath, mimeType, onProgress){
     const manifest = await fetchManifest(manifestPath);
     const chunkFolder = chunkFolderFor(manifestPath);
-    const buffers = [];
-    for (let i = 1; i <= manifest.parts; i++){
-      const partName = "part-" + String(i).padStart(3, "0");
+    const total = manifest.parts;
+    const buffers = new Array(total);
+    let done = 0;
+    await Promise.all(Array.from({ length: total }, (_, idx) => (async () => {
+      const partName = "part-" + String(idx + 1).padStart(3, "0");
       const res = await fetch(rawUrl(`${chunkFolder}/${partName}`));
-      if (!res.ok) throw new Error(`Could not load part ${i} of ${manifest.parts}`);
-      buffers.push(await res.arrayBuffer());
-    }
+      if (!res.ok) throw new Error(`Could not load part ${idx + 1} of ${total}`);
+      buffers[idx] = await res.arrayBuffer();
+      done++;
+      if (onProgress) onProgress(done, total);
+    })()));
     return new Blob(buffers, { type: mimeType });
   }
 
@@ -4103,7 +4286,8 @@
     el("miniTranscript").classList.remove("active");
     highlightPlaying(entry.path);
     try{
-      const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)));
+      const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)),
+        (done, total) => { el("miniTitle").textContent = `Loading ${niceName(entry.name)}… ${Math.round((done/total)*100)}%`; });
       audioEl.src = URL.createObjectURL(blob);
       audioEl.playbackRate = SPEEDS[speedIndex];
       audioEl.play();
@@ -4118,10 +4302,19 @@
     el("modalContent").innerHTML = `<div style="color:var(--text-dim); font-size:13px;">Loading ${niceName(entry.name)}…</div>`;
     el("modalOverlay").classList.add("show");
     try{
-      const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)));
+      const blob = await reconstructBlob(entry.path, mimeFor(realNameOf(entry.name)),
+        (done, total) => {
+          const pct = Math.round((done/total)*100);
+          el("modalContent").innerHTML = `<div style="color:var(--text-dim); font-size:13px;">Loading ${niceName(entry.name)}… ${pct}%</div>`;
+        });
       const url = URL.createObjectURL(blob);
+      openDocObjectUrls.push(url); // released when the player closes
       el("modalContent").innerHTML = `<video src="${url}" controls autoplay playsinline></video>`;
+      const v = el("modalContent").querySelector("video");
+      wireVideoErrors(v, entry, url);
+      currentVideoEntry = entry;
       wireVideoSpeed();
+      setMediaSessionMetadata(niceName(entry.name));
     } catch(err){
       el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
     }
@@ -4161,7 +4354,13 @@
       const pointer = await fetchPointer(entry.path);
       audioEl.src = pointer.url;
       audioEl.playbackRate = SPEEDS[speedIndex];
-      audioEl.play();
+      // Release assets are served as attachments, so this often can't play — if it fails,
+      // say why instead of leaving a silent player sitting there.
+      audioEl.addEventListener("error", function once(){
+        audioEl.removeEventListener("error", once);
+        el("miniTitle").textContent = "Stored as a release asset — can't stream. Re-upload to play.";
+      }, { once: true });
+      audioEl.play().catch(() => {});
       el("miniTitle").textContent = niceName(entry.name);
       setSpeedLabel();
     } catch(err){
@@ -4169,13 +4368,45 @@
     }
   }
 
+  // A <video> that fails reports it through an 'error' event, not an exception — without a
+  // listener the player just sits there dead, which is what "failed to play" looked like.
+  // This surfaces the real reason and always leaves a way to open the file directly.
+  function wireVideoErrors(videoEl, entry, directUrl){
+    if (!videoEl) return;
+    videoEl.addEventListener("error", () => {
+      const e = videoEl.error;
+      const reason = !e ? "unknown error"
+        : e.code === 1 ? "loading was aborted"
+        : e.code === 2 ? "the network dropped while loading"
+        : e.code === 3 ? "the file couldn't be decoded"
+        : e.code === 4 ? "this format isn't supported by this browser, or the file didn't load"
+        : "unknown error";
+      el("modalContent").innerHTML = docPanel({
+        icon: "⚠",
+        name: niceName(entry.name),
+        meta: `Couldn't play this video — ${reason}.`,
+        buttons: directUrl ? `<a class="doc-btn secondary" href="${directUrl}" target="_blank" rel="noopener">Open directly</a>` : ""
+      });
+      el("modalSpeed").classList.remove("show");
+    });
+  }
+
   async function playPointerVideo(entry){
     el("modalContent").innerHTML = `<div style="color:var(--text-dim); font-size:13px;">Loading ${niceName(entry.name)}…</div>`;
     el("modalOverlay").classList.add("show");
     try{
       const pointer = await fetchPointer(entry.path);
-      el("modalContent").innerHTML = `<video src="${pointer.url}" controls autoplay playsinline></video>`;
-      wireVideoSpeed();
+      // Inline playback can't work for these: GitHub's release-download redirect rewrites
+      // the response to application/octet-stream + Content-Disposition: attachment, and
+      // sends no CORS header, so we can't repair the type client-side either. Rather than
+      // show a player that will certainly fail, offer the two things that do work.
+      el("modalContent").innerHTML = docPanel({
+        icon: "▶",
+        name: niceName(entry.name),
+        meta: `This file is stored as a GitHub release asset, which browsers can only download, not stream. Re-upload it to play it in the app.${pointer.size ? " · " + fmtBytes(pointer.size) : ""}`,
+        buttons: `<a class="doc-btn" href="${pointer.url}" target="_blank" rel="noopener">Open / Download</a>`
+      });
+      el("modalSpeed").classList.remove("show");
     } catch(err){
       el("modalContent").innerHTML = `<div style="color:var(--err); font-size:13px;">Couldn't load: ${err.message}</div>`;
     }
