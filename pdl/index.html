@@ -1111,6 +1111,7 @@
 
   let currentPath = MEDIA_PATH;
   let allEntries = [];
+  let allEntriesPath = null; // which folder allEntries actually belongs to
   let activeFilter = "all";
   let searchTerm = "";
   let currentView = "browse";
@@ -1498,18 +1499,71 @@
 
   // Tries the CDN, falls back to the origin (a cover saved moments ago won't be on the CDN
   // yet), and quietly removes itself if there's no cover at all — leaving the placeholder.
+  // A cover you just saved can take minutes to appear on the CDN and on raw.githubusercontent,
+  // so waiting for propagation would mean staring at a placeholder. Instead the browser keeps
+  // the exact image it just produced and shows that until the network catches up. Entries
+  // expire after 30 minutes, by which point the real URL is serving it — which also keeps
+  // this cache from growing.
+  const LS_COVER_CACHE = "pdl_cover_cache_v1";
+  const COVER_CACHE_TTL_MS = 30 * 60 * 1000;
+
+  function readCoverCache(){
+    try { return JSON.parse(localStorage.getItem(LS_COVER_CACHE) || "{}"); } catch(e){ return {}; }
+  }
+  function pruneCoverCache(cache){
+    const now = Date.now();
+    let changed = false;
+    Object.keys(cache).forEach(k => {
+      if (!cache[k] || now - cache[k].savedAt > COVER_CACHE_TTL_MS){ delete cache[k]; changed = true; }
+    });
+    return changed;
+  }
+  function writeCoverCache(cache){
+    try { localStorage.setItem(LS_COVER_CACHE, JSON.stringify(cache)); }
+    catch(e){
+      // Out of room — drop the oldest entry and try once more rather than losing the newest.
+      const keys = Object.keys(cache).sort((a, b) => cache[a].savedAt - cache[b].savedAt);
+      if (keys.length){ delete cache[keys[0]]; try { localStorage.setItem(LS_COVER_CACHE, JSON.stringify(cache)); } catch(e2){} }
+    }
+  }
+  function cacheCoverLocally(path, dataUrl){
+    const cache = readCoverCache();
+    pruneCoverCache(cache);
+    cache[path] = { dataUrl, savedAt: Date.now() };
+    writeCoverCache(cache);
+  }
+  function forgetLocalCover(path){
+    const cache = readCoverCache();
+    delete cache[path];
+    writeCoverCache(cache);
+  }
+  function localCoverFor(path){
+    const cache = readCoverCache();
+    if (pruneCoverCache(cache)) writeCoverCache(cache);
+    return cache[path] ? cache[path].dataUrl : null;
+  }
+
   function attachCoverImage(container, path, onFound){
     const img = document.createElement("img");
     img.loading = "lazy";
     img.alt = "";
     img.style.position = "absolute";
     img.style.inset = "0";
-    let triedOrigin = false;
+    if (onFound) img.addEventListener("load", onFound);
+
+    const local = localCoverFor(path);
+    if (local){
+      img.src = local; // instant, and exactly what was saved
+      container.appendChild(img);
+      return img;
+    }
+
+    let stage = 0; // 0 = CDN, 1 = origin, 2+ = give up
     img.addEventListener("error", () => {
-      if (!triedOrigin){ triedOrigin = true; img.src = rawUrl(path); return; }
+      stage++;
+      if (stage === 1){ img.src = rawUrl(path); return; }
       img.remove();
     });
-    if (onFound) img.addEventListener("load", onFound);
     img.src = jsDelivrUrl(path);
     container.appendChild(img);
     return img;
@@ -2239,14 +2293,26 @@
   async function loadCurrentFolder(fresh){
     buildCrumbs();
     const cached = folderCache.get(currentPath);
+    const showingThisFolder = allEntriesPath === currentPath && allEntries.length > 0;
     if (cached && !fresh){
       allEntries = cached;
+      allEntriesPath = currentPath;
       renderListing(); // show instantly, then quietly refresh below
-    } else if (!cached) {
+    } else if (!cached && !showingThisFolder) {
+      // Only blank the screen when there's genuinely nothing to show — refreshing a folder
+      // you're already looking at shouldn't flash "Loading…" over good content.
       el("listing").innerHTML = '<div class="loading">Loading…</div>';
     }
     try{
-      const raw = await fetchFolder(currentPath, fresh);
+      let raw;
+      try{
+        raw = await fetchFolder(currentPath, fresh);
+      } catch(err){
+        // A refresh must never leave you worse off than not refreshing. If the
+        // cache-busting request fails for any reason, fall back to the ordinary one.
+        if (!fresh) throw err;
+        raw = await fetchFolder(currentPath, false);
+      }
       // The sidecars are in this same listing, so note which media already have a summary
       // before filtering them out — that's the 📝 marker, with no extra network calls.
       summaryPaths.clear();
@@ -2273,9 +2339,14 @@
 
       folderCache.set(currentPath, entries);
       allEntries = entries;
+      allEntriesPath = currentPath;
       renderListing();
     } catch(e){
-      if (!cached) el("listing").innerHTML = `<div class="empty">Couldn't load this folder. ${e.message}</div>`;
+      // Keep whatever is already on screen for this folder; only show the error if there's
+      // nothing there to keep.
+      if (!cached && !showingThisFolder){
+        el("listing").innerHTML = `<div class="empty">Couldn't load this folder. ${e.message}</div>`;
+      }
     }
   }
 
@@ -3858,10 +3929,7 @@
     ["pointerup", "pointercancel"].forEach(ev => stage.addEventListener(ev, () => { dragging = false; }));
   })();
 
-  function canvasToBase64Jpeg(){
-    const dataUrl = el("ccCanvas").toDataURL("image/jpeg", 0.82);
-    return dataUrl.slice(dataUrl.indexOf(",") + 1);
-  }
+  function canvasDataUrl(){ return el("ccCanvas").toDataURL("image/jpeg", 0.82); }
 
   async function putCoverFile(path, base64, message){
     let sha = null;
@@ -3888,7 +3956,9 @@
     const btn = el("ccSave");
     btn.disabled = true; btn.textContent = "Saving…";
     try{
-      await putCoverFile(ccTargetPath, canvasToBase64Jpeg(), `Cover art: ${ccTargetPath}`);
+      const dataUrl = canvasDataUrl();
+      await putCoverFile(ccTargetPath, dataUrl.slice(dataUrl.indexOf(",") + 1), `Cover art: ${ccTargetPath}`);
+      cacheCoverLocally(ccTargetPath, dataUrl); // show it immediately, don't wait on the CDN
       if (ccOnSaved) ccOnSaved();
       purgeJsDelivr(ccTargetPath);
       el("ccOverlay").classList.remove("show");
@@ -3908,6 +3978,7 @@
         `Remove cover art: ${ccTargetPath}`
       );
       coverPaths.delete(ccTargetPath.replace(COVER_SUFFIX, ""));
+      forgetLocalCover(ccTargetPath);
       purgeJsDelivr(ccTargetPath);
       el("ccOverlay").classList.remove("show");
       ccRefreshAfterWrite();
