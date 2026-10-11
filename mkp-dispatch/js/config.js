@@ -25,8 +25,12 @@
  *
  * ASSUMPTIONS / EXTERNAL DEPENDENCIES
  *   - DEFAULT_PROXY_URL must point at a live, deployed Worker (see
- *     /worker/clickup-proxy.js) that already has the CLICKUP_TOKEN
- *     secret set. This file holds no credentials — only a public URL.
+ *     /worker/clickup-proxy.js) that has completed the ClickUp OAuth
+ *     connect flow. This file holds no credentials — only public IDs.
+ *   - Since v13 this file is no longer the ONLY routing map: smart
+ *     routing (Worker v8) reads the live ClickUp structure too. The
+ *     destinations here act as the owner's labeled "usual places" that
+ *     Gemini prefers, and as the fallback catalog before the first sync.
  *   - Every `listId` below is a ClickUp List ID copied from the list's
  *     URL in the ClickUp web app: app.clickup.com/<team>/v/li/<LIST_ID>.
  *   - As of v6, no entries are flagged `verify: true` — the 4 that were
@@ -147,8 +151,31 @@
  *                        value is stored in plaintext downstream
  *                        regardless, so on-screen masking added
  *                        friction without real protection).
+ *   v13 2026-10-10  Smart routing + rename:
+ *                    (1) APP_NAME = 'Dispatch It' (user-requested rename;
+ *                        internal ids like the Worker URL and the
+ *                        "dispatch:" storage prefix are unchanged so
+ *                        existing devices keep their passcode and queue).
+ *                    (2) getRoutableDestinations() — the labeled
+ *                        destinations sent to the Worker with every smart
+ *                        capture (task-creating types only; never Add to
+ *                        Accounts or Follow-up).
+ *                    (3) ROUTING_EXCLUDED_LIST_IDS — lists the app never
+ *                        offers to smart routing (mirrors the Worker's
+ *                        PRIVATE_LIST_IDS; the Worker enforces it anyway).
+ *                    (4) Fixed stale header text (still described the
+ *                        retired CLICKUP_TOKEN personal-token setup) and
+ *                        the WORKSPACE_ID comment (it IS used now).
  * =========================================================================
  */
+
+// -----------------------------------------------------------------------
+// APP_NAME — the user-facing product name (v13 rename from "Dispatch").
+// Shown in the header, lock screen and chat log messages. index.html and
+// manifest.webmanifest carry the same name for the browser tab and the
+// home-screen icon label.
+// -----------------------------------------------------------------------
+const APP_NAME = 'Dispatch It';
 
 // -----------------------------------------------------------------------
 // DEFAULT_PROXY_URL
@@ -162,13 +189,6 @@
 // -----------------------------------------------------------------------
 const DEFAULT_PROXY_URL = 'https://dispatch-clickup-proxy.c1-jumpw.workers.dev';
 
-// -----------------------------------------------------------------------
-// WORKSPACE_ID
-//   The ClickUp Workspace (Team) all the lists below belong to. Currently
-//   unused by app logic directly (each List ID is globally unique in
-//   ClickUp's API), but kept here for reference / future use, e.g. if we
-//   ever need to build a "open in ClickUp" deep link.
-// -----------------------------------------------------------------------
 // Destination Chat channel for "Add to Accounts" submissions —
 // confirmed via GET /chat/channels lookup on 2026-07-25 (name:
 // "mkc-sa-add-to-accounts-admin"), matches the URL the user provided:
@@ -193,7 +213,19 @@ const MKC_CLIENT_ACCOUNTS_LIST_ID = '901711853904';
 // 'company' capture type under crm-ops, below.
 const CRM_COMPANIES_LIST_ID = '901710481777';
 
+// -----------------------------------------------------------------------
+// WORKSPACE_ID
+//   The ClickUp Workspace (Team) all the lists below belong to. Used to
+//   build Chat deep links (Add to Accounts) and, since v13, to page
+//   through open tasks when building the smart-routing task index
+//   (Settings → Build task index).
+// -----------------------------------------------------------------------
 const WORKSPACE_ID = '25724879';
+
+// Lists smart routing must never offer or index — account credentials
+// live here. Mirrors PRIVATE_LIST_IDS in worker/wrangler.toml (the Worker
+// enforces it server-side regardless of what the app sends).
+const ROUTING_EXCLUDED_LIST_IDS = [MKC_CLIENT_ACCOUNTS_LIST_ID];
 
 // -----------------------------------------------------------------------
 // FIELD_SCHEMAS
@@ -410,4 +442,29 @@ const OAUTH_REDIRECT_URI = `${DEFAULT_PROXY_URL}/oauth/callback`;
  */
 function buildClickUpAuthorizeUrl() {
   return `https://app.clickup.com/api?client_id=${CLICKUP_CLIENT_ID}&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT_URI)}`;
+}
+
+/**
+ * getRoutableDestinations
+ * The owner's labeled destinations, sent to the Worker with each smart
+ * capture so Gemini knows "this list is MKP → To-Do". Only capture types
+ * that create a plain task qualify: Follow-up (comments), Add to Accounts
+ * (credentials) and anything excluded above are left out on purpose.
+ * @returns {Array<{list_id: string, label: string, entity: string, entityId: string, typeId: string}>}
+ *   Duplicated list IDs (same list under two labels) are collapsed to
+ *   the first label seen.
+ */
+function getRoutableDestinations() {
+  const seen = new Set();
+  const out = [];
+  ENTITIES.forEach(entity => {
+    entity.captureTypes.forEach(t => {
+      const action = t.action || 'task';
+      if (action !== 'task' || !t.listId || t.schema === 'account') return;
+      if (ROUTING_EXCLUDED_LIST_IDS.includes(t.listId) || seen.has(t.listId)) return;
+      seen.add(t.listId);
+      out.push({ list_id: t.listId, label: t.label, entity: entity.name, entityId: entity.id, typeId: t.id });
+    });
+  });
+  return out;
 }

@@ -3,7 +3,7 @@
  * clickup.js — thin wrapper around the ClickUp API (via the Worker proxy)
  * =========================================================================
  * PURPOSE
- *   Every network call Dispatch makes to "ClickUp" actually goes to the
+ *   Every network call Dispatch It makes to "ClickUp" actually goes to the
  *   Cloudflare Worker proxy (see /worker/clickup-proxy.js), never to
  *   api.clickup.com directly — see that file's header comment for why
  *   (CORS + credential custody). This file just shapes requests/
@@ -18,12 +18,19 @@
  * ASSUMPTIONS / EXTERNAL DEPENDENCIES
  *   - Requires Storage (storage.js) to be loaded first, for the proxy
  *     URL and device passcode.
- *   - Every function here can throw. Callers should expect network
- *     failures (offline, Worker down) as well as explicit rejections
- *     (wrong passcode → 403, ClickUp not connected yet → 401).
- *     Thrown Errors carry a `.status` property with the HTTP status
- *     code where available, so callers can distinguish failure kinds
- *     without parsing message text.
+ *   - Every function here can throw. Since v10 all calls go through
+ *     request(), which normalizes failures into three kinds callers can
+ *     branch on without parsing text:
+ *       err.status set, no err.outcome → a real rejection (403 wrong
+ *         passcode, 401 not connected, 400 bad field, ...). Retrying
+ *         the same payload won't help.
+ *       err.outcome === 'unknown'       → timed out AFTER sending a
+ *         write; ClickUp may or may not have created it. Queue it, but
+ *         check before re-sending (see app.js processQueue).
+ *       err.network === true, no status → never reached the Worker
+ *         (offline / DNS / Worker down). Safe to queue and retry.
+ *     Rejections also carry err.code (ClickUp ECODE or the Worker's
+ *     code) and err.serverMessage for friendly display (ui.js).
  *
  * -------------------------------------------------------------------------
  * VERSION HISTORY
@@ -113,8 +120,38 @@
  *                    reliably knowable in advance — the description
  *                    line is a guaranteed-visible fallback regardless
  *                    of whether the structured write actually took.
+ *   v10 2026-10-10  Hardening + smart routing support:
+ *                    (1) request() — one fetch wrapper for every call:
+ *                        timeouts (none of the calls had one; a stalled
+ *                        connection could leave Send spinning forever),
+ *                        and the three-way error classification above.
+ *                    (2) Date fix: date fields were sent as
+ *                        new Date('YYYY-MM-DD') = midnight UTC, which is
+ *                        the PREVIOUS evening in US time zones, so dates
+ *                        could show a day early in ClickUp. Now sent as
+ *                        local noon (localDateToMs), which lands on the
+ *                        intended calendar day in any time zone.
+ *                    (3) buildTaskPayload exported (smart captures build
+ *                        their payload here too, then send it via the
+ *                        Worker's /route/commit).
+ *                    (4) addComment returns ClickUp's comment id (needed
+ *                        so a follow-up can be undone from Activity).
+ *                    (5) getTeamTasksPage() for the task-index backfill;
+ *                        findRecentTaskByName() so a capture that timed
+ *                        out mid-send isn't created twice on retry.
+ *                    (6) logCapture() notes how a capture was routed
+ *                        ("Auto-filed · 92%") and labels "update" sends.
+ *                    (7) Review fixes: a write that drops mid-flight while
+ *                        online is flagged outcome 'unknown' (not just
+ *                        timeouts), and findRecentTaskByName uses the
+ *                        workspace filter (subtasks included, not capped
+ *                        at the list's first 100 tasks).
+ *                    (8) Removed duplicated/misplaced doc comments
+ *                        (logCapture's was in twice; buildTaskPayload's
+ *                        sat above capitalizeWords).
  * =========================================================================
  */
+
 
 const ClickUp = (() => {
   /**
@@ -130,136 +167,23 @@ const ClickUp = (() => {
 
   /**
    * authHeaders — every proxied request needs the device passcode so
-   * the Worker can verify this is an authorized device before it'll
-   * touch ClickUp on the owner's behalf. See clickup-proxy.js's
-   * checkPasscode() for the server-side half of this.
+   * the Worker can verify this is an authorized device. See
+   * clickup-proxy.js checkPasscode() for the server-side half.
    */
   function authHeaders() {
     return { 'X-Dispatch-Key': Storage.getDeviceKey() || '' };
   }
 
   // ClickUp's priority field is a 1-4 integer, not the friendly labels
-  // shown in the UI — this maps one to the other. Order matters: 1 is
-  // most urgent, matching ClickUp's own convention (not "1 = low").
+  // shown in the UI. 1 is most urgent (ClickUp's convention).
   const PRIORITY_MAP = { Urgent: 1, High: 2, Normal: 3, Low: 4 };
 
   /**
-   * buildTaskPayload
-   * Converts a capture `entry` (as assembled by app.js's
-   * submitCapture()) into the JSON body ClickUp's "Create Task"
-   * endpoint expects.
-   * @param {object} entry - { fields, transcript, ... } — see app.js
-   * @returns {object} ClickUp task payload
-   * Edge cases: any field not present in `entry.fields` is simply
-   * omitted rather than sent as null/empty, since ClickUp treats an
-   * omitted key differently from an explicit empty value for some
-   * fields (e.g. due_date).
-   */
-  /**
-   * capitalizeWords
-   * Cosmetic-only title formatting: uppercases the first letter of
-   * each word. Deliberately only ever uppercases, never lowercases —
-   * "F5 CEO" stays "F5 CEO", "aws project" becomes "Aws Project" —
-   * so acronyms and intentional casing typed by the user survive
-   * untouched, and only the common "typed it all lowercase in a rush"
-   * case gets fixed.
-   * @param {string} str
-   * @returns {string}
-   */
-  function capitalizeWords(str) {
-    return str.replace(/\b\p{L}/gu, (ch) => ch.toUpperCase());
-  }
-
-  function buildTaskPayload(entry) {
-    const payload = { name: capitalizeWords(entry.fields.title || entry.fields.name || '(untitled)') };
-
-    const descriptionParts = [];
-    if (entry.fields.description) descriptionParts.push(entry.fields.description);
-    if (entry.fields.company) descriptionParts.push(`Company: ${entry.fields.company}`);
-    if (entry.fields.contactMethod) descriptionParts.push(`Best contact method: ${entry.fields.contactMethod}`);
-    if (entry.fields.opportunity) descriptionParts.push(`Opportunity: ${entry.fields.opportunity}`);
-    // "Add to Accounts" fields, when routed directly to a List instead
-    // of Chat (see app.js's destination toggle) — same plaintext
-    // trade-off as the Chat-message version (see formatAccountMessage
-    // in app.js), just landing in a task description instead.
-    // "Add to Accounts" fields, when routed directly to a List instead
-    // of Chat (see app.js's destination toggle). Admin
-    // Username/Email/Password/Tool now go into real ClickUp custom
-    // fields when a match was found (entry.customFields, resolved in
-    // app.js) — only fall back to writing them into the description
-    // for whichever ones DIDN'T resolve to a real field, so the
-    // password (in particular) never ends up duplicated in two places
-    // on the same task. "Notes" has no matching custom field in this
-    // list at all, so it always goes into the description.
-    const resolvedKeys = new Set((entry.customFieldKeys || []));
-    if (entry.fields.accountType) descriptionParts.push(`Account Type: ${entry.fields.accountType}`);
-    if (entry.fields.adminUsername && !resolvedKeys.has('adminUsername')) descriptionParts.push(`Admin Username: ${entry.fields.adminUsername}`);
-    if (entry.fields.adminEmail && !resolvedKeys.has('adminEmail')) descriptionParts.push(`Admin Email: ${entry.fields.adminEmail}`);
-    if (entry.fields.password && !resolvedKeys.has('password')) descriptionParts.push(`Password: ${entry.fields.password}`);
-    if (entry.fields.notes) descriptionParts.push(`Notes: ${entry.fields.notes}`);
-    // Associated Account: ALWAYS written here too (not only when the
-    // real custom field didn't resolve, unlike the fields above) —
-    // whether that ClickUp field is a plain-text field or a
-    // Relationship/Tasks field type isn't reliably knowable from the
-    // API's field-list response alone, and setting a Relationship
-    // field's value via Create Task is a known rough edge in
-    // ClickUp's API (community reports of it silently not applying).
-    // This plain-text line guarantees the association is visible on
-    // the task even if the structured field write silently no-ops.
-    if (entry.associatedAccountName) {
-      descriptionParts.push(`Associated Client Account: ${entry.associatedAccountName}${entry.associatedAccountId ? ` (${entry.associatedAccountId})` : ''}`);
-    }
-    if (entry.transcript) descriptionParts.push(`\n— Voice transcript —\n${entry.transcript}`);
-    if (descriptionParts.length) payload.description = descriptionParts.join('\n\n');
-
-    if (entry.fields.priority && PRIORITY_MAP[entry.fields.priority]) {
-      payload.priority = PRIORITY_MAP[entry.fields.priority];
-    }
-    // Start date: when this capture should become active/visible on a
-    // timeline — distinct from Due date (deadline). Both are plain
-    // dates (no time-of-day) by design; see config.js v5 note.
-    if (entry.fields.startDate) {
-      payload.start_date = new Date(entry.fields.startDate).getTime();
-      payload.start_date_time = false;
-    }
-    if (entry.fields.dueDate) {
-      payload.due_date = new Date(entry.fields.dueDate).getTime();
-      payload.due_date_time = false;
-    }
-    if (entry.fields.tags) {
-      payload.tags = entry.fields.tags.split(',').map(t => t.trim()).filter(Boolean);
-    }
-    // Assignee: populated from a list-specific dropdown (see app.js
-    // renderForm's assignee section, backed by getListMembers() below)
-    // rather than a schema field, since valid options depend on which
-    // ClickUp List this capture is headed to and have to be fetched.
-    if (entry.fields.assigneeId) {
-      payload.assignees = [Number(entry.fields.assigneeId)];
-    }
-    // Subtask nesting: entry.parentTaskId is set by app.js's "subtask
-    // of an existing task" flow (see loadParentTaskOptions/selectParentTask),
-    // not a schema field — same reasoning as assigneeId above. ClickUp
-    // requires the parent to already live in this same List (see
-    // clickup.js version history) and to not itself be a subtask; both
-    // are enforced by how the search is scoped, not here.
-    if (entry.parentTaskId) {
-      payload.parent = entry.parentTaskId;
-    }
-    // Custom fields: resolved ahead of time by app.js (real ClickUp
-    // custom-field IDs looked up via getListFields(), matched by
-    // name to the relevant form fields — see app.js
-    // getAccountFieldMapping()). Passed straight through here since
-    // this file has no List-specific field knowledge of its own.
-    if (entry.customFields && entry.customFields.length) {
-      payload.custom_fields = entry.customFields;
-    }
-    return payload;
-  }
-
-  /**
    * apiError — builds an Error with a `.status` property attached, so
-   * callers can branch on HTTP status (e.g. 403 = wrong passcode)
-   * without string-matching the message.
+   * callers can branch on HTTP status without string-matching.
+   * @param {string} message
+   * @param {number} status
+   * @returns {Error}
    */
   function apiError(message, status) {
     const err = new Error(message);
@@ -268,304 +192,361 @@ const ClickUp = (() => {
   }
 
   /**
-   * createTask
-   * Creates a task in the given ClickUp List via the Worker proxy.
-   * @param {string} listId - destination ClickUp List ID
-   * @param {object} entry - capture entry (see buildTaskPayload)
-   * @returns {Promise<object>} the created ClickUp task object
-   * @throws on non-2xx response — status 403 means the device passcode
-   *   was missing/wrong; 401 means the passcode was fine but no
-   *   ClickUp OAuth connection is stored yet (needs Settings → Connect).
+   * request
+   * The single fetch wrapper behind every call in this file (and
+   * routing.js). Adds the passcode header, a timeout, JSON handling and
+   * the error classification described in the file header.
+   * @param {string} path - Worker path beginning with "/"
+   * @param {object} [opts]
+   * @param {string} [opts.method='GET']
+   * @param {*} [opts.json] - body to send as JSON
+   * @param {FormData} [opts.form] - multipart body (attachments)
+   * @param {number} [opts.timeoutMs=20000] - 0 disables the timeout
+   *   (attachment uploads: a 90MB file on a slow link is legitimately slow)
+   * @returns {Promise<object|null>} parsed JSON, or null for empty bodies
+   * @throws Error — see the file header for the three kinds
    */
-  async function createTask(listId, entry) {
-    const res = await fetch(`${proxyUrl()}/list/${listId}/task`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify(buildTaskPayload(entry))
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_${res.status}: ${text}`, res.status);
+  async function request(path, { method = 'GET', json, form, timeoutMs = 20000 } = {}) {
+    const headers = { ...authHeaders() };
+    let body;
+    if (json !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(json);
+    } else if (form) {
+      body = form;
     }
-    return res.json();
+    const controller = timeoutMs ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    // Captured BEFORE sending: a write that fails while the device was
+    // online may have reached the server before the connection dropped.
+    const wasOnline = typeof navigator === 'undefined' || navigator.onLine !== false;
+
+    let res;
+    try {
+      res = await fetch(`${proxyUrl()}${path}`, { method, headers, body, signal: controller ? controller.signal : undefined });
+    } catch (e) {
+      // Never got an HTTP response at all.
+      const timedOut = e && e.name === 'AbortError';
+      const err = new Error(timedOut ? 'TIMEOUT' : 'NETWORK');
+      err.network = true;
+      if (timedOut) err.timeout = true;
+      // A write that timed out — or dropped mid-flight while online (a
+      // phone switching from Wi-Fi to cellular) — may still have happened
+      // server-side. Flag it so callers check before re-sending.
+      if (method !== 'GET' && (timedOut || wasOnline)) err.outcome = 'unknown';
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) err.offline = true;
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
+    const text = await res.text().catch(() => '');
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+    if (!res.ok) {
+      const err = apiError(`HTTP_${res.status}: ${text.slice(0, 500)}`, res.status);
+      err.code = (data && (data.code || data.ECODE)) || null;
+      err.serverMessage = (data && (data.error || data.err)) || null;
+      err.body = text.slice(0, 2000);
+      // Worker-side timeout talking to ClickUp: outcome unknown, NOT a
+      // rejection — callers queue it with a "check first" flag.
+      if (res.status === 504 && data && data.outcome === 'unknown') {
+        err.outcome = 'unknown';
+        err.timeout = true;
+      }
+      throw err;
+    }
+    return data;
+  }
+
+  /**
+   * capitalizeWords
+   * Cosmetic-only title formatting: uppercases the first letter of each
+   * word, never lowercases — "F5 CEO" stays, "aws project" → "Aws Project".
+   * @param {string} str
+   * @returns {string}
+   */
+  function capitalizeWords(str) {
+    return str.replace(/\b\p{L}/gu, (ch) => ch.toUpperCase());
+  }
+
+  /**
+   * localDateToMs
+   * Converts a date-input value ("YYYY-MM-DD") to a timestamp at NOON
+   * local time. Noon (not midnight) keeps the calendar day stable when
+   * ClickUp renders it in any time zone within ±11h — the v10 fix for
+   * dates showing a day early. Returns null for anything malformed.
+   * @param {string} ymd
+   * @returns {number|null}
+   */
+  function localDateToMs(ymd) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0);
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  /**
+   * buildTaskPayload
+   * Converts a capture `entry` into the JSON body ClickUp's "Create Task"
+   * endpoint expects. Used by the manual path (createTask) and the smart
+   * path (app.js → Routing.commit).
+   * @param {object} entry - { fields, transcript?, customFields?, ... }
+   * @returns {object} ClickUp task payload
+   * Edge cases: absent fields are omitted rather than sent as null/empty,
+   * since ClickUp treats an omitted key differently from an explicit
+   * empty value for some fields (e.g. due_date).
+   */
+  function buildTaskPayload(entry) {
+    const payload = { name: capitalizeWords(entry.fields.title || entry.fields.name || '(untitled)') };
+
+    const descriptionParts = [];
+    if (entry.fields.description) descriptionParts.push(entry.fields.description);
+    if (entry.fields.company) descriptionParts.push(`Company: ${entry.fields.company}`);
+    if (entry.fields.contactMethod) descriptionParts.push(`Best contact method: ${entry.fields.contactMethod}`);
+    if (entry.fields.opportunity) descriptionParts.push(`Opportunity: ${entry.fields.opportunity}`);
+    // "Add to Accounts" fields (Direct-to-List path). Admin Username/
+    // Email/Password go into real custom fields when a match was found
+    // (entry.customFields, resolved in app.js) — only fall back to the
+    // description for whichever ones DIDN'T resolve, so the password
+    // never ends up duplicated in two places on one task.
+    const resolvedKeys = new Set((entry.customFieldKeys || []));
+    if (entry.fields.accountType) descriptionParts.push(`Account Type: ${entry.fields.accountType}`);
+    if (entry.fields.adminUsername && !resolvedKeys.has('adminUsername')) descriptionParts.push(`Admin Username: ${entry.fields.adminUsername}`);
+    if (entry.fields.adminEmail && !resolvedKeys.has('adminEmail')) descriptionParts.push(`Admin Email: ${entry.fields.adminEmail}`);
+    if (entry.fields.password && !resolvedKeys.has('password')) descriptionParts.push(`Password: ${entry.fields.password}`);
+    if (entry.fields.notes) descriptionParts.push(`Notes: ${entry.fields.notes}`);
+    // Associated Account: ALWAYS written here too — the structured
+    // custom-field write can silently no-op for some field types, so this
+    // line guarantees the link is visible either way (see v9).
+    if (entry.associatedAccountName) {
+      descriptionParts.push(`Associated Client Account: ${entry.associatedAccountName}${entry.associatedAccountId ? ` (${entry.associatedAccountId})` : ''}`);
+    }
+    if (entry.transcript) descriptionParts.push(`\n— Voice transcript —\n${entry.transcript}`);
+    // Smart captures sign their work so it's obvious in ClickUp how a
+    // task got there (and with what confidence).
+    if (entry.routingFooter) descriptionParts.push(entry.routingFooter);
+    if (descriptionParts.length) payload.description = descriptionParts.join('\n\n');
+
+    if (entry.fields.priority && PRIORITY_MAP[entry.fields.priority]) {
+      payload.priority = PRIORITY_MAP[entry.fields.priority];
+    }
+    // Start/Due: plain dates (no time of day) — see localDateToMs for
+    // why they're sent as local noon.
+    const start = localDateToMs(entry.fields.startDate);
+    if (start) {
+      payload.start_date = start;
+      payload.start_date_time = false;
+    }
+    const due = localDateToMs(entry.fields.dueDate);
+    if (due) {
+      payload.due_date = due;
+      payload.due_date_time = false;
+    }
+    if (entry.fields.tags) {
+      payload.tags = entry.fields.tags.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    // Assignee comes from a list-specific dropdown (not a schema field).
+    if (entry.fields.assigneeId) {
+      payload.assignees = [Number(entry.fields.assigneeId)];
+    }
+    // Subtask nesting: parent must live in the same List and not itself
+    // be a subtask — enforced by how app.js scopes the search.
+    if (entry.parentTaskId) {
+      payload.parent = entry.parentTaskId;
+    }
+    // Custom fields resolved ahead of time by app.js (Add to Accounts).
+    if (entry.customFields && entry.customFields.length) {
+      payload.custom_fields = entry.customFields;
+    }
+    return payload;
+  }
+
+  /**
+   * createTask
+   * Creates a task in the given List via the Worker proxy.
+   * @param {string} listId
+   * @param {object} entry - capture entry (see buildTaskPayload)
+   * @returns {Promise<object>} the created ClickUp task
+   * @throws see request(); a 40s client timeout sits above the Worker's
+   *   own 25s upstream timeout so the Worker's clearer 504 usually wins.
+   */
+  function createTask(listId, entry) {
+    return request(`/list/${listId}/task`, { method: 'POST', json: buildTaskPayload(entry), timeoutMs: 40000 });
   }
 
   /**
    * uploadAttachment
-   * Attaches a file to an already-created ClickUp task.
-   * @param {string} taskId - ClickUp task ID returned by createTask()
-   * @param {File} file - browser File/Blob to attach
-   * @returns {Promise<object>} ClickUp's attachment response
-   * Note: callers (app.js) intentionally swallow failures here per
-   * attachment (a failed attachment shouldn't undo an otherwise
-   * successful task creation) — see submitCapture()'s .catch(() => {}).
+   * Attaches a file to an existing task (no timeout — large files).
+   * @param {string} taskId
+   * @param {File} file
+   * @returns {Promise<object>}
+   * Note: callers swallow failures per attachment — a failed attachment
+   * shouldn't undo an otherwise successful capture.
    */
-  async function uploadAttachment(taskId, file) {
+  function uploadAttachment(taskId, file) {
     const form = new FormData();
     form.append('attachment', file, file.name);
-    const res = await fetch(`${proxyUrl()}/task/${taskId}/attachment`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: form
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_ATTACH_${res.status}: ${text}`, res.status);
-    }
-    return res.json();
+    return request(`/task/${taskId}/attachment`, { method: 'POST', form, timeoutMs: 0 });
   }
 
   /**
    * testConnection
-   * Lightweight check used two ways: (1) the passcode lock screen
-   * calls this right after someone enters a passcode, to confirm it's
-   * correct before letting them into the app; (2) Settings calls this
-   * on every load to show real, current connection status rather than
-   * only right after the OAuth redirect.
-   * @returns {Promise<object>} ClickUp's /user response on success
-   * @throws apiError with status 403 (bad passcode) or 401 (passcode
-   *   fine, ClickUp not connected) or other network/HTTP errors.
+   * Used by the lock screen (verify a passcode) and Settings (live
+   * connection status).
+   * @returns {Promise<object>} ClickUp's /user response
+   * @throws 403 bad passcode, 401 not connected, network errors
    */
-  async function testConnection() {
-    const res = await fetch(`${proxyUrl()}/user`, { method: 'GET', headers: authHeaders() });
-    if (!res.ok) throw apiError(`CLICKUP_${res.status}`, res.status);
-    return res.json();
+  function testConnection() {
+    return request('/user', { timeoutMs: 15000 });
   }
 
   /**
-   * getListMembers
-   * Fetches the Workspace members who have access to (and can be
-   * assigned tasks in) a given ClickUp List — powers the Assignee
-   * dropdown on Task-type capture forms. See app.js renderForm() for
-   * the caching layer (avoids re-fetching per keystroke/re-render).
+   * getListMembers — people who can be assigned in a List.
    * @param {string} listId
    * @returns {Promise<Array<{id:number, username:string}>>}
-   * @throws apiError on non-2xx (403 wrong passcode, 401 not connected,
-   *   or a genuine ClickUp error e.g. the list ID doesn't exist)
    */
   async function getListMembers(listId) {
-    const res = await fetch(`${proxyUrl()}/list/${listId}/member`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_MEMBERS_${res.status}: ${text}`, res.status);
-    }
-    const data = await res.json();
-    return data.members || [];
+    const data = await request(`/list/${listId}/member`);
+    return (data && data.members) || [];
   }
 
   /**
    * logCapture
-   * Posts a short Markdown activity message to the configured ClickUp
-   * Chat channel, summarizing what was just captured and linking to
-   * it. Called by app.js right after a successful createTask(), as a
-   * lightweight "new activity" feed distinct from the task itself.
-   * Deliberately best-effort: callers should wrap this in a .catch()
-   * that swallows failures (same pattern as uploadAttachment callers)
-   * so a Chat-logging hiccup never undoes or blocks a capture that
-   * already succeeded. See clickup-proxy.js handleChatLog() for the
-   * server side, including the "experimental API" caveat.
-   * @param {object} entry - the capture entry (see submitCapture in app.js)
-   * @param {string} taskUrl - the created task's ClickUp URL
-   * @returns {Promise<object>} ClickUp's message-creation response
+   * Posts a short Markdown activity message to the default Chat channel
+   * after a successful send. Best-effort: callers .catch() and ignore.
+   * @param {object} entry - the capture entry
+   * @param {string} taskUrl - the relevant ClickUp URL
+   * @returns {Promise<object>}
+   * Wording branches on entry.action so the log is honest about what
+   * happened: new task, follow-up comment, or "update" added to an
+   * existing task by duplicate detection.
    */
-  /**
-   * logCapture
-   * Posts a short Markdown activity message to the configured ClickUp
-   * Chat channel, summarizing what was just captured and linking to
-   * it. Called by app.js after a successful send, as a lightweight
-   * "new activity" feed distinct from the task itself. Deliberately
-   * best-effort: callers should wrap this in a .catch() that swallows
-   * failures (same pattern as uploadAttachment callers) so a
-   * Chat-logging hiccup never undoes or blocks a capture that already
-   * succeeded. See clickup-proxy.js handleChatLog() for the server
-   * side, including the "experimental API" caveat.
-   * @param {object} entry - the capture entry (see submitCapture in app.js)
-   * @param {string} taskUrl - the relevant ClickUp URL (a task URL for
-   *   action:'task'/'comment'; not called at all for action:'chat' —
-   *   see performSend() in app.js)
-   * @returns {Promise<object>} ClickUp's message-creation response
-   * Note: entry.parentTaskId/parentTaskName carry two different
-   * meanings depending on entry.action — "subtask nested under X" for
-   * a normal task capture, vs "comment added to X" for a Follow-up.
-   * Branching on entry.action here keeps the log message honest about
-   * which actually happened, rather than always saying "Subtask of".
-   */
-  async function logCapture(entry, taskUrl) {
+  function logCapture(entry, taskUrl) {
     let lines;
-    if (entry.action === 'comment') {
+    if (entry.action === 'comment' || entry.action === 'update') {
       lines = [
-        `\ud83d\udcac **Follow-up** \u2014 ${entry.entityName}`,
-        entry.fields && entry.fields.note ? entry.fields.note : entry.title,
+        entry.action === 'update' ? `🔁 **Update added** — ${entry.entityName}` : `💬 **Follow-up** — ${entry.entityName}`,
+        entry.fields && (entry.fields.note || entry.fields.description) ? (entry.fields.note || entry.fields.description) : entry.title,
         `On: ${entry.parentTaskName || 'existing task'}`
       ];
     } else {
       lines = [`📥 **New ${entry.typeLabel}** — ${entry.entityName}`, entry.title];
-      // Surface subtask nesting in the log — otherwise a subtask shows
-      // up identically to a top-level task, losing useful context
-      // about where it actually landed in the hierarchy.
       if (entry.parentTaskId && entry.parentTaskName) {
-        lines.push(`\u21b3 Subtask of: ${entry.parentTaskName}`);
+        lines.push(`↳ Subtask of: ${entry.parentTaskName}`);
       }
     }
-    lines.push(taskUrl);
-    const content = lines.join('\n');
-    const res = await fetch(`${proxyUrl()}/log/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ content })
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_CHATLOG_${res.status}: ${text}`, res.status);
+    if (entry.routing && typeof entry.routing.confidence === 'number') {
+      const pct = Math.round(entry.routing.confidence * 100);
+      lines.push(`🧭 ${entry.routing.source === 'auto' ? 'Auto-filed' : 'Routed'} by ${APP_NAME} · ${pct}%${entry.routing.moved ? ' · destination changed by you' : ''}`);
     }
-    return res.json();
+    lines.push(taskUrl);
+    return request('/log/chat', { method: 'POST', json: { content: lines.join('\n') }, timeoutMs: 15000 });
   }
 
   /**
    * getListTasks
-   * Fetches the (open + closed) tasks that live in a given ClickUp
-   * List — used by both "make this a subtask of an existing task" and
-   * "Follow-up / Reminder" (see app.js loadParentTaskOptions()).
-   * ClickUp's API has no name search endpoint (confirmed via their own
-   * public feedback board as of this writing), so the app fetches
-   * once and filters client-side as the user types, rather than
-   * hitting the API per keystroke.
+   * First page (≤100) of a List's tasks, open + closed — powers the
+   * subtask/follow-up search and the Associated Account autocomplete.
+   * ClickUp has no name-search endpoint, so the app filters client-side.
    * @param {string} listId
-   * @returns {Promise<Array<object>>} all tasks as ClickUp returns
-   *   them — including ones that are themselves subtasks (each has a
-   *   `.parent` field). Whether subtasks-of-subtasks should be
-   *   filtered out is caller-specific (the subtask-parent feature
-   *   must exclude them per ClickUp's API rules; Follow-up/Reminder
-   *   does not, since commenting on an existing subtask is fine) — see
-   *   app.js filterAndRenderSubtaskResults()'s excludeSubtasks param.
-   * @throws apiError on non-2xx
-   * Edge case: ClickUp caps this endpoint at 100 tasks/page and this
-   * function only fetches page 0 — for a list with 100+ tasks, very
-   * old entries might not appear in the search. getTaskById() is the
-   * fallback for finding something outside that window by pasting its
-   * exact task ID.
+   * @returns {Promise<Array<object>>}
+   * Edge case: lists with 100+ tasks only return the first page;
+   * getTaskById() is the paste-an-ID fallback.
    */
   async function getListTasks(listId) {
-    const res = await fetch(`${proxyUrl()}/list/${listId}/task?include_closed=true`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_LISTTASKS_${res.status}: ${text}`, res.status);
-    }
-    const data = await res.json();
-    return data.tasks || [];
+    const data = await request(`/list/${listId}/task?include_closed=true`);
+    return (data && data.tasks) || [];
   }
 
   /**
    * getTaskById
-   * Direct lookup of a single task by its exact ClickUp ID — the
-   * fallback path in the subtask-parent search when a pasted ID isn't
-   * found in the (max 100) tasks getListTasks() already fetched.
    * @param {string} taskId
-   * @returns {Promise<object|null>} the task, or null if not found
-   *   (404) — callers treat "not found" as a normal outcome, not an
-   *   error, since the user may have simply mistyped the ID.
-   * @throws apiError on any non-404 non-2xx response
+   * @returns {Promise<object|null>} the task, or null on 404 (a mistyped
+   *   ID is a normal outcome, not an error)
    */
   async function getTaskById(taskId) {
-    const res = await fetch(`${proxyUrl()}/task/${taskId}`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_TASKLOOKUP_${res.status}: ${text}`, res.status);
+    try {
+      return await request(`/task/${taskId}`);
+    } catch (err) {
+      if (err.status === 404) return null;
+      throw err;
     }
-    return res.json();
   }
 
   /**
    * addComment
-   * Adds a comment to an existing task — the mechanism behind
-   * "Follow-up / Reminder" (see app.js). Used instead of creating a
-   * new task, and instead of ClickUp's native Reminders (which have
-   * no public API at all — confirmed via ClickUp's own feedback
-   * board, a 5+ year open request).
+   * Adds a comment to an existing task — Follow-up / Reminder, and
+   * manual "add as update" from duplicate detection.
    * @param {string} taskId
-   * @param {string} commentText - plain text; ClickUp renders it as a
-   *   normal comment, not markdown (unlike Chat messages)
-   * @returns {Promise<object>} ClickUp's comment-creation response
-   * @throws apiError on non-2xx
+   * @param {string} commentText - plain text
+   * @returns {Promise<{id: (number|string)}>} includes ClickUp's comment
+   *   id, which Activity needs to undo it
    */
-  async function addComment(taskId, commentText) {
-    const res = await fetch(`${proxyUrl()}/task/${taskId}/comment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ comment_text: commentText })
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_COMMENT_${res.status}: ${text}`, res.status);
-    }
-    return res.json();
+  function addComment(taskId, commentText) {
+    return request(`/task/${taskId}/comment`, { method: 'POST', json: { comment_text: commentText }, timeoutMs: 30000 });
   }
 
   /**
    * postToChannel
-   * Posts a message to a specific ClickUp Chat channel — the
-   * mechanism behind "Add to Accounts" (see app.js), which needs a
-   * different destination than the general activity log logCapture()
-   * posts to. Both go through the same Worker route
-   * (handleChatLog) — passing channel_id here is what tells the
-   * Worker to use this destination instead of its CHAT_CHANNEL_ID
-   * default.
+   * Posts to a specific Chat channel (Add to Accounts). Same Worker route
+   * as logCapture, with an explicit channel_id.
    * @param {string} channelId
-   * @param {string} content - Markdown-formatted message text
-   * @returns {Promise<object>} ClickUp's message-creation response
-   * @throws apiError on non-2xx
+   * @param {string} content - Markdown
+   * @returns {Promise<object>}
    */
-  async function postToChannel(channelId, content) {
-    const res = await fetch(`${proxyUrl()}/log/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ content, channel_id: channelId })
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_CHATPOST_${res.status}: ${text}`, res.status);
-    }
-    return res.json();
+  function postToChannel(channelId, content) {
+    return request('/log/chat', { method: 'POST', json: { content, channel_id: channelId }, timeoutMs: 20000 });
   }
 
   /**
-   * getListFields
-   * Fetches the custom field definitions ClickUp has configured for a
-   * List — used to look up the real field IDs "Add to Accounts"'s
-   * Direct-to-List mode needs (Admin Username, Admin Email,
-   * Registered Password, Tool/Software/Act) so it can actually
-   * populate them, rather than only dumping everything into the task
-   * description. See app.js getAccountFieldMapping() for the
-   * name-matching that turns this into a usable mapping.
+   * getListFields — a List's custom field definitions.
    * @param {string} listId
    * @returns {Promise<Array<{id:string, name:string, type:string}>>}
-   * @throws apiError on non-2xx
    */
   async function getListFields(listId) {
-    const res = await fetch(`${proxyUrl()}/list/${listId}/field`, {
-      method: 'GET',
-      headers: authHeaders()
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw apiError(`CLICKUP_FIELDS_${res.status}: ${text}`, res.status);
-    }
-    const data = await res.json();
-    return data.fields || [];
+    const data = await request(`/list/${listId}/field`);
+    return (data && data.fields) || [];
+  }
+
+  /**
+   * getTeamTasksPage
+   * One page (≤100) of OPEN tasks across the whole workspace, subtasks
+   * included — used by Settings → Build task index. The Worker streams
+   * these pages through without parsing them (see Worker v8 notes).
+   * @param {number} page - 0-based
+   * @returns {Promise<{tasks: object[], last_page?: boolean}>}
+   */
+  async function getTeamTasksPage(page) {
+    const data = await request(`/team/${WORKSPACE_ID}/task?page=${page}&subtasks=true&include_closed=false`, { timeoutMs: 30000 });
+    return data || { tasks: [] };
+  }
+
+  /**
+   * findRecentTaskByName
+   * "Did that timed-out create actually go through?" — looks for a task
+   * in the list with the same (capitalized) name created at/after
+   * `sinceMs`. Used before re-sending a queued capture flagged
+   * maybeSent, so a slow ClickUp never produces a duplicate.
+   * @param {string} listId
+   * @param {string} title - the capture title as typed
+   * @param {number} sinceMs
+   * @returns {Promise<object|null>} the matching task, if any
+   */
+  async function findRecentTaskByName(listId, title, sinceMs) {
+    const want = capitalizeWords(String(title || '')).trim().toLowerCase();
+    // Workspace task filter, narrowed to this list and to tasks created
+    // since the capture — subtasks included (a timed-out SUBTASK must be
+    // found too), and not limited to the list's first 100 tasks.
+    const q = `list_ids%5B%5D=${encodeURIComponent(listId)}&date_created_gt=${Math.max(0, Math.floor(sinceMs))}&subtasks=true&include_closed=true`;
+    const data = await request(`/team/${WORKSPACE_ID}/task?${q}`, { timeoutMs: 20000 });
+    return ((data && data.tasks) || []).find(t => String(t.name || '').trim().toLowerCase() === want) || null;
   }
 
   return {
+    request, buildTaskPayload, localDateToMs,
     createTask, uploadAttachment, testConnection, getListMembers, logCapture,
-    getListTasks, getTaskById, addComment, postToChannel, getListFields
+    getListTasks, getTaskById, addComment, postToChannel, getListFields,
+    getTeamTasksPage, findRecentTaskByName
   };
 })();

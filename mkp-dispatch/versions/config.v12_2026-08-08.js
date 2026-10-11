@@ -1,0 +1,413 @@
+/**
+ * =========================================================================
+ * config.js — Dispatch routing & destination map
+ * =========================================================================
+ * PURPOSE
+ *   This file is the entire "brain" of Dispatch. It defines:
+ *     1. DEFAULT_PROXY_URL   — where the app sends requests (the Cloudflare
+ *                               Worker deployed in /worker, NOT ClickUp
+ *                               directly — see clickup.js for why).
+ *     2. FIELD_SCHEMAS        — reusable sets of form fields (Task, Note,
+ *                               Light Bulb, Contact, etc).
+ *     3. ENTITIES              — the 6 ClickUp Spaces (businesses/areas),
+ *                               each with a list of Capture Types that
+ *                               point at a specific ClickUp List ID.
+ *
+ *   app.js reads ENTITIES + FIELD_SCHEMAS to build every screen. Nothing
+ *   about routing or form fields is hardcoded anywhere else — to change
+ *   what goes where, edit this file only.
+ *
+ * DATA FLOW
+ *   User picks Entity → picks Capture Type → fills the fields defined by
+ *   that type's `schema` → app.js sends fields + listId to clickup.js →
+ *   clickup.js POSTs to DEFAULT_PROXY_URL (the Worker) → Worker creates
+ *   the task in the matching ClickUp List.
+ *
+ * ASSUMPTIONS / EXTERNAL DEPENDENCIES
+ *   - DEFAULT_PROXY_URL must point at a live, deployed Worker (see
+ *     /worker/clickup-proxy.js) that already has the CLICKUP_TOKEN
+ *     secret set. This file holds no credentials — only a public URL.
+ *   - Every `listId` below is a ClickUp List ID copied from the list's
+ *     URL in the ClickUp web app: app.clickup.com/<team>/v/li/<LIST_ID>.
+ *   - As of v6, no entries are flagged `verify: true` — the 4 that were
+ *     ambiguous in the original export have been corrected against a
+ *     fresh one. See v6 in VERSION HISTORY below.
+ *
+ * -------------------------------------------------------------------------
+ * VERSION HISTORY
+ *   v1  2026-07-23  Initial routing map generated from the user's ClickUp
+ *                    space/list export. Proxy URL was NOT set yet (app
+ *                    prompted for it manually in Settings).
+ *   v2  2026-07-23  Added DEFAULT_PROXY_URL now that the Worker is live
+ *                    at https://dispatch-clickup-proxy.c1-jumpw.workers.dev
+ *                    (deployed in Step 6 of setup). Settings now
+ *                    auto-fills instead of requiring manual entry.
+ *                    Added full file/function-level documentation per
+ *                    user's commenting standard. No routing changes.
+ *   v3  2026-07-23  (No functional change — version bump reserved
+ *                    while diagnosing the OAUTH_025 "revoked token"
+ *                    issue; root cause was on the ClickUp/Worker side,
+ *                    not this file.)
+ *   v4  2026-07-23  Added CLICKUP_CLIENT_ID + buildClickUpAuthorizeUrl()
+ *                    now that Dispatch is registered as its own ClickUp
+ *                    OAuth app, replacing the shared personal token
+ *                    that was found revoked (see worker/clickup-proxy.js
+ *                    v2 history for the full reasoning). No routing
+ *                    changes.
+ *   v5  2026-07-24  Added a "Start date" field to the task schema
+ *                    (date-only, no time picker — kept deliberately
+ *                    simple to preserve fast capture; a time-of-day
+ *                    toggle can be added later if needed). Placed
+ *                    between Priority and Due date. Task-type-only for
+ *                    now; not added to note/lightbulb/contact/etc.
+ *   v6  2026-07-25  Corrected 4 list IDs that were flagged `verify:
+ *                    true` in v1 (identical IDs in the original export
+ *                    turned out to be a copy-paste artifact) using a
+ *                    fresh export: MKP Contact Follow-up, MKP Meeting
+ *                    Note, Super Admin Light Bulb, Unywebs New Hosting
+ *                    Account Request. All now have distinct, correct
+ *                    IDs — `verify` flags removed accordingly. NOTE:
+ *                    this file is a static snapshot of ClickUp's
+ *                    structure, not a live sync — see clickup-proxy.js
+ *                    for why, and README.md "Editing what goes where"
+ *                    for how to update it when Spaces/Lists change.
+ *   v7  2026-07-25  Corrected JTG's subtitle: "Jump Tech Group" was
+ *                    wrong, real name is "Gel Tech Group" — per a
+ *                    fuller workspace-structure doc the user provided.
+ *                    That doc also surfaced 3 JTG sub-brands (BarBoost,
+ *                    Party Designers, Seeder Agency) with content-
+ *                    strategy coverage but no Task list mapped here
+ *                    yet, and an unmapped CRM list ("Plans & Products
+ *                    Master List") — both pending the user confirming
+ *                    List IDs before adding.
+ *   v8  2026-07-25  Reverted v7's JTG subtitle back to "Jump Tech
+ *                    Group" — the source doc's "(Gel Tech Group)" was
+ *                    itself wrong per the user's direct correction; the
+ *                    original name from the very first project brief
+ *                    was right all along. Added the "Plan/Product Idea"
+ *                    capture type to CRM & Operations (list ID
+ *                    901715517147, confirmed by the user) — same
+ *                    lightbulb schema as Lead Magnet Idea since the
+ *                    workspace doc describes it as structurally
+ *                    identical. BarBoost/Party Designers/Seeder Agency
+ *                    remain unmapped — confirmed only 3 JTG sub-brands
+ *                    currently have dedicated Task lists; the other 3
+ *                    will need a config.js edit + redeploy whenever
+ *                    their lists are created (no auto-sync — see the
+ *                    static-snapshot note in v6 above).
+ *   v9  2026-07-26  Three additions:
+ *                    (1) Renamed MKP's "Contact Follow-up" to "New
+ *                        Contact Activity" (cosmetic, per user request).
+ *                    (2) Added a "Follow-up / Reminder" capture type to
+ *                        every entity (schema: followup, action:
+ *                        comment, no listId — see app.js for why: it
+ *                        searches across all of that entity's `task`-
+ *                        schema lists at once rather than one fixed
+ *                        list). Exists because ClickUp's native
+ *                        Reminders feature has no public API (confirmed
+ *                        via their own feedback board); this instead
+ *                        posts a comment on an existing task, adding
+ *                        zero duplicate tasks.
+ *                    (3) Added "Add to Accounts" to Super Admin
+ *                        (schema: account, action: chat, channelId:
+ *                        ADD_TO_ACCOUNTS_CHANNEL_ID) — posts a
+ *                        formatted message to the confirmed Chat
+ *                        channel instead of creating a ClickUp task.
+ *                        Carries account credentials (including a
+ *                        password field) — see clickup.js/app.js
+ *                        version history for how that's handled.
+ *   v10 2026-07-26  Two cosmetic/scope fixes:
+ *                    (1) Renamed MKP's "Meeting Note" to "New
+ *                        Meeting/Apt/Event" (per user request).
+ *                    (2) Removed Super Admin's "Client Account Note"
+ *                        (schema: log, direct-to-list) — redundant
+ *                        with "Add to Accounts" (v9), which already
+ *                        covers this workflow properly: capture →
+ *                        review in Chat → manually exported to the
+ *                        right destination. User confirmed keeping
+ *                        only the Chat-based version.
+ *   v11 2026-07-28  Added MKC_CLIENT_ACCOUNTS_LIST_ID and a
+ *                    `directListId` on "Add to Accounts" — powers a
+ *                    new destination toggle in the app (Chat review
+ *                    channel vs. straight into this List). Only one
+ *                    known List destination exists (MKC Client
+ *                    accounts specifically, per the workspace doc);
+ *                    the direct option uses it regardless of the
+ *                    selected Account Type, since MKC's/MKP's own
+ *                    accounts are exported outside ClickUp entirely.
+ *   v12 2026-08-08  Two changes:
+ *                    (1) Added CRM_COMPANIES_LIST_ID (was already
+ *                        inline on the 'company' capture type; now
+ *                        named/reused) — powers the new Associated
+ *                        Account autocomplete on "Add to Accounts"
+ *                        (see app.js), which links a new MKC Client
+ *                        account entry back to its company record.
+ *                    (2) Account schema's password field switched from
+ *                        masked to plain text (per user request — the
+ *                        value is stored in plaintext downstream
+ *                        regardless, so on-screen masking added
+ *                        friction without real protection).
+ * =========================================================================
+ */
+
+// -----------------------------------------------------------------------
+// DEFAULT_PROXY_URL
+//   The live Cloudflare Worker that proxies requests to ClickUp.
+//   This is a PUBLIC URL, not a secret — it's safe for it to live here
+//   and be visible in the deployed site's source. The actual ClickUp
+//   token lives only on the Worker (as an encrypted secret), never here.
+//   storage.js falls back to this value if the user hasn't manually
+//   overridden the Worker URL in Settings (e.g. while testing a second,
+//   separate Worker).
+// -----------------------------------------------------------------------
+const DEFAULT_PROXY_URL = 'https://dispatch-clickup-proxy.c1-jumpw.workers.dev';
+
+// -----------------------------------------------------------------------
+// WORKSPACE_ID
+//   The ClickUp Workspace (Team) all the lists below belong to. Currently
+//   unused by app logic directly (each List ID is globally unique in
+//   ClickUp's API), but kept here for reference / future use, e.g. if we
+//   ever need to build a "open in ClickUp" deep link.
+// -----------------------------------------------------------------------
+// Destination Chat channel for "Add to Accounts" submissions —
+// confirmed via GET /chat/channels lookup on 2026-07-25 (name:
+// "mkc-sa-add-to-accounts-admin"), matches the URL the user provided:
+// app.clickup.com/25724879/chat/r/rh1yf-12097
+const ADD_TO_ACCOUNTS_CHANNEL_ID = 'rh1yf-12097';
+
+// The one known ClickUp List destination for account entries — used
+// by "Add to Accounts"'s direct-to-list toggle (added 2026-07-28).
+// Per the user's workspace doc, this is specifically where *reviewed*
+// MKC Client accounts land; MKC's and MKP's own accounts get exported
+// outside ClickUp entirely once reviewed, so there's no equivalent
+// list ID for those — the direct option uses this same list
+// regardless of account type, since it's the only known destination.
+const MKC_CLIENT_ACCOUNTS_LIST_ID = '901711853904';
+
+// CRM & Operations' Companies & Accounts list — each task there is one
+// client company record. Used by "Add to Accounts"'s Associated
+// Account autocomplete (added 2026-08-08): when Account Type = MKC
+// Client, this list is searched by company name so the new account
+// entry can be linked back to the right client via that company
+// record's own ClickUp task ID. Same list already referenced by the
+// 'company' capture type under crm-ops, below.
+const CRM_COMPANIES_LIST_ID = '901710481777';
+
+const WORKSPACE_ID = '25724879';
+
+// -----------------------------------------------------------------------
+// FIELD_SCHEMAS
+//   Reusable field sets. Every capture type (below, in ENTITIES) points
+//   at one of these by name instead of redefining its own fields, so a
+//   change here (e.g. adding a field to every "task") applies everywhere
+//   at once.
+//
+//   Supported field `type` values (rendered by app.js → renderField()):
+//     text      — single-line input
+//     textarea  — multi-line input; set `primary: true` on the field
+//                 that dictation (speech-to-text) should type into
+//     select    — dropdown; requires an `options: [...]` array
+//     date      — native date picker
+//     priority  — dropdown fixed to ClickUp's 4-level priority scale
+//                 (Urgent/High/Normal/Low), mapped to ClickUp's 1-4
+//                 integers in clickup.js's PRIORITY_MAP
+// -----------------------------------------------------------------------
+const FIELD_SCHEMAS = {
+  task: [
+    { key: 'title', label: 'Title', type: 'text', required: true, placeholder: 'What needs to get done?' },
+    { key: 'description', label: 'Details', type: 'textarea', placeholder: 'Any context, links, or notes…' },
+    { key: 'priority', label: 'Priority', type: 'priority' },
+    { key: 'startDate', label: 'Start date', type: 'date' },
+    { key: 'dueDate', label: 'Due date', type: 'date' },
+    { key: 'tags', label: 'Tags', type: 'text', placeholder: 'comma, separated, tags' }
+  ],
+  note: [
+    { key: 'title', label: 'Title', type: 'text', required: true, placeholder: 'Give it a short label' },
+    { key: 'description', label: 'Note', type: 'textarea', placeholder: 'Dump everything here…', primary: true }
+  ],
+  lightbulb: [
+    { key: 'title', label: 'Idea', type: 'text', required: true, placeholder: 'The idea, in one line' },
+    { key: 'description', label: 'Details', type: 'textarea', placeholder: 'What made you think of this? Where could it go?' },
+    { key: 'opportunity', label: 'Opportunity', type: 'select', options: ['High', 'Medium', 'Low'] },
+    { key: 'tags', label: 'Category', type: 'text', placeholder: 'e.g. content, ops, product' }
+  ],
+  contact: [
+    { key: 'title', label: 'Name', type: 'text', required: true, placeholder: 'Who do you need to reach out to?' },
+    { key: 'company', label: 'Company', type: 'text' },
+    { key: 'contactMethod', label: 'Best way to reach them', type: 'select', options: ['Phone', 'Email', 'Text', 'In person', 'Other'] },
+    { key: 'description', label: 'Notes', type: 'textarea', placeholder: 'Why you\u2019re reaching out…' },
+    { key: 'dueDate', label: 'Follow up by', type: 'date' }
+  ],
+  lead: [
+    { key: 'title', label: 'Lead name', type: 'text', required: true },
+    { key: 'company', label: 'Company', type: 'text' },
+    { key: 'contactMethod', label: 'Source', type: 'select', options: ['Referral', 'Inbound', 'Cold outreach', 'Event', 'Other'] },
+    { key: 'description', label: 'Notes', type: 'textarea' }
+  ],
+  log: [
+    { key: 'title', label: 'Title', type: 'text', required: true },
+    { key: 'description', label: 'Details', type: 'textarea', primary: true }
+  ],
+  request: [
+    { key: 'title', label: 'What do you need?', type: 'text', required: true },
+    { key: 'description', label: 'Details', type: 'textarea', placeholder: 'Anything the fulfiller needs to know…' }
+  ],
+  // Used by "Follow-up / Reminder" capture types (action: 'comment').
+  // Deliberately just one field — the target task is chosen via the
+  // required task-search UI (see app.js), not a form field here.
+  followup: [
+    { key: 'note', label: 'Follow-up note', type: 'textarea', required: true, placeholder: 'What do you need to follow up on?', primary: true }
+  ],
+  // Used by "Add to Accounts" (action: 'chat' — posts to a Chat
+  // channel, never creates a ClickUp task). `password` uses a
+  // dedicated masked input type — see renderField() in app.js.
+  account: [
+    { key: 'accountType', label: 'Account Type', type: 'select', options: ['MKC', 'MKC Client', 'MKP'], required: true },
+    { key: 'title', label: 'Account / Tool Name & Purpose', type: 'text', required: true, placeholder: 'e.g. Canva \u2014 design tool for MCO content' },
+    { key: 'adminUsername', label: 'Admin Username', type: 'text' },
+    { key: 'adminEmail', label: 'Admin Email', type: 'text' },
+    { key: 'password', label: 'Password', type: 'text' },
+    { key: 'notes', label: 'Additional Notes', type: 'textarea', placeholder: 'Secret question & answer, recovery codes, etc.' }
+  ]
+};
+
+// -----------------------------------------------------------------------
+// ENTITIES
+//   Each entry = one ClickUp Space (a business/area). `captureTypes`
+//   within it = the buttons shown on the "Type" screen for that entity;
+//   each one maps directly to a destination ClickUp List via `listId`.
+//
+//   `verify: true` flags (none currently set — resolved in v6, see
+//   VERSION HISTORY above) mark entries where the ClickUp export had
+//   two different list names sharing the exact same URL/ID — almost
+//   certainly a copy-paste artifact rather than the real destination.
+//   If a future re-export introduces a new ambiguity, flag it the same
+//   way: add `verify: true` to that entry so the app surfaces a
+//   tap-to-explain "!" on it (see app.js renderTypePicker) instead of
+//   silently routing somewhere unconfirmed. Confirm the real ID via:
+//     app.clickup.com/<workspace>/v/li/<LIST_ID>  ← the number after /li/
+// -----------------------------------------------------------------------
+const ENTITIES = [
+  {
+    id: 'mkp',
+    name: 'MKP',
+    subtitle: 'Personal',
+    color: '#E8A33D',
+    captureTypes: [
+      { id: 'task', label: 'To-Do', icon: 'check', schema: 'task', listId: '901702176129' },
+      { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710575809' },
+      { id: 'contact', label: 'New Contact Activity', icon: 'user', schema: 'contact', listId: '205582666' },
+      { id: 'meeting', label: 'New Meeting/Apt/Event', icon: 'calendar', schema: 'note', listId: '205582656' },
+      { id: 'accounting', label: 'Accounting Item', icon: 'dollar', schema: 'task', listId: '901702176148' },
+      { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711351925' },
+      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+    ]
+  },
+  {
+    id: 'super-admin',
+    name: 'Super Admin',
+    subtitle: 'Org management',
+    color: '#7C8AF6',
+    captureTypes: [
+      { id: 'task', label: 'Task', icon: 'check', schema: 'task', listId: '901702161386' },
+      { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710064693' },
+      { id: 'process', label: 'Process / System Idea', icon: 'gear', schema: 'note', listId: '901711745105' },
+      { id: 'receivable', label: 'Receivable', icon: 'dollar', schema: 'task', listId: '901703199842' },
+      { id: 'payable', label: 'Payable', icon: 'dollar', schema: 'task', listId: '901702161436' },
+      { id: 'subscription', label: 'Subscription', icon: 'repeat', schema: 'task', listId: '901711350683' },
+      { id: 'team-note', label: 'Team Directory Update', icon: 'user', schema: 'log', listId: '901711759484' },
+      { id: 'automation', label: 'Automation Idea', icon: 'bulb', schema: 'lightbulb', listId: '901711237466' },
+      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' },
+      { id: 'add-account', label: 'Add to Accounts', icon: 'key', schema: 'account', action: 'chat', channelId: ADD_TO_ACCOUNTS_CHANNEL_ID, directListId: MKC_CLIENT_ACCOUNTS_LIST_ID }
+    ]
+  },
+  {
+    id: 'crm-ops',
+    name: 'CRM & Operations',
+    subtitle: 'Clients & pipeline',
+    color: '#4CAF7D',
+    captureTypes: [
+      { id: 'lead', label: 'New Lead', icon: 'user', schema: 'lead', listId: '901710477809' },
+      { id: 'pipeline', label: 'Pipeline Update', icon: 'check', schema: 'task', listId: '901710326878' },
+      { id: 'contact', label: 'New Contact', icon: 'user', schema: 'contact', listId: '901710477009' },
+      { id: 'company', label: 'Company / Account Note', icon: 'building', schema: 'log', listId: CRM_COMPANIES_LIST_ID },
+      { id: 'task', label: 'CRM Task', icon: 'check', schema: 'task', listId: '901714539764' },
+      { id: 'activity', label: 'Activity Log', icon: 'note', schema: 'log', listId: '901715117797' },
+      { id: 'email', label: 'Email Follow-up', icon: 'note', schema: 'note', listId: '901715226645' },
+      { id: 'lead-magnet', label: 'Lead Magnet Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715467342' },
+      { id: 'plan-product', label: 'Plan/Product Idea', icon: 'bulb', schema: 'lightbulb', listId: '901715517147' },
+      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+    ]
+  },
+  {
+    id: 'jtg',
+    name: 'JTG Admin',
+    subtitle: 'Jump Tech Group — agency',
+    color: '#E2604F',
+    captureTypes: [
+      { id: 'task-f5ceo', label: 'F5 CEO Task', icon: 'check', schema: 'task', listId: '901702184622' },
+      { id: 'task-bms', label: 'BMS Task', icon: 'check', schema: 'task', listId: '901702183494' },
+      { id: 'task-f5', label: 'F5 Task', icon: 'check', schema: 'task', listId: '901702200453' },
+      { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710065006' },
+      { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901710065625' },
+      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+    ]
+  },
+  {
+    id: 'mambay',
+    name: 'Mambay Co',
+    subtitle: 'Independent projects & brand',
+    color: '#D06BC2',
+    captureTypes: [
+      { id: 'task', label: 'Task', icon: 'check', schema: 'task', listId: '901702165849' },
+      { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710123795' },
+      { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901710123796' },
+      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+    ]
+  },
+  {
+    id: 'unywebs',
+    name: 'Unywebs',
+    subtitle: 'Marketplace / reseller',
+    color: '#3FA7D6',
+    captureTypes: [
+      { id: 'task', label: 'Task', icon: 'check', schema: 'task', listId: '901702157771' },
+      { id: 'lightbulb', label: 'Light Bulb', icon: 'bulb', schema: 'lightbulb', listId: '901710960459' },
+      { id: 'content', label: 'Content Idea', icon: 'note', schema: 'note', listId: '901711428018' },
+      { id: 'req-hosting', label: 'New Hosting Account Request', icon: 'gear', schema: 'request', listId: '182168594' },
+      { id: 'req-systemsio', label: 'New Systems.io Account Request', icon: 'gear', schema: 'request', listId: '188376548' },
+      { id: 'req-zoho', label: 'New Zoho Email Request', icon: 'gear', schema: 'request', listId: '901701551198' },
+      { id: 'followup', label: 'Follow-up / Reminder', icon: 'bell', schema: 'followup', action: 'comment' }
+    ]
+  }
+];
+
+// -----------------------------------------------------------------------
+// OAuth connect (added in v4)
+//   Dispatch is registered as its own ClickUp OAuth app (rather than
+//   sharing a personal API token with other integrations — see the
+//   v2/v3 version history in worker/clickup-proxy.js for why). These
+//   two values build the URL that sends the browser to ClickUp's
+//   consent screen; the Worker (not this file) holds the matching
+//   Client Secret and completes the handshake server-side.
+// -----------------------------------------------------------------------
+
+// Public app identifier — safe to ship in client-side code. Grants no
+// access by itself; it only identifies which app is asking.
+const CLICKUP_CLIENT_ID = 'CB58HH6R33DAM091WKD5OG4EO5NSWP0I';
+
+// Must exactly match the Redirect URL registered for this app in
+// ClickUp → Settings → Apps → ClickUp API Settings, or ClickUp will
+// reject the request with a redirect_uri mismatch error.
+const OAUTH_REDIRECT_URI = `${DEFAULT_PROXY_URL}/oauth/callback`;
+
+/**
+ * buildClickUpAuthorizeUrl
+ * Builds the URL that starts the OAuth handshake — navigating the
+ * browser here (a full page redirect, not a fetch) shows the user
+ * ClickUp's own "Allow Dispatch to access your Workspace?" screen.
+ * @returns {string} the ClickUp authorization URL
+ */
+function buildClickUpAuthorizeUrl() {
+  return `https://app.clickup.com/api?client_id=${CLICKUP_CLIENT_ID}&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT_URI)}`;
+}

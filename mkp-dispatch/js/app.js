@@ -3,25 +3,33 @@
  * app.js — screen rendering, navigation, form logic, capture + send flow
  * =========================================================================
  * PURPOSE
- *   The entire UI of Dispatch. A tiny hash-based single-page router
- *   (no framework) drives five screens: Home, Entity picker, Type
- *   picker, capture Form, and Settings. Reads ENTITIES/FIELD_SCHEMAS
- *   from config.js to build screens, reads/writes drafts and the
- *   offline queue via storage.js, and sends captures via clickup.js.
+ *   The entire UI of Dispatch It. A tiny hash-based single-page router
+ *   (no framework) drives these screens:
+ *     Home · Entity picker · Type picker · capture Form   (manual path)
+ *     Smart capture · Review/confirm                       (smart path)
+ *     Activity (audit log + undo) · Settings · Lock
+ *   Reads ENTITIES/FIELD_SCHEMAS from config.js, persists drafts/queue/
+ *   history via storage.js, talks to ClickUp via clickup.js and to the
+ *   routing brain via routing.js, and uses ui.js for toasts, sheets and
+ *   friendly error messages.
  *
  * DATA FLOW
- *   User taps through Home → Entity → Type → Form → Send. On submit,
- *   collectFields() reads the DOM into a plain object, ClickUp.
- *   createTask() posts it through the Worker proxy; on success it's
- *   logged locally via Storage.addRecent(), on failure (including
- *   being offline) it's queued via Storage.enqueue() and retried
- *   automatically on the next 'online' event or app load.
+ *   Manual:  Home → Entity → Type → Form → Send → ClickUp.createTask
+ *            (with a quick semantic duplicate check first, when the task
+ *            index is built) → Activity record (best-effort).
+ *   Smart:   Home → Smart capture (just type/talk) → Routing.suggest →
+ *            high confidence & no duplicate → Routing.commit (auto) →
+ *            toast with Undo; otherwise → Review screen (confirm / change
+ *            list / "add as update" to the duplicate) → Routing.commit.
+ *   Offline: manual sends queue (Storage.enqueue) and retry on 'online';
+ *            smart capture hands the text to the manual picker instead,
+ *            since routing needs the network.
  *
  * ASSUMPTIONS / EXTERNAL DEPENDENCIES
- *   Expects config.js, storage.js, and clickup.js to already be loaded
- *   (see index.html script order) — this file uses their globals
- *   (ENTITIES, FIELD_SCHEMAS, Storage, ClickUp, buildClickUpAuthorizeUrl)
- *   directly rather than importing them.
+ *   Expects config.js, storage.js, clickup.js, ui.js and routing.js to be
+ *   loaded first (index.html script order) and uses their globals.
+ *   "Add to Accounts" (credentials) never touches the smart-routing code
+ *   path, drafts, or the offline queue.
  *
  * -------------------------------------------------------------------------
  * VERSION HISTORY
@@ -131,7 +139,7 @@
  *                    explicitly rather than read from the shared
  *                    `state` object, so a background retry can never
  *                    clobber whatever a different form has in progress.
- * *                    Also added a `password` field type to renderField
+ *                    Also added a `password` field type to renderField
  *                    (masked input) and bell/key icons.
  *   v8  2026-07-28  Added a destination toggle to "Add to Accounts"
  *                    (Chat review channel vs. direct to the one known
@@ -245,27 +253,91 @@
  *                    submission, and gating them too would risk a
  *                    regression if the guessed allowlist type strings
  *                    don't exactly match ClickUp's real ones.
+ *   v14 2026-10-10  Smart routing, rename, and a UX/error cleanup pass:
+ *                    (1) Renamed to "Dispatch It" (APP_NAME in config.js).
+ *                    (2) Smart capture (#/smart): one text box + voice +
+ *                        attachments + optional business hint. Gemini picks
+ *                        the list, title, dates and priority; confident
+ *                        results file themselves (toast with Undo), the
+ *                        rest go to a Review screen with the reasoning,
+ *                        a "Why 78%?" breakdown, alternatives, an
+ *                        any-list picker, and editable title/dates.
+ *                    (3) Duplicate handling: the Review screen offers
+ *                        "Add as update" when the capture matches an open
+ *                        task; manual sends get a quick semantic check
+ *                        too (checkManualDuplicate) once the task index
+ *                        is built.
+ *                    (4) Activity screen (#/activity): every send from
+ *                        every device, with confidence, source (auto /
+ *                        confirmed / manual) and one-tap Undo.
+ *                    (5) Settings: Smart routing section — status, auto-
+ *                        file switch + threshold, duplicate sensitivity,
+ *                        Sync now, Build task index, live updates
+ *                        (ClickUp webhook), accuracy so far. Plus
+ *                        "Forget passcode on this device".
+ *                    (6) Type picker shows "More lists in this space" from
+ *                        the synced workspace index, so lists created in
+ *                        ClickUp later are usable without editing
+ *                        config.js.
+ *                    (7) Cleanups: every alert() replaced by inline errors
+ *                        / toasts / sheets with plain-language messages
+ *                        (ui.js); drafts auto-save and restore; a send
+ *                        that times out is queued as "maybe sent" and
+ *                        checked before resending (no more duplicate
+ *                        tasks from a slow ClickUp); Add to Accounts is
+ *                        never stored in the offline queue (passwords no
+ *                        longer sit in localStorage); lock screen no
+ *                        longer forces a numeric keypad; the type-picker
+ *                        verify flag explains itself in a sheet (it was a
+ *                        <button> nested inside a <button>, which is
+ *                        invalid HTML); voice notes recorded on iPhone are
+ *                        saved with their real type (audio/mp4 → .m4a)
+ *                        instead of being mislabeled .webm; dictation uses
+ *                        the device language instead of forcing en-US.
+ *                    (8) Pre-deploy review fixes: the retry queue keeps
+ *                        captures on temporary errors (only 400/404/413/
+ *                        422 drop them); queued entries are marked
+ *                        "created" before attachments upload; the
+ *                        success screen's timer can't yank you Home after
+ *                        you've moved on; screen-scoped toasts clear on
+ *                        navigation.
  * =========================================================================
  */
 
 const App = (() => {
   const root = document.getElementById('app');
+  // Per-screen working state for the manual form AND the smart capture
+  // screen (they never coexist). Reset on every renderForm/renderSmart.
   let state = {
     entityId: null,
     typeId: null,
     fields: {},
     attachments: [],   // File objects staged for this capture
     transcript: '',
-    recording: null    // { blob, url } if a voice note was recorded
+    recording: null
   };
+  // Smart-capture working state: the text, hint, and (after routing)
+  // the suggestion plus whatever the owner changed on the Review screen.
+  // Null when not in the smart flow.
+  let smart = null;
+  // Text handed from smart capture to the manual picker when routing
+  // isn't possible (offline, Gemini down) or the owner chose "pick it
+  // myself". Applied to the next form opened, then cleared.
+  let carry = null;
 
   let mediaRecorder = null;
   let mediaChunks = [];
   let recognizer = null;
+  let draftTimer = null;
+  // The success screen's "back to Home" timer. Cancelled on any
+  // navigation so it can't yank the user away from a screen they moved
+  // to in the meantime (found in v14 testing).
+  let successTimer = null;
 
   // ---------------------------------------------------------------
   // Routing
   // ---------------------------------------------------------------
+  /** go — navigate to a hash route, e.g. go('/settings'). */
   function go(hash) {
     window.location.hash = hash;
   }
@@ -273,11 +345,10 @@ const App = (() => {
   /**
    * currentRoute
    * Parses window.location.hash into path segments, e.g.
-   * "#/form/mkp/task" -> ['form', 'mkp', 'task'].
-   * Query params (e.g. "#/settings?connected=1", used by the OAuth
-   * callback redirect in worker/clickup-proxy.js) are stripped from
-   * the path here — use getQueryParams() separately to read them.
-   * @returns {string[]} non-empty path segments
+   * "#/form/mkp/task" -> ['form', 'mkp', 'task']. Query params (e.g.
+   * "#/settings?connected=1" from the OAuth redirect) are stripped —
+   * use getQueryParams() for those.
+   * @returns {string[]}
    */
   function currentRoute() {
     const hash = window.location.hash.replace(/^#\/?/, '');
@@ -287,10 +358,8 @@ const App = (() => {
 
   /**
    * getQueryParams
-   * Reads the query string portion of the current hash route (if any)
-   * as a URLSearchParams object. Needed because this is a hash-routed
-   * SPA — the "real" URL query string (before the #) is never used,
-   * so params like ?connected=1 live after the hash instead.
+   * Query string of the current hash route (hash-routed SPA, so params
+   * live after the #).
    * @returns {URLSearchParams}
    */
   function getQueryParams() {
@@ -299,14 +368,21 @@ const App = (() => {
     return new URLSearchParams(query || '');
   }
 
+  /** render — draws whichever screen the hash points at. */
   function render() {
     const [screen, a, b] = currentRoute();
     stopRecognizer();
+    clearTimeout(draftTimer);
+    clearTimeout(successTimer);
+    UI.dismissScoped();
+    if (screen !== 'smart') smart = null;
 
     if (!screen || screen === 'home') return renderHome();
     if (screen === 'entity') return renderEntityPicker();
     if (screen === 'type') return renderTypePicker(a);
     if (screen === 'form') return renderForm(a, b);
+    if (screen === 'smart') return renderSmart();
+    if (screen === 'activity') return renderActivity();
     if (screen === 'settings') return renderSettings();
     renderHome();
   }
@@ -316,15 +392,26 @@ const App = (() => {
   // ---------------------------------------------------------------
   // Screen: Home
   // ---------------------------------------------------------------
+  /**
+   * renderHome
+   * One big button, a short Recent list, nothing else. When smart
+   * routing is available the big button opens Smart capture and a
+   * secondary link keeps the manual picker one tap away; otherwise the
+   * big button goes straight to the manual picker (pre-v14 behavior).
+   */
   function renderHome() {
     const recent = Storage.getRecent();
     const queue = Storage.getQueue();
+    const smartOn = Routing.isAvailable();
 
     root.innerHTML = `
       <header class="topbar">
         <button class="icon-btn" id="refresh-btn" aria-label="Check for updates">${icon('refresh')}</button>
-        <span class="brand">Dispatch</span>
-        <button class="icon-btn" data-nav="settings" aria-label="Settings">${icon('gear')}</button>
+        <span class="brand">${escapeHtml(APP_NAME)}</span>
+        <span class="topbar-actions">
+          <button class="icon-btn" data-nav="activity" aria-label="Activity">${icon('history')}</button>
+          <button class="icon-btn" data-nav="settings" aria-label="Settings">${icon('gear')}</button>
+        </span>
       </header>
 
       <main class="home">
@@ -334,20 +421,24 @@ const App = (() => {
             <button class="link-btn" id="retry-queue">Retry now</button>
           </div>` : ''}
 
-        <button class="fab-primary" data-nav="entity">
-          <span class="fab-plus">+</span>
-          <span>New Capture</span>
-        </button>
+        <div class="home-actions">
+          <button class="fab-primary" id="new-capture">
+            <span class="fab-plus">+</span>
+            <span>New Capture</span>
+            ${smartOn ? `<span class="fab-sub">${icon('spark')} Auto-routed</span>` : ''}
+          </button>
+          ${smartOn ? `<button class="link-btn home-manual" id="manual-capture">Choose the destination yourself →</button>` : ''}
+        </div>
 
         <section class="recent">
           <h2>Recent</h2>
           ${recent.length ? `<ul class="recent-list">
             ${recent.map(r => `
-              <li class="recent-item">
-                <span class="tag" style="--tag-color:${r.color}">${r.entityName}</span>
+              <li class="recent-item${r.undone ? ' recent-item--undone' : ''}">
+                <span class="tag" style="--tag-color:${escapeHtml(r.color || '#E8A33D')}">${escapeHtml(r.entityName || '')}</span>
                 <span class="recent-title">${escapeHtml(r.title)}</span>
-                <span class="recent-type">${r.typeLabel}</span>
-                ${r.clickupUrl ? `<a class="recent-link" href="${r.clickupUrl}" target="_blank" rel="noopener">${icon('link')}</a>` : ''}
+                ${recentBadge(r)}
+                ${r.clickupUrl && !r.undone ? `<a class="recent-link" href="${escapeHtml(r.clickupUrl)}" target="_blank" rel="noopener" aria-label="Open in ClickUp">${icon('link')}</a>` : ''}
               </li>`).join('')}
           </ul>` : `<p class="empty">Nothing sent yet. Your first capture will show up here.</p>`}
         </section>
@@ -355,22 +446,47 @@ const App = (() => {
     `;
 
     root.querySelector('[data-nav="settings"]').onclick = () => go('/settings');
-    root.querySelector('[data-nav="entity"]').onclick = () => go('/entity');
+    root.querySelector('[data-nav="activity"]').onclick = () => go('/activity');
+    root.querySelector('#new-capture').onclick = () => go(smartOn ? '/smart' : '/entity');
+    const manualBtn = root.querySelector('#manual-capture');
+    if (manualBtn) manualBtn.onclick = () => go('/entity');
     root.querySelector('#refresh-btn').onclick = checkForUpdates;
     const retryBtn = root.querySelector('#retry-queue');
     if (retryBtn) retryBtn.onclick = () => processQueue(true);
 
     processQueue(false);
+    // Keep the smart-routing availability current without blocking the
+    // screen; re-render only if availability actually flipped (prevents
+    // a render loop).
+    Routing.refreshStatusIfStale(() => {
+      if (currentRoute()[0] && currentRoute()[0] !== 'home') return;
+      if (Routing.isAvailable() !== smartOn) renderHome();
+    });
+  }
+
+  /**
+   * recentBadge
+   * Small label on a Recent item: how it was routed, or that it was
+   * undone / added as an update.
+   * @param {object} r - Recent entry
+   * @returns {string} HTML
+   */
+  function recentBadge(r) {
+    if (r.undone) return `<span class="badge badge--muted">Undone</span>`;
+    if (r.action === 'update') return `<span class="badge badge--info">Update</span>`;
+    if (r.routing && typeof r.routing.confidence === 'number') {
+      const pct = Math.round(r.routing.confidence * 100);
+      return `<span class="badge ${r.routing.source === 'auto' ? 'badge--auto' : 'badge--info'}">${r.routing.source === 'auto' ? 'Auto' : 'AI'} ${pct}%</span>`;
+    }
+    return `<span class="recent-type">${escapeHtml(r.typeLabel || '')}</span>`;
   }
 
   /**
    * checkForUpdates
-   * Forces an immediate service-worker update check instead of
-   * waiting on the browser's own schedule (which barely runs for an
-   * installed home-screen PWA — see sw.js's header comment for why
-   * this exists at all). Spins the refresh icon while checking, then
-   * reloads regardless of outcome — if nothing was new, the reload is
-   * harmless; if something was, the reload picks it up.
+   * Forces an immediate service-worker update check, then reloads. With
+   * sw.js v3 (network-first) a normal reload already fetches fresh files
+   * when online; this button remains the explicit "make sure" control
+   * for installed home-screen apps, which have no pull-to-refresh.
    */
   async function checkForUpdates() {
     const btn = root.querySelector('#refresh-btn');
@@ -381,9 +497,7 @@ const App = (() => {
         if (reg) await reg.update();
       }
     } catch (err) {
-      // Swallow — reload below happens either way, which is the
-      // actual fallback if the update check itself fails (e.g. no
-      // network right now).
+      // Swallow — the reload below is the real fallback.
     }
     setTimeout(() => window.location.reload(), 250);
   }
@@ -391,6 +505,11 @@ const App = (() => {
   // ---------------------------------------------------------------
   // Screen: Entity picker
   // ---------------------------------------------------------------
+  /**
+   * renderEntityPicker
+   * Grid of businesses. If text was carried over from Smart capture, a
+   * banner says so (it'll be pre-filled into whichever form is picked).
+   */
   function renderEntityPicker() {
     root.innerHTML = `
       <header class="topbar">
@@ -399,17 +518,20 @@ const App = (() => {
         <span class="icon-btn-spacer"></span>
       </header>
       <main class="picker">
+        ${carry ? `<div class="banner banner--carry"><span>${icon('note')} Your note comes with you: “${escapeHtml(truncate(carry.text, 60))}”</span><button class="link-btn" id="drop-carry">Clear</button></div>` : ''}
         <div class="tile-grid">
           ${ENTITIES.map(e => `
             <button class="tile" style="--tile-color:${e.color}" data-entity="${e.id}">
-              <span class="tile-name">${e.name}</span>
-              <span class="tile-sub">${e.subtitle}</span>
+              <span class="tile-name">${escapeHtml(e.name)}</span>
+              <span class="tile-sub">${escapeHtml(e.subtitle)}</span>
             </button>
           `).join('')}
         </div>
       </main>
     `;
     bindBack();
+    const drop = root.querySelector('#drop-carry');
+    if (drop) drop.onclick = () => { carry = null; renderEntityPicker(); };
     root.querySelectorAll('[data-entity]').forEach(btn => {
       btn.onclick = () => go(`/type/${btn.dataset.entity}`);
     });
@@ -418,141 +540,167 @@ const App = (() => {
   // ---------------------------------------------------------------
   // Screen: Capture type picker
   // ---------------------------------------------------------------
+  /**
+   * renderTypePicker
+   * The entity's configured capture types, plus (v14) any OTHER lists in
+   * the same ClickUp Space found by the workspace sync — tucked in a
+   * collapsible "More lists" section so the curated types stay primary.
+   * @param {string} entityId
+   */
   function renderTypePicker(entityId) {
     const entity = ENTITIES.find(e => e.id === entityId);
     if (!entity) return go('/entity');
+    const extra = syncedListsForEntity(entity);
 
     root.innerHTML = `
       <header class="topbar">
         <button class="icon-btn" data-nav="back" aria-label="Back">${icon('back')}</button>
-        <span class="brand">${entity.name}</span>
+        <span class="brand">${escapeHtml(entity.name)}</span>
         <span class="icon-btn-spacer"></span>
       </header>
       <main class="picker">
         <div class="chip-list">
           ${entity.captureTypes.map(t => `
-            <button class="chip" style="--tile-color:${entity.color}" data-type="${t.id}">
-              <span class="chip-icon">${icon(t.icon)}</span>
-              <span>${t.label}</span>
+            <div class="chip-wrap">
+              <button class="chip" style="--tile-color:${entity.color}" data-type="${t.id}">
+                <span class="chip-icon">${icon(t.icon)}</span>
+                <span>${escapeHtml(t.label)}</span>
+              </button>
               ${t.verify ? `<button type="button" class="chip-flag" data-verify-label="${escapeHtml(t.label)}" data-verify-list="${t.listId}" aria-label="This destination needs verifying">!</button>` : ''}
-            </button>
+            </div>
           `).join('')}
         </div>
+        ${extra.length ? `
+          <details class="more-lists">
+            <summary>More lists in this space <span class="count">${extra.length}</span></summary>
+            <p class="hint">Synced from ClickUp — new lists show up here automatically.</p>
+            <div class="chip-list">
+              ${extra.map(l => `
+                <button class="chip chip--synced" style="--tile-color:${entity.color}" data-type="list-${l.id}">
+                  <span class="chip-icon">${icon('list')}</span>
+                  <span>${escapeHtml(l.name)}</span>
+                </button>`).join('')}
+            </div>
+          </details>` : ''}
       </main>
     `;
     bindBack();
     root.querySelectorAll('[data-type]').forEach(btn => {
       btn.onclick = () => go(`/form/${entityId}/${btn.dataset.type}`);
     });
-    // Tapping the "!" flag explains itself instead of opening the
-    // capture form — stopPropagation keeps the tap from also
-    // triggering the parent chip's own onclick (click events bubble
-    // from this child button up through the chip button it sits in).
+    // The "!" flag sits beside (not inside) its chip, so tapping it
+    // explains itself instead of opening the form.
     root.querySelectorAll('[data-verify-label]').forEach(flag => {
-      flag.onclick = (e) => {
-        e.stopPropagation();
-        alert(
-          `"${flag.dataset.verifyLabel}" points at ClickUp List ${flag.dataset.verifyList}, which came out identical to another list's ID in the original export \u2014 most likely a copy-paste artifact, not confirmed wrong.\n\n` +
-          `Sending to it will still work, but worth double-checking: open the real list in ClickUp and look at the URL \u2014 app.clickup.com/<workspace>/v/li/<LIST_ID>. If that ID doesn't match ${flag.dataset.verifyList}, update it in js/config.js.`
-        );
-      };
+      flag.onclick = () => UI.sheet({
+        title: 'Double-check this destination',
+        html: `<p>“${escapeHtml(flag.dataset.verifyLabel)}” points at ClickUp List ${escapeHtml(flag.dataset.verifyList)}, which matched another list’s ID in the original export — most likely a copy-paste artifact, not confirmed wrong.</p>
+               <p>Sending still works. To check: open the real list in ClickUp and compare the number after <code>/li/</code> in its URL. If it differs, update it in <code>js/config.js</code>.</p>`,
+        actions: [{ label: 'Got it', value: true, kind: 'primary' }]
+      });
     });
+  }
+
+  /**
+   * syncedListsForEntity
+   * Lists from the cached workspace catalog that live in the same
+   * Space(s) as this entity's configured lists but aren't configured
+   * anywhere yet. The Space is inferred from where the entity's known
+   * list IDs live, so config.js didn't need Space IDs added.
+   * @param {object} entity
+   * @returns {Array<{id, name, path, space_id}>} empty if no catalog yet
+   */
+  function syncedListsForEntity(entity) {
+    const catalog = Storage.getCatalog();
+    if (!catalog || !Array.isArray(catalog.lists) || !catalog.lists.length) return [];
+    const mine = new Set(entity.captureTypes.map(t => t.listId).filter(Boolean));
+    const spaceIds = new Set(catalog.lists.filter(l => mine.has(l.id)).map(l => l.space_id));
+    const configured = new Set(ENTITIES.flatMap(e => e.captureTypes.map(t => t.listId)).filter(Boolean));
+    return catalog.lists
+      .filter(l => spaceIds.has(l.space_id) && !configured.has(l.id) && !ROUTING_EXCLUDED_LIST_IDS.includes(l.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * resolveType
+   * Finds a capture type by id, including synthesized "list-<id>" types
+   * for synced lists (generic Task form pointed at that list).
+   * @param {object} entity
+   * @param {string} typeId
+   * @returns {object|null}
+   */
+  function resolveType(entity, typeId) {
+    const configured = entity.captureTypes.find(t => t.id === typeId);
+    if (configured) return configured;
+    const m = /^list-(\d+)$/.exec(typeId || '');
+    if (!m) return null;
+    const catalog = Storage.getCatalog();
+    const list = catalog && (catalog.lists || []).find(l => l.id === m[1]);
+    if (!list || ROUTING_EXCLUDED_LIST_IDS.includes(list.id)) return null;
+    return { id: typeId, label: list.name, icon: 'list', schema: 'task', listId: list.id, synced: true };
   }
 
   // ---------------------------------------------------------------
   // Screen: Dynamic capture form
   // ---------------------------------------------------------------
-  // Module-level cache of list members, keyed by listId, so switching
-  // between forms for the same List (or re-opening one) doesn't
-  // re-fetch every time. Cleared only on a full page reload — good
-  // enough since Workspace membership rarely changes mid-session.
+  // Per-list caches (cleared on full reload; membership/tasks/fields
+  // rarely change mid-session). Each holds a Promise so concurrent
+  // triggers share one in-flight fetch.
   const listMembersCache = {};
-
-  // Same caching idea as listMembersCache, for the "make this a
-  // subtask" search — see loadParentTaskOptions() below. Keyed by
-  // listId; holds a Promise so concurrent triggers (e.g. opening the
-  // panel twice quickly) share one in-flight fetch rather than firing
-  // duplicates.
   const listTasksCache = {};
-
-  // Same idea again, for "Add to Accounts"'s Direct-to-List custom
-  // field lookup — see loadAccountFieldMapping()/getAccountFieldMapping()
-  // below. Keyed by listId; holds a Promise of the resolved {key:
-  // fieldId} mapping (not the raw ClickUp field list).
   const accountFieldMappingCache = {};
 
-  // Cloudflare's free-tier Worker plan hard-caps any request body at
-  // 100MB (ClickUp itself allows up to 1GB per attachment, but that
-  // never matters here — the proxy rejects first). Warn well under
-  // that ceiling rather than let someone attach a big file and only
-  // discover the failure after tapping Send.
-  const MAX_ATTACHMENT_BYTES = 90 * 1024 * 1024; // 90MB, leaving headroom for the rest of the multipart payload
+  // Cloudflare's free plan caps request bodies at 100MB (ClickUp itself
+  // allows 1GB) — warn below that rather than fail after tapping Send.
+  const MAX_ATTACHMENT_BYTES = 90 * 1024 * 1024; // 90MB, headroom for the multipart envelope
 
-  // ClickUp custom field `type` strings confidently safe to write a
-  // plain string value to. Learned the hard way (2026-08-11): a field
-  // named "Tool/Software/Act" looked text-like by name alone but was
-  // actually a Dropdown expecting an option uuid, and sending it a
-  // plain string got the ENTIRE task creation rejected — not just
-  // that field. This allowlist is deliberately conservative: an
-  // unrecognized type is treated as unsafe (skip the structured
-  // write, rely on the description-line fallback) rather than assumed
-  // safe. Used by submitCapture()'s customFields resolution for
-  // "Add to Accounts" fields matched by name rather than known ahead
-  // of time — see getAccountFieldMapping().
+  // ClickUp custom field `type` strings confidently safe to write a plain
+  // string to. Deliberately conservative (see v12/v13): an unrecognized
+  // type is treated as unsafe and falls back to the description line.
   const TEXT_LIKE_FIELD_TYPES = new Set(['text', 'short_text', 'email', 'phone', 'url', 'location', 'number']);
 
+  /**
+   * renderForm
+   * Builds the capture form for one entity + capture type.
+   * @param {string} entityId
+   * @param {string} typeId - configured type id, or "list-<id>" for a
+   *   synced list (see resolveType)
+   */
   function renderForm(entityId, typeId) {
     const entity = ENTITIES.find(e => e.id === entityId);
-    const type = entity && entity.captureTypes.find(t => t.id === typeId);
+    const type = entity && resolveType(entity, typeId);
     if (!entity || !type) return go('/entity');
 
-    // What this capture type actually does on submit — see
-    // submitCapture()'s branch on the same value. Entries without an
-    // explicit `action` in config.js default to 'task' (the original,
-    // still most common behavior), so this stays backward-compatible
-    // with every capture type defined before Follow-up/Add-to-Accounts
-    // existed.
+    // What this capture type does on submit (defaults to 'task').
     const action = type.action || 'task';
 
     state = { entityId, typeId, fields: {}, attachments: [], transcript: '', recording: null, parentTaskId: null, parentTaskName: null, parentTaskUrl: null, accountDestination: 'chat', associatedAccountId: null, associatedAccountName: null };
     const schema = FIELD_SCHEMAS[type.schema];
+    const isAccount = type.schema === 'account';
     const speechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     const recordSupported = !!(navigator.mediaDevices && window.MediaRecorder);
-    // Assignee and optional subtask-nesting only make sense when this
-    // capture actually creates a ClickUp task.
+    // Assignee and optional subtask-nesting only when this creates a task.
     const showAssignee = action === 'task' && type.schema === 'task';
     // File/voice-note attachments need a task to attach to.
     const showAttachments = action === 'task';
-    // Follow-up (action:'comment') requires picking a target task
-    // first — searched across every task-schema list in this entity
-    // at once, since posting a comment isn't restricted to one
-    // specific list the way a new subtask's parent is.
+    // Follow-up (action:'comment') requires picking a target task first,
+    // searched across every task-schema list in this entity.
     const requiresTaskSearch = action === 'comment';
     const taskSearchListIds = requiresTaskSearch
       ? entity.captureTypes.filter(t => t.schema === 'task').map(t => t.listId)
       : (showAssignee ? [type.listId] : []);
-    // "Add to Accounts" specifically gets a destination toggle: post
-    // to the Chat review/buffer channel (default, matches everything
-    // before this feature existed) or file straight into the one
-    // known account-directory List (type.directListId — see config.js
-    // MKC_CLIENT_ACCOUNTS_LIST_ID comment for why there's only one).
-    const showDestinationToggle = type.schema === 'account' && type.directListId;
-    // Associated Account autocomplete: only relevant for MKC Client
-    // entries (the only Account Type with a real client-company
-    // relationship to capture) — actual visibility is toggled live by
-    // syncAccountTypeDependents() below, reacting to the Account Type
-    // field, but the container itself needs to exist in the DOM for
-    // any 'account' schema form regardless of the type initially picked.
-    const showAssociatedAccount = type.schema === 'account';
+    // "Add to Accounts": Chat review channel vs. straight into the one
+    // known account-directory List.
+    const showDestinationToggle = isAccount && type.directListId;
+    const showAssociatedAccount = isAccount;
 
     root.innerHTML = `
       <header class="topbar">
         <button class="icon-btn" data-nav="back" aria-label="Back">${icon('back')}</button>
-        <span class="brand">${type.label}</span>
-        <span class="tag" style="--tag-color:${entity.color}">${entity.name}</span>
+        <span class="brand">${escapeHtml(type.label)}</span>
+        <span class="tag" style="--tag-color:${entity.color}">${escapeHtml(entity.name)}</span>
       </header>
       <main class="form">
-        <form id="capture-form">
+        <form id="capture-form" novalidate>
           ${requiresTaskSearch ? `<div id="subtask-block"></div>` : ''}
           ${schema.map(f => renderField(f)).join('')}
           ${showAssociatedAccount ? `<div id="associated-account-block"></div>` : ''}
@@ -561,7 +709,7 @@ const App = (() => {
             <button type="button" class="segmented-btn active" data-dest="chat">${icon('note')} Review Channel</button>
             <button type="button" class="segmented-btn" data-dest="direct" id="direct-to-list-btn" disabled title="Only available for MKC Client accounts">${icon('link')} Direct to List</button>
           </div>
-          <p class="hint" id="direct-to-list-hint">"Direct to List" is only available once Account Type is set to MKC Client \u2014 MKC's and MKP's own accounts are reviewed and exported outside ClickUp.</p>` : ''}
+          <p class="hint" id="direct-to-list-hint">"Direct to List" is only available once Account Type is set to MKC Client — MKC's and MKP's own accounts are reviewed and exported outside ClickUp.</p>` : ''}
           ${showAssignee ? `<div id="subtask-block"></div>` : ''}
           ${showAssignee ? `
           <label class="field" for="field-assigneeId">Assignee
@@ -570,17 +718,9 @@ const App = (() => {
             </select>
           </label>` : ''}
 
-          ${showAttachments ? `
-          <div class="voice-row">
-            ${speechSupported ? `<button type="button" class="pill-btn" id="dictate-btn">${icon('mic')} Dictate</button>` : ''}
-            ${recordSupported ? `<button type="button" class="pill-btn" id="record-btn">${icon('record')} Voice note</button>` : ''}
-            <label class="pill-btn" for="file-input">${icon('paperclip')} Attach
-              <input type="file" id="file-input" multiple hidden>
-            </label>
-          </div>
-          <div id="attachment-list" class="attachment-list"></div>
-          <div id="recording-indicator" class="recording-indicator hidden">Recording… <span id="rec-time">0:00</span></div>
-          ` : (speechSupported ? `<div class="voice-row"><button type="button" class="pill-btn" id="dictate-btn">${icon('mic')} Dictate</button></div>` : '')}
+          ${showAttachments ? voiceRowHtml(speechSupported, recordSupported, true) : (speechSupported ? voiceRowHtml(true, false, false) : '')}
+          ${isAccount ? `<p class="hint">${icon('lock')} For safety, account details are never saved on this device — not as a draft, and not in the offline queue.</p>` : ''}
+          <div id="form-error"></div>
         </form>
       </main>
       <div class="form-footer">
@@ -591,17 +731,13 @@ const App = (() => {
     bindBack();
 
     if (showDestinationToggle) {
-      const directBtn = root.querySelector('#direct-to-list-btn');
       root.querySelectorAll('#account-destination .segmented-btn').forEach(btn => {
         btn.onclick = () => {
           if (btn.disabled) return;
           state.accountDestination = btn.dataset.dest;
           root.querySelectorAll('#account-destination .segmented-btn').forEach(b => b.classList.toggle('active', b === btn));
-          if (btn.dataset.dest === 'direct') {
-            // Prefetch now rather than waiting until Send — same
-            // "ready before it's needed" pattern as loadAssigneeOptions.
-            loadAccountFieldMapping(type.directListId);
-          }
+          // Prefetch the custom-field mapping so Send doesn't wait on it.
+          if (btn.dataset.dest === 'direct') loadAccountFieldMapping(type.directListId);
         };
       });
     }
@@ -609,25 +745,20 @@ const App = (() => {
     if (showAssociatedAccount) {
       const accountTypeSelect = root.querySelector('#field-accountType');
       const directBtn = root.querySelector('#direct-to-list-btn');
-
-      // Both "Direct to List" eligibility and the Associated Account
-      // autocomplete react to the same Account Type field, so one
-      // handler covers both rather than two separate listeners.
+      // "Direct to List" eligibility and the Associated Account
+      // autocomplete both react to Account Type.
       const syncAccountTypeDependents = () => {
         const isMkcClient = accountTypeSelect.value === 'MKC Client';
-
         if (directBtn) {
           directBtn.disabled = !isMkcClient;
           directBtn.title = isMkcClient ? '' : 'Only available for MKC Client accounts';
           if (!isMkcClient && state.accountDestination === 'direct') {
-            // Selected type changed away from MKC Client after Direct
-            // was already chosen — fall back to the always-valid
-            // option rather than leaving an unusable choice selected.
+            // Type changed away after Direct was chosen → fall back to
+            // the always-valid option.
             state.accountDestination = 'chat';
             root.querySelectorAll('#account-destination .segmented-btn').forEach(b => b.classList.toggle('active', b.dataset.dest === 'chat'));
           }
         }
-
         if (isMkcClient) {
           renderAssociatedAccountBlock();
         } else {
@@ -649,28 +780,23 @@ const App = (() => {
       renderSubtaskBlock(taskSearchListIds, 'searching', true, false, 'task to follow up on');
     }
 
-    if (showAttachments) {
-      const fileInput = root.querySelector('#file-input');
-      fileInput.onchange = () => {
-        const incoming = Array.from(fileInput.files);
-        const tooBig = incoming.filter(f => f.size > MAX_ATTACHMENT_BYTES);
-        const ok = incoming.filter(f => f.size <= MAX_ATTACHMENT_BYTES);
-        if (tooBig.length) {
-          alert(
-            `${tooBig.map(f => f.name).join(', ')} ${tooBig.length > 1 ? 'are' : 'is'} over the 90MB limit for attachments sent through Dispatch and won\u2019t be included. ` +
-            `For larger files, add them directly in ClickUp once the task is created.`
-          );
-        }
-        state.attachments.push(...ok);
-        renderAttachmentList();
-        fileInput.value = '';
-      };
-      const recordBtn = root.querySelector('#record-btn');
-      if (recordBtn) recordBtn.onclick = () => toggleRecording();
-    }
+    if (showAttachments) bindAttachmentControls();
 
+    const primary = schema.find(f => f.primary) || schema.find(f => f.type === 'textarea') || schema[0];
     const dictateBtn = root.querySelector('#dictate-btn');
-    if (dictateBtn) dictateBtn.onclick = () => toggleDictate(schema);
+    if (dictateBtn) dictateBtn.onclick = () => toggleDictate(root.querySelector(`#field-${primary.key}`));
+
+    // Pre-fill: text carried from Smart capture wins over a saved draft.
+    const route = `/form/${entityId}/${typeId}`;
+    if (carry && !isAccount) {
+      applyCarry(schema, showAttachments);
+    } else if (!isAccount) {
+      restoreDraft(route, (values) => setFieldValues(schema, values), () => setFieldValues(schema, {}, true));
+    }
+    // Drafts: never for Add to Accounts (credentials).
+    if (!isAccount) {
+      watchDraft(route, root.querySelector('#capture-form'), () => collectDraftValues(schema));
+    }
 
     root.querySelector('#send-btn').onclick = (e) => {
       e.preventDefault();
@@ -678,23 +804,76 @@ const App = (() => {
     };
   }
 
+  /**
+   * voiceRowHtml
+   * The Dictate / Voice note / Attach controls (+ attachment list and
+   * recording indicator when attachments are allowed). Shared by the
+   * manual form and Smart capture so both behave identically.
+   * @param {boolean} speech - show Dictate
+   * @param {boolean} record - show Voice note
+   * @param {boolean} attach - show Attach + attachment list
+   * @returns {string} HTML
+   */
+  function voiceRowHtml(speech, record, attach) {
+    return `
+      <div class="voice-row">
+        ${speech ? `<button type="button" class="pill-btn" id="dictate-btn">${icon('mic')} Dictate</button>` : ''}
+        ${record ? `<button type="button" class="pill-btn" id="record-btn">${icon('record')} Voice note</button>` : ''}
+        ${attach ? `<label class="pill-btn" for="file-input">${icon('paperclip')} Attach
+          <input type="file" id="file-input" multiple hidden>
+        </label>` : ''}
+      </div>
+      ${attach ? `<div id="attachment-list" class="attachment-list"></div>
+      <div id="recording-indicator" class="recording-indicator hidden">Recording… <span id="rec-time">0:00</span></div>` : ''}`;
+  }
+
+  /**
+   * bindAttachmentControls
+   * Wires the file input (with the 90MB guard) and the voice-note button
+   * rendered by voiceRowHtml(). Files go into state.attachments.
+   */
+  function bindAttachmentControls() {
+    const fileInput = root.querySelector('#file-input');
+    if (fileInput) {
+      fileInput.onchange = () => {
+        const incoming = Array.from(fileInput.files);
+        const tooBig = incoming.filter(f => f.size > MAX_ATTACHMENT_BYTES);
+        const ok = incoming.filter(f => f.size <= MAX_ATTACHMENT_BYTES);
+        if (tooBig.length) {
+          UI.toast(`${tooBig.map(f => f.name).join(', ')} ${tooBig.length > 1 ? 'are' : 'is'} over the 90MB limit and won’t be included — add ${tooBig.length > 1 ? 'them' : 'it'} in ClickUp directly.`, { kind: 'bad', duration: 7000 });
+        }
+        state.attachments.push(...ok);
+        renderAttachmentList();
+        fileInput.value = '';
+      };
+    }
+    const recordBtn = root.querySelector('#record-btn');
+    if (recordBtn) recordBtn.onclick = () => toggleRecording();
+  }
+
+  /**
+   * renderField — one schema field as HTML (see FIELD_SCHEMAS types).
+   * @param {object} f - schema field
+   * @returns {string}
+   */
   function renderField(f) {
     const id = `field-${f.key}`;
+    const req = f.required ? ' <span class="req" aria-hidden="true">*</span>' : '';
     if (f.type === 'textarea') {
-      return `<label class="field" for="${id}">${f.label}${f.required ? ' *' : ''}
-        <textarea id="${id}" name="${f.key}" rows="4" placeholder="${f.placeholder || ''}"></textarea>
+      return `<label class="field" for="${id}"><span>${escapeHtml(f.label)}${req}</span>
+        <textarea id="${id}" name="${f.key}" rows="4" placeholder="${escapeHtml(f.placeholder || '')}"${f.required ? ' required' : ''}></textarea>
       </label>`;
     }
     if (f.type === 'select') {
-      return `<label class="field" for="${id}">${f.label}
-        <select id="${id}" name="${f.key}">
+      return `<label class="field" for="${id}"><span>${escapeHtml(f.label)}${req}</span>
+        <select id="${id}" name="${f.key}"${f.required ? ' required' : ''}>
           <option value="">—</option>
-          ${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}
+          ${f.options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}
         </select>
       </label>`;
     }
     if (f.type === 'priority') {
-      return `<label class="field" for="${id}">${f.label}
+      return `<label class="field" for="${id}">${escapeHtml(f.label)}
         <select id="${id}" name="${f.key}">
           <option value="">—</option>
           <option value="Urgent">Urgent</option>
@@ -705,34 +884,126 @@ const App = (() => {
       </label>`;
     }
     if (f.type === 'date') {
-      return `<label class="field" for="${id}">${f.label}
+      return `<label class="field" for="${id}">${escapeHtml(f.label)}
         <input type="date" id="${id}" name="${f.key}">
       </label>`;
     }
     if (f.type === 'password') {
-      // Masked on screen — same reasoning as any password field: avoid
-      // it being visible over someone's shoulder while typing quickly
-      // on a phone. Doesn't add any real encryption; see the security
-      // note on "Add to Accounts" in config.js/clickup.js/app.js
-      // version history for what this field's data actually does.
-      return `<label class="field" for="${id}">${f.label}
+      // Masked input (no current schema uses it since v10 — kept for
+      // future fields). Masking is shoulder-surfing protection only.
+      return `<label class="field" for="${id}">${escapeHtml(f.label)}
         <input type="password" id="${id}" name="${f.key}" autocomplete="new-password">
       </label>`;
     }
-    return `<label class="field" for="${id}">${f.label}${f.required ? ' *' : ''}
-      <input type="text" id="${id}" name="${f.key}" placeholder="${f.placeholder || ''}" autocomplete="off">
+    return `<label class="field" for="${id}"><span>${escapeHtml(f.label)}${req}</span>
+      <input type="text" id="${id}" name="${f.key}" placeholder="${escapeHtml(f.placeholder || '')}" autocomplete="off"${f.required ? ' required' : ''}>
     </label>`;
+  }
+
+  // ---------------------------------------------------------------
+  // Drafts (auto-save while typing; restore on reopen)
+  // ---------------------------------------------------------------
+  /**
+   * collectDraftValues
+   * Current values of the schema's fields, minus anything sensitive.
+   * @param {object[]} schema
+   * @returns {object}
+   */
+  function collectDraftValues(schema) {
+    const values = {};
+    schema.forEach(f => {
+      if (f.type === 'password' || f.key === 'password') return;
+      const el = root.querySelector(`#field-${f.key}`);
+      if (el && el.value) values[f.key] = el.value;
+    });
+    return values;
+  }
+
+  /**
+   * setFieldValues
+   * Writes values into the form's fields.
+   * @param {object[]} schema
+   * @param {object} values
+   * @param {boolean} [clearOthers=false] - also blank fields not in values
+   */
+  function setFieldValues(schema, values, clearOthers = false) {
+    schema.forEach(f => {
+      const el = root.querySelector(`#field-${f.key}`);
+      if (!el) return;
+      if (values[f.key] != null) el.value = values[f.key];
+      else if (clearOthers) el.value = '';
+    });
+  }
+
+  /**
+   * watchDraft
+   * Debounced auto-save: any input inside `container` saves a draft for
+   * `route` 500ms after typing pauses. Empty forms clear the draft.
+   * @param {string} route
+   * @param {HTMLElement} container
+   * @param {() => object} getValues
+   */
+  function watchDraft(route, container, getValues) {
+    if (!container) return;
+    const save = () => {
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(() => {
+        const values = getValues();
+        if (Object.keys(values).length) Storage.saveDraft(route, values);
+        else Storage.clearDraft();
+      }, 500);
+    };
+    container.addEventListener('input', save);
+    container.addEventListener('change', save);
+  }
+
+  /**
+   * restoreDraft
+   * If a draft exists for this route, applies it and offers "Discard".
+   * @param {string} route
+   * @param {(values: object) => void} apply
+   * @param {() => void} wipe - clears the restored values on Discard
+   */
+  function restoreDraft(route, apply, wipe) {
+    const values = Storage.getDraft(route);
+    if (!values) return;
+    apply(values);
+    UI.toast('Draft restored.', {
+      action: { label: 'Discard', onClick: () => { Storage.clearDraft(); wipe(); } },
+      duration: 5000,
+      // Its Discard acts on THIS screen's fields — drop it on navigation.
+      scoped: true
+    });
+  }
+
+  /**
+   * applyCarry
+   * Pre-fills a manual form with text handed over from Smart capture:
+   * the first line becomes the title, the full text the details field,
+   * and any staged attachments come along too.
+   * @param {object[]} schema
+   * @param {boolean} attachmentsAllowed
+   */
+  function applyCarry(schema, attachmentsAllowed) {
+    const c = carry;
+    carry = null;
+    if (!c) return;
+    const titleField = schema.find(f => f.key === 'title');
+    const textField = schema.find(f => f.primary) || schema.find(f => f.type === 'textarea');
+    const firstLine = c.title || truncate(c.text.split('\n')[0], 80);
+    if (titleField) root.querySelector(`#field-${titleField.key}`).value = firstLine;
+    if (textField && textField !== titleField) root.querySelector(`#field-${textField.key}`).value = c.text;
+    if (attachmentsAllowed && c.attachments && c.attachments.length) {
+      state.attachments.push(...c.attachments);
+      renderAttachmentList();
+    }
   }
 
   /**
    * loadAssigneeOptions
-   * Fills the Assignee <select> on Task-type forms with the members
-   * who actually have access to the destination list, fetched via
-   * ClickUp.getListMembers(). Uses listMembersCache so switching
-   * capture types for the same list doesn't refetch. Fails quietly
-   * (dropdown just shows "Unavailable") rather than blocking the rest
-   * of the form — assignee is optional, a fetch failure here shouldn't
-   * stop someone from capturing and sending the task itself.
+   * Fills the Assignee <select> with the List's members (cached per
+   * list). Fails quietly — assignee is optional and must never block a
+   * capture.
    * @param {string} listId
    */
   async function loadAssigneeOptions(listId) {
@@ -743,14 +1014,12 @@ const App = (() => {
         listMembersCache[listId] = ClickUp.getListMembers(listId);
       }
       const members = await listMembersCache[listId];
-      // Guard against the user having already navigated away from
-      // this form (e.g. tapped back) before the fetch resolved.
-      if (!root.contains(select)) return;
+      if (!root.contains(select)) return; // navigated away meanwhile
       select.innerHTML = `<option value="">Unassigned</option>` +
         members.map(m => `<option value="${m.id}">${escapeHtml(m.username || m.email || 'Member')}</option>`).join('');
       select.disabled = false;
     } catch (err) {
-      delete listMembersCache[listId]; // don't cache a failure — allow retry next time the form opens
+      delete listMembersCache[listId]; // don't cache a failure
       if (root.contains(select)) {
         select.innerHTML = `<option value="">Unavailable — you can still send without an assignee</option>`;
       }
@@ -759,57 +1028,31 @@ const App = (() => {
 
   /**
    * loadAccountFieldMapping
-   * Kicks off (and caches) the fetch+match described in
-   * getAccountFieldMapping() below, without blocking on it — called
-   * as soon as "Direct to List" is selected so the mapping is likely
-   * already resolved by the time Send is tapped, same "prefetch early"
-   * pattern as loadAssigneeOptions.
+   * Prefetches getAccountFieldMapping() without blocking (called the
+   * moment "Direct to List" is selected).
    * @param {string} listId
    */
   function loadAccountFieldMapping(listId) {
     getAccountFieldMapping(listId).catch(() => {
-      // Swallow here — submitCapture() awaits the same cached promise
-      // and handles a failure there (falls back to plain description
-      // text for whichever fields didn't resolve, rather than
-      // blocking the whole submission on a field-lookup hiccup).
+      // submitCapture() awaits the same promise and handles failure there.
     });
   }
 
   /**
    * getAccountFieldMapping
-   * Fetches a List's real ClickUp custom field definitions
-   * (ClickUp.getListFields) and matches them by name to the "Add to
-   * Accounts" form fields that have a real custom-field home in the
-   * MKC Client Accounts list: Admin Username, Admin Email, Registered
-   * Password, and Tool/Software/Act (mapped from our `title` field,
-   * labeled "Account / Tool Name & Purpose" in the form). Matching is
-   * substring-based and case-insensitive rather than an exact string
-   * match, so a minor rename of the ClickUp field later doesn't
-   * silently break this. "Notes" and "Account Type" have no
-   * corresponding custom field in this list and are deliberately not
-   * mapped — they still land in the task description as plain text
-   * (see clickup.js buildTaskPayload()). "MKC ID" and "Notebook Link"
-   * are deliberately never set by Dispatch at all — see config.js/
-   * README for why (auto-generated by ClickUp, and manually filled in
-   * later, respectively).
+   * Matches the MKC Client Accounts list's real custom fields by name to
+   * the Add to Accounts form: Admin Username, Admin Email, Registered
+   * Password, Related Account ID. Substring + case-insensitive so a minor
+   * rename in ClickUp doesn't break it. Returns {id, type} per key (type
+   * gates the associatedAccount write — see TEXT_LIKE_FIELD_TYPES).
+   * "Tool/Software/Act" is deliberately NOT mapped (it's a dropdown; see
+   * v12). "MKC ID" / "Notebook Link" are never set by the app.
    * @param {string} listId
-   * @returns {Promise<{adminUsername?:string, adminEmail?:string, password?:string, title?:string}>}
-   *   values are ClickUp custom field IDs (only present for fields
-   *   that were actually found — a missing key means no match, not an
-   *   error, and callers should treat that field as description-only)
+   * @returns {Promise<{adminUsername?, adminEmail?, password?, associatedAccount?}>}
    */
   function getAccountFieldMapping(listId) {
     if (!accountFieldMappingCache[listId]) {
       accountFieldMappingCache[listId] = ClickUp.getListFields(listId).then(fields => {
-        // Returns {id, type} rather than just the id. `type` matters
-        // for associatedAccount specifically — see TEXT_LIKE_FIELD_TYPES
-        // and its use in submitCapture() below, added after a real
-        // submission proved a *different* field ("Tool/Software/Act")
-        // was a Dropdown type expecting an option uuid rather than
-        // free text, which rejected the whole task. Only attempt a
-        // structured write when the field's reported type is
-        // confidently text-like; otherwise rely on the guaranteed
-        // description-line fallback (clickup.js buildTaskPayload).
         const find = (...keywords) => {
           const match = fields.find(f => keywords.some(k => f.name.toLowerCase().includes(k)));
           return match ? { id: match.id, type: match.type } : undefined;
@@ -818,23 +1061,11 @@ const App = (() => {
           adminUsername: find('admin username', 'username'),
           adminEmail: find('admin email', 'email'),
           password: find('registered password', 'password'),
-          // "Related Account ID" — confirmed as the actual field name
-          // (distinct from "Assc. Account", a separate column that
-          // isn't targeted here). Stores the linked company's own
-          // ClickUp task ID.
+          // "Related Account ID" — stores the linked company's task ID.
           associatedAccount: find('related account id', 'related account', 'account id')
-          // Deliberately no "title" / Tool-Software-Act mapping — see
-          // v11 in version history: that field turned out to be a
-          // Dropdown/Label type (ClickUp error: "Value must be an
-          // option index or uuid"), not free text, and its real
-          // meaning is a category picker (Tool/Software/Activity),
-          // not literally "the tool's name" as first assumed. No data
-          // is lost by not mapping it — the title still becomes the
-          // task's own Name field regardless (see buildTaskPayload in
-          // clickup.js), which was always separate from this attempt.
         };
       }).catch(err => {
-        delete accountFieldMappingCache[listId]; // don't cache a failure — allow retry
+        delete accountFieldMappingCache[listId]; // allow retry
         throw err;
       });
     }
@@ -843,16 +1074,10 @@ const App = (() => {
 
   /**
    * renderAssociatedAccountBlock
-   * Populates #associated-account-block with a company-name
-   * autocomplete (native <datalist>, so keyboard/accessibility comes
-   * for free rather than needing custom dropdown logic) sourced from
-   * CRM_COMPANIES_LIST_ID — each option is one client company record.
-   * Selecting or typing an exact match sets state.associatedAccountId/
-   * associatedAccountName; anything else leaves both null, and Send
-   * still works (this field is informative, not required — the user
-   * asked for it to be offered, not enforced).
-   * Shown only while Account Type = MKC Client — see
-   * syncAccountTypeDependents() in renderForm for the show/hide logic.
+   * Company-name autocomplete (native <datalist>) sourced from
+   * CRM_COMPANIES_LIST_ID, shown while Account Type = MKC Client. An
+   * exact match sets state.associatedAccountId/Name; anything else leaves
+   * them null and Send still works (informative, not required).
    */
   function renderAssociatedAccountBlock() {
     const container = root.querySelector('#associated-account-block');
@@ -869,71 +1094,49 @@ const App = (() => {
     const status = container.querySelector('#associated-account-status');
 
     loadParentTaskOptions(CRM_COMPANIES_LIST_ID).then(companies => {
-      if (!root.contains(container)) return; // navigated away before this resolved
+      if (!root.contains(container)) return;
       datalist.innerHTML = companies.map(c => `<option value="${escapeHtml(c.name)}">`).join('');
-      status.textContent = 'Optional \u2014 links this entry to the client\u2019s company record.';
-
+      status.textContent = 'Optional — links this entry to the client’s company record.';
       const syncMatch = () => {
         const match = companies.find(c => c.name === input.value);
         if (match) {
           state.associatedAccountId = match.id;
           state.associatedAccountName = match.name;
-          status.textContent = `\u2713 Matched: ${match.name}`;
+          status.textContent = `✓ Matched: ${match.name}`;
           status.className = 'hint hint--good';
         } else {
           state.associatedAccountId = null;
           state.associatedAccountName = null;
           status.textContent = input.value
-            ? 'No exact match \u2014 pick a company from the list to link it.'
-            : 'Optional \u2014 links this entry to the client\u2019s company record.';
+            ? 'No exact match — pick a company from the list to link it.'
+            : 'Optional — links this entry to the client’s company record.';
           status.className = 'hint';
         }
       };
       input.addEventListener('input', syncMatch);
     }).catch(() => {
-      if (root.contains(container)) status.textContent = 'Couldn\u2019t load client companies \u2014 you can still send without linking one.';
+      if (root.contains(container)) status.textContent = 'Couldn’t load client companies — you can still send without linking one.';
     });
   }
 
   // -----------------------------------------------------------------
-  // "Make this a subtask of an existing task"
+  // Task search/picker — shared by:
+  //   "Make this a subtask" (Task forms; optional; single list — the
+  //     parent must be in the same list and not itself a subtask)
+  //   "Follow-up / Reminder" (required; searches every task list in the
+  //     entity, since a comment isn't restricted to one list)
+  // Three UI states re-rendered into #subtask-block only, so the rest of
+  // the form keeps whatever was typed: 'idle' | 'searching' | 'selected'.
+  // Only the selection (state.parentTask*) persists.
   // -----------------------------------------------------------------
-  // Three-state UI, re-rendered into the #subtask-block container
-  // -----------------------------------------------------------------
-  // Task search/picker — shared by two features:
-  //   "Make this a subtask of an existing task" (Task-type forms,
-  //     optional, single-list — ClickUp requires the parent to live
-  //     in the exact same list as the new task)
-  //   "Follow-up / Reminder" (its own capture type, required,
-  //     multi-list — searches every task-schema list in the entity at
-  //     once, since a comment isn't restricted to one specific list)
-  // Three-state UI, re-rendered into the #subtask-block container
-  // (not the whole form) whenever state changes, to avoid disturbing
-  // whatever else the user has already typed elsewhere on the form:
-  //   'idle'      — just a toggle button (skipped entirely when required)
-  //   'searching' — a search box + live-filtered results list
-  //   'selected'  — a summary chip naming the chosen task, + remove
-  // The mode itself isn't stored in `state` (it's pure UI, discarded
-  // on re-render) — only the actual selection (state.parentTaskId /
-  // state.parentTaskName / state.parentTaskUrl) persists, since that's
-  // what submitCapture() needs.
 
   /**
    * renderSubtaskBlock
-   * (Re)renders the #subtask-block container based on current
-   * selection state and the given UI mode.
-   * @param {string[]} listIds - lists to search across (1 for the
-   *   subtask feature, possibly several for Follow-up)
-   * @param {'idle'|'searching'|'selected'} [mode] - defaults to
-   *   'selected' if a task is already chosen, else 'searching' when
-   *   `required` else 'idle'
-   * @param {boolean} [required] - Follow-up passes true: no toggle-off
-   *   state, a task must be chosen before Send will work
-   * @param {boolean} [excludeSubtasks] - the subtask feature passes
-   *   true (ClickUp rejects a parent that's itself a subtask);
-   *   Follow-up passes false (commenting on a subtask is fine)
-   * @param {string} [label] - customizes the toggle/chip wording
-   *   ("subtask" vs "task to follow up on")
+   * @param {string[]} listIds - lists to search across
+   * @param {'idle'|'searching'|'selected'} [mode]
+   * @param {boolean} [required] - Follow-up: no idle state
+   * @param {boolean} [excludeSubtasks] - subtask feature: true
+   * @param {string} [label] - wording ("subtask" / "task to follow up on")
    */
   function renderSubtaskBlock(listIds, mode, required, excludeSubtasks, label) {
     const container = root.querySelector('#subtask-block');
@@ -965,8 +1168,8 @@ const App = (() => {
     // 'searching'
     container.innerHTML = `
       <div class="subtask-panel">
-        ${required ? `<p class="hint">Search for the ${escapeHtml(noun)} \u2014 required.</p>` : ''}
-        <input type="text" id="subtask-search" class="subtask-search" placeholder="Search by name or ID…" autocomplete="off">
+        ${required ? `<p class="hint">Search for the ${escapeHtml(noun)} — required.</p>` : ''}
+        <input type="text" id="subtask-search" class="subtask-search" placeholder="Search by name or ID…" autocomplete="off" aria-label="Search tasks">
         <div id="subtask-results" class="subtask-results">
           <p class="hint">Type at least 2 characters to search.</p>
         </div>
@@ -975,32 +1178,29 @@ const App = (() => {
 
     const searchInput = container.querySelector('#subtask-search');
     const resultsEl = container.querySelector('#subtask-results');
-    searchInput.focus();
+    if (!required) searchInput.focus();
 
     const cancelBtn = container.querySelector('#subtask-cancel');
     if (cancelBtn) cancelBtn.onclick = () => renderSubtaskBlock(listIds, 'idle', required, excludeSubtasks, label);
 
     searchInput.oninput = () => filterAndRenderSubtaskResults(listIds, searchInput.value.trim(), resultsEl, required, excludeSubtasks, label);
 
-    // Kick off the (cached) fetch(es) immediately on opening the
-    // panel, so results appear the instant 2+ characters are typed
-    // rather than waiting on a fetch that starts only once typed.
+    // Start the (cached) fetches now so results appear as soon as 2+
+    // characters are typed.
     Promise.all(listIds.map(loadParentTaskOptions)).catch(() => {
-      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks. ${required ? 'You can still paste an exact task ID above.' : 'You can still send without one.'}</p>`;
+      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn’t load tasks. ${required ? 'You can still paste an exact task ID above.' : 'You can still send without one.'}</p>`;
     });
   }
 
   /**
-   * loadParentTaskOptions
-   * Ensures listTasksCache[listId] is populated (fetching once via
-   * ClickUp.getListTasks if not already cached/in-flight).
+   * loadParentTaskOptions — cached ClickUp.getListTasks per list.
    * @param {string} listId
    * @returns {Promise<object[]>}
    */
   function loadParentTaskOptions(listId) {
     if (!listTasksCache[listId]) {
       listTasksCache[listId] = ClickUp.getListTasks(listId).catch(err => {
-        delete listTasksCache[listId]; // don't cache a failure — allow retry next open
+        delete listTasksCache[listId]; // allow retry
         throw err;
       });
     }
@@ -1009,18 +1209,9 @@ const App = (() => {
 
   /**
    * filterAndRenderSubtaskResults
-   * Filters the cached task list(s) by substring match
-   * (case-insensitive) against name/id/custom_id, renders up to 8
-   * matches as clickable results. Falls back to a direct-by-ID lookup
-   * button when nothing local matches and the query looks like it
-   * could be a task ID — covers lists with more tasks than the single
-   * cached page holds (see getListTasks()'s doc comment).
-   * @param {string[]} listIds
-   * @param {string} query
-   * @param {HTMLElement} resultsEl
-   * @param {boolean} required
-   * @param {boolean} excludeSubtasks - see renderSubtaskBlock's doc
-   * @param {string} label
+   * Substring match (name / id / custom_id) over the cached tasks, up to
+   * 8 results; offers a direct-by-ID lookup when nothing local matches
+   * and the query looks like a task ID.
    */
   async function filterAndRenderSubtaskResults(listIds, query, resultsEl, required, excludeSubtasks, label) {
     if (query.length < 2) {
@@ -1031,7 +1222,7 @@ const App = (() => {
     try {
       taskLists = await Promise.all(listIds.map(loadParentTaskOptions));
     } catch (err) {
-      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn\u2019t load tasks.</p>`;
+      resultsEl.innerHTML = `<p class="hint hint--bad">Couldn’t load tasks.</p>`;
       return;
     }
     let tasks = taskLists.flat();
@@ -1045,15 +1236,12 @@ const App = (() => {
     ).slice(0, 8);
 
     let html = matches.map(t => `
-      <button type="button" class="subtask-result" data-task-id="${t.id}" data-task-name="${escapeHtml(t.name)}" data-task-url="${escapeHtml(t.url || '')}">
+      <button type="button" class="subtask-result" data-task-id="${escapeHtml(t.id)}" data-task-name="${escapeHtml(t.name)}" data-task-url="${escapeHtml(t.url || '')}">
         <span class="subtask-result-name">${escapeHtml(t.name)}</span>
-        <span class="subtask-result-meta">${escapeHtml(t.status && t.status.status || '')}</span>
+        <span class="subtask-result-meta">${escapeHtml((t.status && t.status.status) || '')}</span>
       </button>
     `).join('');
 
-    // Looks plausibly like a ClickUp task ID (short alphanumeric, no
-    // spaces) and nothing local matched — offer to look it up directly
-    // rather than silently coming up empty.
     const looksLikeId = /^[a-z0-9]{6,10}$/i.test(query);
     if (!matches.length && looksLikeId) {
       html += `<button type="button" class="subtask-result subtask-result--lookup" id="subtask-direct-lookup">Look up task "${escapeHtml(query)}" directly</button>`;
@@ -1073,24 +1261,20 @@ const App = (() => {
         try {
           const task = await ClickUp.getTaskById(query);
           if (task && excludeSubtasks && task.parent) {
-            resultsEl.innerHTML = `<p class="hint hint--bad">That task is itself a subtask, so it can\u2019t be used as a parent.</p>`;
+            resultsEl.innerHTML = `<p class="hint hint--bad">That task is itself a subtask, so it can’t be used as a parent.</p>`;
           } else if (task) {
             selectParentTask(listIds, task.id, task.name, task.url, required, excludeSubtasks, label);
           } else {
             resultsEl.innerHTML = `<p class="hint hint--bad">No task found with that ID.</p>`;
           }
         } catch (err) {
-          resultsEl.innerHTML = `<p class="hint hint--bad">Lookup failed \u2014 double-check the ID.</p>`;
+          resultsEl.innerHTML = `<p class="hint hint--bad">Lookup failed — double-check the ID.</p>`;
         }
       };
     }
   }
 
-  /**
-   * selectParentTask
-   * Records the chosen task on `state` and switches the subtask block
-   * into its 'selected' summary view.
-   */
+  /** selectParentTask — records the chosen task and shows the summary chip. */
   function selectParentTask(listIds, taskId, taskName, taskUrl, required, excludeSubtasks, label) {
     state.parentTaskId = taskId;
     state.parentTaskName = taskName;
@@ -1098,11 +1282,12 @@ const App = (() => {
     renderSubtaskBlock(listIds, 'selected', required, excludeSubtasks, label);
   }
 
+  /** renderAttachmentList — pills for state.attachments with remove (×). */
   function renderAttachmentList() {
     const list = root.querySelector('#attachment-list');
     if (!list) return;
     list.innerHTML = state.attachments.map((f, i) => `
-      <span class="attachment-pill">${escapeHtml(f.name)} <button type="button" data-remove="${i}">×</button></span>
+      <span class="attachment-pill">${escapeHtml(f.name)} <button type="button" data-remove="${i}" aria-label="Remove ${escapeHtml(f.name)}">×</button></span>
     `).join('');
     list.querySelectorAll('[data-remove]').forEach(btn => {
       btn.onclick = () => {
@@ -1113,39 +1298,60 @@ const App = (() => {
   }
 
   // ---------------------------------------------------------------
-  // Voice: dictation (speech-to-text into the primary text field)
+  // Voice: dictation (speech-to-text into a text field)
   // ---------------------------------------------------------------
-  function toggleDictate(schema) {
+  /**
+   * toggleDictate
+   * Starts/stops Web Speech dictation into `el`, appending to whatever
+   * is already typed. Fires an 'input' event so drafts auto-save.
+   * @param {HTMLInputElement|HTMLTextAreaElement} el
+   */
+  function toggleDictate(el) {
     const btn = root.querySelector('#dictate-btn');
-    if (recognizer) { stopRecognizer(); btn.classList.remove('active'); return; }
+    if (recognizer) { stopRecognizer(); if (btn) btn.classList.remove('active'); return; }
+    if (!el) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognizer = new SpeechRecognition();
     recognizer.continuous = true;
     recognizer.interimResults = true;
-    recognizer.lang = 'en-US';
+    recognizer.lang = navigator.language || 'en-US';
 
-    const targetField = schema.find(f => f.primary) || schema.find(f => f.type === 'textarea') || schema[0];
-    const el = root.querySelector(`#field-${targetField.key}`);
     const baseText = el.value ? el.value + ' ' : '';
-
     recognizer.onresult = (event) => {
       let transcript = '';
       for (let i = 0; i < event.results.length; i++) transcript += event.results[i][0].transcript;
       el.value = baseText + transcript;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
     };
-    recognizer.onend = () => { btn.classList.remove('active'); recognizer = null; };
-    recognizer.start();
-    btn.classList.add('active');
+    recognizer.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        UI.toast('Dictation needs microphone permission — check your browser settings.', { kind: 'bad' });
+      }
+    };
+    recognizer.onend = () => { if (btn) btn.classList.remove('active'); recognizer = null; };
+    try {
+      recognizer.start();
+      if (btn) btn.classList.add('active');
+    } catch (e) {
+      recognizer = null;
+      UI.toast('Couldn’t start dictation.', { kind: 'bad' });
+    }
   }
 
+  /** stopRecognizer — stops dictation if running (on screen change). */
   function stopRecognizer() {
-    if (recognizer) { try { recognizer.stop(); } catch (e) {} recognizer = null; }
+    if (recognizer) { try { recognizer.stop(); } catch (e) { /* already stopped */ } recognizer = null; }
   }
 
   // ---------------------------------------------------------------
   // Voice: audio recording (attached as a file on submit)
   // ---------------------------------------------------------------
+  /**
+   * toggleRecording
+   * Starts/stops a MediaRecorder voice note; the result is added to
+   * state.attachments as a .webm file.
+   */
   async function toggleRecording() {
     const btn = root.querySelector('#record-btn');
     const indicator = root.querySelector('#recording-indicator');
@@ -1163,8 +1369,10 @@ const App = (() => {
       mediaRecorder = new MediaRecorder(stream);
       mediaRecorder.ondataavailable = (e) => mediaChunks.push(e.data);
       mediaRecorder.onstop = () => {
-        const blob = new Blob(mediaChunks, { type: 'audio/webm' });
-        const file = new File([blob], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' });
+        const mime = mediaRecorder.mimeType || 'audio/webm';
+        const ext = mime.includes('mp4') ? 'm4a' : 'webm';
+        const blob = new Blob(mediaChunks, { type: mime });
+        const file = new File([blob], `voice-note-${Date.now()}.${ext}`, { type: mime });
         state.attachments.push(file);
         renderAttachmentList();
         stream.getTracks().forEach(t => t.stop());
@@ -1180,8 +1388,644 @@ const App = (() => {
         if (label) label.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
       }, 500);
     } catch (err) {
-      alert('Couldn\u2019t access the microphone. Check your browser permissions.');
+      UI.toast('Couldn’t access the microphone. Check your browser permissions.', { kind: 'bad' });
     }
+  }
+
+  // ---------------------------------------------------------------
+  // Screen: Smart capture (#/smart)
+  // ---------------------------------------------------------------
+  /**
+   * renderSmart
+   * The "just say it" screen: one text box (dictation target), optional
+   * business hint chips, voice note + attachments. "Route & Send" asks
+   * Gemini where it goes. Re-entering the screen while a suggestion is
+   * on hand (e.g. back from Review) keeps the text.
+   */
+  function renderSmart() {
+    if (!Routing.isAvailable()) return go('/entity');
+    const keep = smart && smart.text != null ? smart : null;
+    if (!keep) state = { attachments: [], transcript: '', recording: null };
+    smart = keep || { text: '', hint: null, suggestion: null };
+    const speechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+    const recordSupported = !!(navigator.mediaDevices && window.MediaRecorder);
+
+    root.innerHTML = `
+      <header class="topbar">
+        <button class="icon-btn" data-nav="back" aria-label="Back">${icon('back')}</button>
+        <span class="brand">New Capture</span>
+        <span class="icon-btn-spacer"></span>
+      </header>
+      <main class="form smart">
+        <label class="field" for="smart-text"><span>What’s on your mind? <span class="req" aria-hidden="true">*</span></span>
+          <textarea id="smart-text" rows="6" placeholder="Type or dictate — e.g. “Call Jim Friday about the overdue invoice”">${escapeHtml(smart.text)}</textarea>
+        </label>
+        <div class="hint-row" role="group" aria-label="Optional: which business is this for?">
+          <span class="hint-label">Hint</span>
+          ${ENTITIES.map(e => `<button type="button" class="hint-chip${smart.hint === e.name ? ' active' : ''}" style="--tile-color:${e.color}" data-hint="${escapeHtml(e.name)}" aria-pressed="${smart.hint === e.name}">${escapeHtml(e.name)}</button>`).join('')}
+        </div>
+        ${voiceRowHtml(speechSupported, recordSupported, true)}
+        <p class="hint">${icon('spark')} Gemini picks the list, title, dates and priority. Confident captures file themselves (you can undo); anything uncertain asks you first.</p>
+        <div id="form-error"></div>
+      </main>
+      <div class="form-footer">
+        <button class="send-btn" id="route-btn">${icon('spark')} Route &amp; Send</button>
+        <button class="link-btn footer-alt" id="manual-btn">Choose the destination myself</button>
+      </div>
+    `;
+    bindBack();
+    bindAttachmentControls();
+    renderAttachmentList();
+
+    const textEl = root.querySelector('#smart-text');
+    if (!keep) {
+      restoreDraft('/smart', (v) => { textEl.value = v.text || ''; smart.text = textEl.value; }, () => { textEl.value = ''; smart.text = ''; });
+    }
+    textEl.addEventListener('input', () => { smart.text = textEl.value; });
+    watchDraft('/smart', root.querySelector('main'), () => (textEl.value.trim() ? { text: textEl.value } : {}));
+    if (!textEl.value) textEl.focus();
+
+    root.querySelectorAll('[data-hint]').forEach(chip => {
+      chip.onclick = () => {
+        smart.hint = smart.hint === chip.dataset.hint ? null : chip.dataset.hint;
+        root.querySelectorAll('[data-hint]').forEach(c => {
+          const on = c.dataset.hint === smart.hint;
+          c.classList.toggle('active', on);
+          c.setAttribute('aria-pressed', String(on));
+        });
+      };
+    });
+
+    const dictateBtn = root.querySelector('#dictate-btn');
+    if (dictateBtn) dictateBtn.onclick = () => toggleDictate(textEl);
+    root.querySelector('#manual-btn').onclick = () => handOffToManual();
+    root.querySelector('#route-btn').onclick = () => runSmartRoute();
+  }
+
+  /**
+   * handOffToManual
+   * Leaves the smart flow for the manual picker, carrying the text and
+   * attachments so nothing has to be retyped.
+   * @param {string} [message] - optional toast explaining why
+   */
+  function handOffToManual(message) {
+    stopRecognizer();
+    const text = (smart && smart.text || '').trim();
+    carry = text || state.attachments.length
+      ? { text, title: smart && smart.suggestion ? smart.suggestion.title : null, attachments: state.attachments.slice() }
+      : null;
+    Storage.clearDraft();
+    if (message) UI.toast(message, { duration: 6000 });
+    go('/entity');
+  }
+
+  /**
+   * runSmartRoute
+   * Validates, asks the Worker for a suggestion, then either auto-files
+   * (high confidence, no duplicate) or opens the Review screen.
+   * Failure handling: offline → hand off to the manual picker (it can
+   * queue); any other routing failure → inline error with a one-tap
+   * "choose it myself" fallback, text preserved.
+   */
+  async function runSmartRoute() {
+    stopRecognizer();
+    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    const textEl = root.querySelector('#smart-text');
+    const errBox = root.querySelector('#form-error');
+    smart.text = textEl.value;
+    const text = smart.text.trim();
+    if (!text) {
+      UI.markFieldError(textEl, 'Type or dictate something to send.');
+      return;
+    }
+    if (!navigator.onLine) {
+      handOffToManual('You’re offline — pick a destination and it’ll send once you’re back online.');
+      return;
+    }
+    const btn = root.querySelector('#route-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Finding the right list…`;
+    UI.clearFormError(errBox);
+
+    try {
+      const s = await Routing.suggest({ text, hint: smart.hint, attachments: state.attachments.length });
+      smart.suggestion = s;
+      if (s.auto) {
+        btn.innerHTML = `<span class="spinner"></span> Filing to ${escapeHtml(lastSegment(s.list_path))}…`;
+        await commitSmart({ mode: 'create', listId: s.list_id, listPath: s.list_path, values: defaultReviewValues(s) }, 'auto', btn);
+        return;
+      }
+      renderReview();
+    } catch (err) {
+      if (!root.contains(btn)) return; // left the screen meanwhile
+      btn.disabled = false;
+      btn.innerHTML = `${icon('spark')} Route &amp; Send`;
+      if (err.offline) {
+        handOffToManual('You’re offline — pick a destination and it’ll send once you’re back online.');
+        return;
+      }
+      UI.showFormError(errBox, err, { label: 'Choose the destination myself →', onClick: () => handOffToManual() });
+    }
+  }
+
+  /**
+   * defaultReviewValues — title/dates/priority as Gemini proposed them.
+   * @param {object} s - suggestion
+   * @returns {{title, dueDate, startDate, priority}}
+   */
+  function defaultReviewValues(s) {
+    return {
+      title: s.title,
+      dueDate: s.due_date || '',
+      startDate: s.start_date || '',
+      priority: s.priority ? s.priority[0].toUpperCase() + s.priority.slice(1) : ''
+    };
+  }
+
+  /**
+   * renderReview
+   * Confirm screen for uncertain (or duplicate-flagged) suggestions.
+   * Shows: duplicate card (if any) with "Add as update"; the suggested
+   * destination with confidence meter, reason and a "Why N%?" breakdown;
+   * alternatives + "Other list…"; editable title, dates, priority.
+   */
+  function renderReview() {
+    const s = smart.suggestion;
+    if (!s) return renderSmart();
+    smart.review = smart.review || { listId: s.list_id, listPath: s.list_path };
+    const r = smart.review;
+    const v = defaultReviewValues(s);
+    const pct = Math.round((s.confidence || 0) * 100);
+    const dup = s.duplicate;
+    // Options: the suggestion first, then alternatives, then (if the
+    // owner picked something else via the picker) that choice.
+    const options = [];
+    if (s.list_id) options.push({ id: s.list_id, path: s.list_path, conf: s.confidence, top: true });
+    (s.alternatives || []).forEach(a => options.push({ id: a.list_id, path: a.list_path, conf: a.confidence }));
+    if (r.listId && !options.some(o => o.id === r.listId)) options.push({ id: r.listId, path: r.listPath, picked: true });
+
+    root.innerHTML = `
+      <header class="topbar">
+        <button class="icon-btn" id="review-back" aria-label="Back to edit">${icon('back')}</button>
+        <span class="brand">Confirm</span>
+        <span class="icon-btn-spacer"></span>
+      </header>
+      <main class="form review">
+        ${dup ? `
+        <section class="card dup-card" aria-label="Possible duplicate">
+          <span class="eyebrow eyebrow--warn">${icon('copy')} Looks like an existing task</span>
+          <div class="dup-name">${escapeHtml(dup.name)}</div>
+          <div class="dup-meta">${escapeHtml(dup.list_path || '')}${dup.status ? ` · ${escapeHtml(dup.status)}` : ''} · ${Math.round(dup.similarity * 100)}% similar</div>
+          ${dup.reason ? `<p class="dup-reason">${escapeHtml(dup.reason)}</p>` : ''}
+          <div class="dup-actions">
+            <button type="button" class="send-btn send-btn--compact" id="dup-update">${icon('nest')} Add as update</button>
+            <a class="pill-btn" href="${escapeHtml(dup.url)}" target="_blank" rel="noopener">View ${icon('link')}</a>
+          </div>
+          <p class="hint">Adds your note as a comment on that task instead of creating a copy. Or create a new task below.</p>
+        </section>` : ''}
+
+        <section class="card place-card" aria-label="Destination">
+          <div class="place-head">
+            <span class="eyebrow">${s.list_id ? 'Suggested destination' : 'Pick a destination'}</span>
+            ${s.list_id ? confidenceMeter(s.confidence) : ''}
+          </div>
+          ${s.reason ? `<p class="place-reason">${escapeHtml(s.reason)}</p>` : ''}
+          <div class="option-list" role="radiogroup" aria-label="Destination list">
+            ${options.map(o => `
+              <button type="button" role="radio" class="option${o.id === r.listId ? ' selected' : ''}" data-list="${escapeHtml(o.id)}" data-path="${escapeHtml(o.path || '')}" aria-checked="${o.id === r.listId}">
+                <span class="option-path">${o.top ? `<span class="star">★</span>` : ''}${escapeHtml(o.path || o.id)}</span>
+                ${typeof o.conf === 'number' ? `<span class="option-conf">${Math.round(o.conf * 100)}%</span>` : (o.picked ? `<span class="option-conf">your pick</span>` : '')}
+              </button>`).join('')}
+            <button type="button" class="option option--other" id="other-list">${icon('list')} Other list…</button>
+          </div>
+          ${s.factors && s.factors.length ? `
+          <details class="why">
+            <summary>Why ${pct}%?</summary>
+            <ul>${s.factors.map(f => `<li><span>${escapeHtml(f.label)}</span><span class="why-num">${typeof f.value === 'number' ? Math.round(f.value * 100) + '%' : (f.delta > 0 ? '+' : '') + Math.round(f.delta * 100)}</span></li>`).join('')}
+              <li class="why-total"><span>Final</span><span class="why-num">${pct}%</span></li></ul>
+            <p class="hint">Auto-filing needs ${Math.round((s.threshold || 0.85) * 100)}% or more${dup ? ' and no likely duplicate' : ''}. Change this in Settings.</p>
+          </details>` : ''}
+          ${s.duplicate_check === 'failed' ? `<p class="hint">Duplicate check was skipped this time.</p>` : ''}
+        </section>
+
+        <label class="field" for="rv-title">Title
+          <input type="text" id="rv-title" value="${escapeHtml(v.title)}" autocomplete="off">
+        </label>
+        <div class="field-row">
+          <label class="field" for="rv-due">Due date
+            <input type="date" id="rv-due" value="${escapeHtml(v.dueDate)}">
+          </label>
+          <label class="field" for="rv-start">Start date
+            <input type="date" id="rv-start" value="${escapeHtml(v.startDate)}">
+          </label>
+        </div>
+        ${s.date_reason && (v.dueDate || v.startDate) ? `<p class="hint">${icon('calendar')} ${escapeHtml(s.date_reason)}</p>` : ''}
+        <label class="field" for="rv-priority">Priority
+          <select id="rv-priority">
+            ${['', 'Urgent', 'High', 'Normal', 'Low'].map(p => `<option value="${p}"${p === v.priority ? ' selected' : ''}>${p || '—'}</option>`).join('')}
+          </select>
+        </label>
+        ${state.attachments.length ? `<p class="hint">${icon('paperclip')} ${state.attachments.length} attachment${state.attachments.length > 1 ? 's' : ''} will be added.</p>` : ''}
+        <div id="form-error"></div>
+      </main>
+      <div class="form-footer">
+        <button class="send-btn" id="rv-send"${r.listId ? '' : ' disabled'}>${sendLabel(r.listPath, Boolean(dup))}</button>
+      </div>
+    `;
+
+    root.querySelector('#review-back').onclick = () => { smart.review = null; renderSmart(); };
+    root.querySelectorAll('.option[data-list]').forEach(btn => {
+      btn.onclick = () => {
+        r.listId = btn.dataset.list;
+        r.listPath = btn.dataset.path;
+        root.querySelectorAll('.option[data-list]').forEach(b => {
+          const on = b === btn;
+          b.classList.toggle('selected', on);
+          b.setAttribute('aria-checked', String(on));
+        });
+        const send = root.querySelector('#rv-send');
+        send.disabled = false;
+        send.innerHTML = sendLabel(r.listPath, Boolean(dup));
+      };
+    });
+    root.querySelector('#other-list').onclick = async () => {
+      const picked = await pickList();
+      if (!picked) return;
+      r.listId = picked.id;
+      r.listPath = picked.path;
+      captureReviewValues();
+      renderReview();
+      restoreReviewValues();
+    };
+    const dupBtn = root.querySelector('#dup-update');
+    if (dupBtn) {
+      dupBtn.onclick = () => commitSmart({ mode: 'update', taskId: dup.task_id, values: readReviewValues() }, 'confirmed', dupBtn);
+    }
+    root.querySelector('#rv-send').onclick = () => {
+      if (!r.listId) return;
+      commitSmart({ mode: 'create', listId: r.listId, listPath: r.listPath, values: readReviewValues() }, 'confirmed', root.querySelector('#rv-send'));
+    };
+  }
+
+  // Edits survive a re-render of the Review screen (after "Other list…").
+  let reviewEdits = null;
+  /** captureReviewValues — stash the current edits before re-rendering. */
+  function captureReviewValues() { reviewEdits = readReviewValues(); }
+  /** restoreReviewValues — put stashed edits back after re-rendering. */
+  function restoreReviewValues() {
+    if (!reviewEdits) return;
+    const set = (id, val) => { const el = root.querySelector(id); if (el) el.value = val; };
+    set('#rv-title', reviewEdits.title);
+    set('#rv-due', reviewEdits.dueDate);
+    set('#rv-start', reviewEdits.startDate);
+    set('#rv-priority', reviewEdits.priority);
+    reviewEdits = null;
+  }
+  /** readReviewValues — the Review screen's editable fields. */
+  function readReviewValues() {
+    const val = (id) => { const el = root.querySelector(id); return el ? el.value.trim() : ''; };
+    return { title: val('#rv-title'), dueDate: val('#rv-due'), startDate: val('#rv-start'), priority: val('#rv-priority') };
+  }
+
+  /** sendLabel — footer button text for the chosen list. */
+  function sendLabel(path, hasDup) {
+    if (!path) return 'Pick a destination';
+    return `${hasDup ? 'Create new in' : 'Send to'} ${escapeHtml(lastSegment(path))}`;
+  }
+
+  /**
+   * confidenceMeter — small bar + percentage, colored by band.
+   * @param {number} c - 0..1
+   * @returns {string} HTML
+   */
+  function confidenceMeter(c) {
+    const pct = Math.round((c || 0) * 100);
+    const band = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : 'low';
+    return `<span class="conf conf--${band}" aria-label="${pct}% confident"><span class="conf-bar"><i style="width:${pct}%"></i></span>${pct}%</span>`;
+  }
+
+  /**
+   * commitSmart
+   * Sends a smart capture through the Worker (/route/commit), then does
+   * the client-side follow-ups: attachments, chat log, Recent, toast.
+   * @param {object} d
+   * @param {'create'|'update'} d.mode
+   * @param {string} [d.listId] / [d.listPath] - create mode
+   * @param {string} [d.taskId] - update mode (the duplicate)
+   * @param {{title, dueDate, startDate, priority}} d.values
+   * @param {'auto'|'confirmed'} source
+   * @param {HTMLButtonElement} [btn] - button to show progress on
+   * Failure: stays on (or opens) the Review screen with an inline error;
+   *   an "unknown outcome" timeout says to check Activity before
+   *   retrying, since the task may exist already.
+   */
+  async function commitSmart(d, source, btn) {
+    const s = smart.suggestion;
+    const title = d.values.title || s.title || truncate(smart.text, 80);
+    const pct = Math.round((s.confidence || 0) * 100);
+    const dest = destinationMeta(d.mode === 'update' ? (s.duplicate && s.duplicate.list_id) : d.listId, d.mode === 'update' ? (s.duplicate && s.duplicate.list_path) : d.listPath);
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      action: d.mode === 'update' ? 'update' : 'task',
+      entityName: dest.entityName,
+      color: dest.color,
+      typeLabel: dest.label,
+      listId: d.listId || null,
+      fields: { title, description: smart.text.trim(), dueDate: d.values.dueDate, startDate: d.values.startDate, priority: d.values.priority },
+      title,
+      createdAt: Date.now(),
+      parentTaskId: d.mode === 'update' ? d.taskId : null,
+      parentTaskName: d.mode === 'update' && s.duplicate ? s.duplicate.name : null,
+      parentTaskUrl: d.mode === 'update' && s.duplicate ? s.duplicate.url : null,
+      routing: { source, confidence: s.confidence, moved: d.mode === 'create' && d.listId !== s.list_id },
+      routingFooter: `— Filed by ${APP_NAME} smart routing · ${pct}% · ${source === 'auto' ? 'auto-filed' : (d.listId && d.listId !== s.list_id ? 'destination chosen by you' : 'confirmed by you')}`
+    };
+    const body = {
+      decision: d.mode === 'update' ? { mode: 'update', task_id: d.taskId } : { mode: 'create', list_id: d.listId },
+      source,
+      suggestion: s,
+      capture: { title, text: smart.text.trim() },
+      attachments_count: state.attachments.length,
+      list_label: d.listPath || null
+    };
+    if (d.mode === 'update') {
+      body.comment_text = [
+        `🔁 Update via ${APP_NAME}`,
+        title,
+        smart.text.trim() !== title ? smart.text.trim() : '',
+        d.values.dueDate ? `Suggested due date: ${d.values.dueDate}` : ''
+      ].filter(Boolean).join('\n\n');
+    } else {
+      body.payload = ClickUp.buildTaskPayload(entry);
+    }
+
+    const label = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Sending…`; }
+    try {
+      const res = await Routing.commit(body);
+      entry.auditId = res.audit_id;
+      entry.taskId = res.task && res.task.id;
+      entry.clickupUrl = (res.task && res.task.url) || (entry.taskId ? `https://app.clickup.com/t/${entry.taskId}` : null);
+      const attachTo = d.mode === 'update' ? d.taskId : entry.taskId;
+      const files = state.attachments.slice();
+      // Attachments + chat log run after we've left the screen; failures
+      // there never undo the capture (same policy as the manual path).
+      (async () => {
+        for (const file of files) await ClickUp.uploadAttachment(attachTo, file).catch(() => {});
+        if (entry.clickupUrl) ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
+      })();
+      Storage.addRecent(entry);
+      Storage.clearDraft();
+      UI.vibrate();
+      smart = null;
+      state.attachments = [];
+      go('/home');
+      const where = d.mode === 'update' ? `Added as an update to “${truncate(entry.parentTaskName || 'task', 40)}”` : `${source === 'auto' ? 'Auto-filed' : 'Filed'} to ${dest.label} · ${pct}%`;
+      UI.toast(where, { kind: 'good', action: { label: 'Undo', onClick: () => undoEntry(entry) } });
+    } catch (err) {
+      if (source === 'auto') {
+        // Auto-file failed — show the Review screen so the owner can
+        // decide, with the error explained there.
+        renderReview();
+      } else if (btn && root.contains(btn)) {
+        btn.disabled = false;
+        btn.innerHTML = label;
+      }
+      const box = root.querySelector('#form-error');
+      if (err.outcome === 'unknown') {
+        UI.showFormError(box, `${err.timeout ? 'ClickUp answered too slowly' : 'The connection dropped before the server confirmed'}, so this may or may not have been created. Check Activity before sending again.`, { label: 'Open Activity', onClick: () => go('/activity') });
+      } else {
+        UI.showFormError(box, err);
+      }
+    }
+  }
+
+  /**
+   * destinationMeta
+   * Display info (tag text, color, short label) for a list, using the
+   * owner's configured entity when the list is one of theirs.
+   * @param {string} listId
+   * @param {string} listPath - "Space › Folder › List"
+   * @returns {{entityName: string, color: string, label: string}}
+   */
+  function destinationMeta(listId, listPath) {
+    const known = getRoutableDestinations().find(k => k.list_id === listId);
+    if (known) {
+      const entity = ENTITIES.find(e => e.id === known.entityId);
+      return { entityName: known.entity, color: entity ? entity.color : '#E8A33D', label: known.label };
+    }
+    const parts = String(listPath || '').split(' › ');
+    const space = parts[0] || '';
+    const entity = ENTITIES.find(e => e.name.toLowerCase() === space.toLowerCase());
+    return { entityName: space || 'ClickUp', color: entity ? entity.color : '#E8A33D', label: parts[parts.length - 1] || 'List' };
+  }
+
+  /**
+   * undoEntry
+   * Undo from a toast or Recent: reverses via the audit log, marks the
+   * Recent entry undone, and reports what happened (incl. anything that
+   * couldn't be reversed, e.g. attachments on an existing task).
+   * @param {object} entry - must carry auditId
+   */
+  async function undoEntry(entry) {
+    if (!entry.auditId) {
+      UI.toast('This one can’t be undone automatically — remove it in ClickUp.', { kind: 'bad' });
+      return;
+    }
+    try {
+      const res = await Routing.undo(entry.auditId);
+      Storage.patchRecent(entry.id, { undone: true });
+      UI.toast((res.notes && res.notes[0]) || 'Undone.', { kind: 'good', duration: 6000 });
+      if (res.notes && res.notes.length > 1) setTimeout(() => UI.toast(res.notes.slice(1).join(' '), { duration: 7000 }), 6200);
+      if (!currentRoute()[0] || currentRoute()[0] === 'home') renderHome();
+    } catch (err) {
+      // 409 means either "already undone" or a safety refusal (task has
+      // subtasks / was edited since) — the server's message says which.
+      if (err.status === 409 && /already undone/i.test(err.serverMessage || '')) {
+        Storage.patchRecent(entry.id, { undone: true });
+        UI.toast('That was already undone.');
+        return;
+      }
+      UI.toast(err.status === 409 && err.serverMessage ? err.serverMessage : `Couldn’t undo: ${UI.describeError(err).message}`, { kind: 'bad', duration: 9000 });
+    }
+  }
+
+  /**
+   * pickList
+   * Searchable picker over every list (synced catalog + configured
+   * destinations). Used by "Other list…" on the Review screen.
+   * @returns {Promise<{id: string, path: string}|null>} null if dismissed
+   */
+  function pickList() {
+    const catalog = Storage.getCatalog();
+    const byId = new Map();
+    getRoutableDestinations().forEach(k => byId.set(k.list_id, { id: k.list_id, path: `${k.entity} › ${k.label}`, known: true }));
+    ((catalog && catalog.lists) || []).forEach(l => {
+      if (ROUTING_EXCLUDED_LIST_IDS.includes(l.id)) return;
+      const existing = byId.get(l.id);
+      byId.set(l.id, { id: l.id, path: l.path, known: Boolean(existing) });
+    });
+    const all = [...byId.values()].sort((a, b) => (b.known - a.known) || a.path.localeCompare(b.path));
+
+    return new Promise((resolve) => {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'sheet-backdrop';
+      backdrop.innerHTML = `
+        <div class="sheet sheet--tall" role="dialog" aria-modal="true" aria-label="Choose a list">
+          <div class="sheet-grip"></div>
+          <h2 class="sheet-title">Choose a list</h2>
+          <input type="search" class="subtask-search" id="pick-search" placeholder="Search ${all.length} lists…" autocomplete="off" aria-label="Search lists">
+          <div class="pick-results" id="pick-results"></div>
+          ${catalog ? '' : `<p class="hint">Only your configured lists are shown — run Settings → Sync workspace to see every ClickUp list.</p>`}
+          <div class="sheet-actions"><button type="button" class="sheet-btn sheet-btn--secondary" id="pick-cancel">Cancel</button></div>
+        </div>`;
+      const close = (value) => { backdrop.remove(); resolve(value); };
+      const results = backdrop.querySelector('#pick-results');
+      const draw = (q) => {
+        const query = q.trim().toLowerCase();
+        const shown = (query ? all.filter(l => l.path.toLowerCase().includes(query)) : all).slice(0, 60);
+        results.innerHTML = shown.length
+          ? shown.map(l => `<button type="button" class="subtask-result" data-id="${escapeHtml(l.id)}" data-path="${escapeHtml(l.path)}"><span class="subtask-result-name">${escapeHtml(l.path)}</span>${l.known ? `<span class="subtask-result-meta">yours</span>` : ''}</button>`).join('')
+          : `<p class="hint">No lists match.</p>`;
+        results.querySelectorAll('[data-id]').forEach(b => { b.onclick = () => close({ id: b.dataset.id, path: b.dataset.path }); });
+      };
+      backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
+      backdrop.querySelector('#pick-cancel').onclick = () => close(null);
+      const search = backdrop.querySelector('#pick-search');
+      search.oninput = () => draw(search.value);
+      document.body.appendChild(backdrop);
+      draw('');
+      search.focus();
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // Screen: Activity (#/activity) — the audit log
+  // ---------------------------------------------------------------
+  /**
+   * renderActivity
+   * Every send from every device (server audit log), newest first, with
+   * how it was decided and one-tap Undo (two taps: Undo → Confirm).
+   * This device's sends from the last few minutes are merged in from
+   * Recent, because KV listings can lag new records by up to a minute.
+   */
+  async function renderActivity() {
+    root.innerHTML = `
+      <header class="topbar">
+        <button class="icon-btn" data-nav="back" aria-label="Back">${icon('back')}</button>
+        <span class="brand">Activity</span>
+        <button class="icon-btn" id="activity-refresh" aria-label="Refresh">${icon('refresh')}</button>
+      </header>
+      <main class="picker activity">
+        <div id="activity-summary"></div>
+        <ul class="activity-list" id="activity-list"><li class="hint">Loading…</li></ul>
+        <button class="pill-btn pill-btn--block hidden" id="activity-more">Load more</button>
+      </main>`;
+    bindBack();
+    root.querySelector('#activity-refresh').onclick = () => renderActivity();
+    const listEl = root.querySelector('#activity-list');
+    const moreBtn = root.querySelector('#activity-more');
+
+    const s = Routing.cachedStatus();
+    if (s && s.accuracy && s.accuracy.suggested) {
+      const a = s.accuracy;
+      root.querySelector('#activity-summary').innerHTML = `
+        <div class="card stat-card">
+          <div><span class="stat-num">${a.pct}%</span><span class="stat-label">suggestions kept</span></div>
+          <div><span class="stat-num">${a.auto}</span><span class="stat-label">auto-filed</span></div>
+          <div><span class="stat-num">${a.undone}</span><span class="stat-label">undone</span></div>
+        </div>`;
+    }
+
+    let cursor = null;
+    const seen = new Set();
+    const load = async (first) => {
+      try {
+        const page = await Routing.activity(cursor);
+        let items = page.items || [];
+        if (first) {
+          // Fresh local sends not yet visible in the KV listing.
+          const fresh = Storage.getRecent()
+            .filter(r => r.auditId && Date.now() - r.createdAt < 3 * 60 * 1000 && !items.some(i => i.id === r.auditId))
+            .map(r => ({ id: r.auditId, ts: r.createdAt, kind: r.action === 'task' ? 'create_task' : 'add_comment', source: r.routing ? r.routing.source : 'manual', confidence: r.routing ? r.routing.confidence : null, title: r.title, list_path: r.typeLabel, task_url: r.clickupUrl, reversed: Boolean(r.undone), duplicate: r.action === 'update' }));
+          items = [...fresh, ...items];
+          listEl.innerHTML = '';
+        }
+        items.filter(i => !seen.has(i.id)).forEach(i => { seen.add(i.id); listEl.insertAdjacentHTML('beforeend', activityItemHtml(i)); });
+        if (!listEl.children.length) listEl.innerHTML = `<li class="empty">No activity yet. Sends from every device show up here.</li>`;
+        cursor = page.cursor;
+        moreBtn.classList.toggle('hidden', !cursor);
+        bindActivityButtons(listEl);
+      } catch (err) {
+        if (first) listEl.innerHTML = '';
+        listEl.insertAdjacentHTML('beforeend', `<li class="hint hint--bad">${escapeHtml(UI.describeError(err).message)}</li>`);
+      }
+    };
+    moreBtn.onclick = () => load(false);
+    load(true);
+  }
+
+  /**
+   * activityItemHtml — one audit entry row.
+   * @param {object} i - listing item from /audit
+   * @returns {string}
+   */
+  function activityItemHtml(i) {
+    const pct = typeof i.confidence === 'number' ? Math.round(i.confidence * 100) : null;
+    const src = i.source === 'auto' ? `<span class="badge badge--auto">Auto${pct != null ? ` ${pct}%` : ''}</span>`
+      : i.source === 'confirmed' ? `<span class="badge badge--info">Confirmed${pct != null ? ` ${pct}%` : ''}</span>`
+      : `<span class="badge badge--muted">Manual</span>`;
+    const kind = i.kind === 'add_comment' ? `<span class="badge badge--info">${i.duplicate ? 'Update' : 'Comment'}</span>` : '';
+    return `
+      <li class="activity-item${i.reversed ? ' activity-item--undone' : ''}" data-id="${escapeHtml(i.id)}">
+        <div class="activity-main">
+          <span class="activity-title">${escapeHtml(i.title || '(untitled)')}</span>
+          <span class="activity-meta">${escapeHtml(i.list_path || '')}${i.moved ? ' · moved by you' : ''} · ${escapeHtml(UI.relativeTime(i.ts))}</span>
+          <span class="activity-badges">${src}${kind}${i.reversed ? '<span class="badge badge--muted">Undone</span>' : ''}</span>
+        </div>
+        <div class="activity-actions">
+          ${i.task_url && !i.reversed ? `<a class="icon-btn" href="${escapeHtml(i.task_url)}" target="_blank" rel="noopener" aria-label="Open in ClickUp">${icon('link')}</a>` : ''}
+          ${i.reversed ? '' : `<button class="pill-btn pill-btn--small" data-undo="${escapeHtml(i.id)}">Undo</button>`}
+        </div>
+      </li>`;
+  }
+
+  /**
+   * bindActivityButtons
+   * Two-tap Undo: first tap arms ("Confirm?", 4s), second performs it.
+   * Avoids a blocking confirm() while still preventing accidental undos.
+   * @param {HTMLElement} listEl
+   */
+  function bindActivityButtons(listEl) {
+    listEl.querySelectorAll('[data-undo]').forEach(btn => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.onclick = async () => {
+        if (!btn.classList.contains('armed')) {
+          btn.classList.add('armed');
+          btn.textContent = 'Confirm?';
+          setTimeout(() => { if (btn.isConnected && btn.classList.contains('armed')) { btn.classList.remove('armed'); btn.textContent = 'Undo'; } }, 4000);
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Undoing…';
+        try {
+          const res = await Routing.undo(btn.dataset.undo);
+          const recent = Storage.getRecent().find(r => r.auditId === btn.dataset.undo);
+          if (recent) Storage.patchRecent(recent.id, { undone: true });
+          const li = btn.closest('.activity-item');
+          li.classList.add('activity-item--undone');
+          li.querySelector('.activity-badges').insertAdjacentHTML('beforeend', '<span class="badge badge--muted">Undone</span>');
+          btn.remove();
+          UI.toast((res.notes || []).join(' ') || 'Undone.', { kind: 'good', duration: 7000 });
+        } catch (err) {
+          btn.disabled = false;
+          btn.classList.remove('armed');
+          btn.textContent = 'Undo';
+          UI.toast(err.status === 409 && err.serverMessage ? err.serverMessage : `Couldn’t undo: ${UI.describeError(err).message}`, { kind: 'bad', duration: 9000 });
+        }
+      };
+    });
   }
 
   // ---------------------------------------------------------------
@@ -1189,30 +2033,15 @@ const App = (() => {
   // ---------------------------------------------------------------
   /**
    * renderSettings
-   * Shows connection status to ClickUp and a "Connect to ClickUp"
-   * button that starts the OAuth handshake (see config.js
-   * buildClickUpAuthorizeUrl() and worker/clickup-proxy.js
-   * handleOAuthCallback()).
-   *
-   * Status is checked live, every time this screen opens (not only
-   * right after the OAuth redirect) — earlier versions only showed a
-   * "Connected ✓" banner driven by the ?connected=1 query param from
-   * the redirect, so a normal reload or a second device showed no
-   * status at all even though the connection was genuinely working
-   * server-side. refreshConnectionStatus() now always re-checks.
-   *
-   * The transient ?connected=1 / ?connect_error=... banners (from the
-   * Worker's redirect) are still shown when present, layered above
-   * the live-checked line, since they carry information the live
-   * check can't (e.g. *why* a connect attempt just failed).
-   *
-   * The "Proxy Worker URL" field is left editable for advanced use
-   * (e.g. pointing at a second/test Worker) even though it's
-   * pre-filled from DEFAULT_PROXY_URL — but changing it here does NOT
-   * change where ClickUp's OAuth redirect goes (that's fixed to
-   * OAUTH_REDIRECT_URI, matching what's registered in ClickUp's app
-   * settings), so an edited value only affects normal capture
-   * requests, not the connect flow itself.
+   * Three sections:
+   *   ClickUp connection — live status (re-checked on every open, not
+   *     only after the OAuth redirect) + Connect button.
+   *   Smart routing — status, auto-file switch/threshold, duplicate
+   *     sensitivity, sync, task index, live updates (see
+   *     renderRoutingSettings).
+   *   This device — proxy URL override (advanced) and "Forget passcode".
+   * The ?connected=1 / ?connect_error=... banners from the Worker's
+   * OAuth redirect are still shown when present.
    */
   function renderSettings() {
     const settings = Storage.getSettings();
@@ -1226,58 +2055,69 @@ const App = (() => {
         <span class="brand">Settings</span>
         <span class="icon-btn-spacer"></span>
       </header>
-      <main class="form">
-        <div class="connect-status" id="connect-status">
-          ${justConnected ? '<p class="hint hint--good">Just connected to ClickUp ✓</p>' : ''}
-          ${connectError ? `<p class="hint hint--bad">Couldn\u2019t connect: ${escapeHtml(connectError)}</p>` : ''}
-          <p class="hint" id="live-status">Checking connection…</p>
-        </div>
+      <main class="form settings">
+        <section class="settings-section">
+          <h2 class="section-title">ClickUp</h2>
+          <div class="connect-status" id="connect-status">
+            ${justConnected ? '<p class="hint hint--good">Just connected to ClickUp ✓</p>' : ''}
+            ${connectError ? `<p class="hint hint--bad">Couldn’t connect: ${escapeHtml(connectError)}</p>` : ''}
+            <p class="hint" id="live-status">Checking connection…</p>
+          </div>
+          <div class="btn-row">
+            <button class="pill-btn pill-btn--accent" id="connect-btn">${icon('link')} Connect to ClickUp</button>
+            <button class="pill-btn" id="test-connection">Re-check</button>
+          </div>
+          <p class="hint">Opens ClickUp’s own approval screen. The access token is stored on the server, never on this device — connect once and every device works.</p>
+        </section>
 
-        <button class="pill-btn pill-btn--wide" id="connect-btn">${icon('link')} Connect to ClickUp</button>
-        <p class="hint">Opens ClickUp\u2019s own approval screen. Dispatch only ever talks to ClickUp through the Worker proxy \u2014 your access token is stored there, never on this device.</p>
+        <section class="settings-section" id="routing-section">
+          <h2 class="section-title">${icon('spark')} Smart routing</h2>
+          <div id="routing-body"><p class="hint">Loading…</p></div>
+        </section>
 
-        <button class="pill-btn" id="test-connection">Re-check connection</button>
-
-        <label class="field" for="proxy-url">Proxy Worker URL <span class="field-optional">(advanced)</span>
-          <input type="url" id="proxy-url" placeholder="https://your-worker.your-subdomain.workers.dev" value="${settings.proxyUrl || ''}">
-        </label>
+        <section class="settings-section">
+          <h2 class="section-title">This device</h2>
+          <label class="field" for="proxy-url">Proxy Worker URL <span class="field-optional">(advanced)</span>
+            <input type="url" id="proxy-url" placeholder="https://your-worker.your-subdomain.workers.dev" value="${escapeHtml(settings.proxyUrl || '')}">
+          </label>
+          <div class="btn-row">
+            <button class="pill-btn" id="save-settings">Save URL</button>
+            <button class="pill-btn pill-btn--danger" id="forget-passcode">${icon('lock')} Forget passcode on this device</button>
+          </div>
+        </section>
       </main>
-      <div class="form-footer">
-        <button class="send-btn" id="save-settings">Save</button>
-      </div>
     `;
     bindBack();
 
     root.querySelector('#connect-btn').onclick = () => {
-      // Full-page navigation (not fetch) — ClickUp needs to show its
-      // own UI and set its own cookies, so this can't happen inside
-      // an iframe/XHR. The browser leaves the app here and comes back
-      // via the Worker's redirect once the user approves or declines.
+      // Full-page navigation — ClickUp shows its own UI; the Worker's
+      // redirect brings the browser back here afterwards.
       window.location.href = buildClickUpAuthorizeUrl();
     };
-
     root.querySelector('#save-settings').onclick = () => {
       Storage.saveSettings({ proxyUrl: root.querySelector('#proxy-url').value.trim() });
-      go('/home');
-    };
-
-    root.querySelector('#test-connection').onclick = () => {
-      Storage.saveSettings({ proxyUrl: root.querySelector('#proxy-url').value.trim() });
+      UI.toast('Saved.', { kind: 'good' });
       refreshConnectionStatus();
     };
+    root.querySelector('#test-connection').onclick = () => refreshConnectionStatus();
+    root.querySelector('#forget-passcode').onclick = async () => {
+      const ok = await UI.sheet({
+        title: 'Forget the passcode on this device?',
+        html: '<p>You’ll need to enter it again to use Dispatch It here. Other devices aren’t affected.</p>',
+        actions: [{ label: 'Forget passcode', value: true, kind: 'danger' }, { label: 'Cancel', value: false }]
+      });
+      if (!ok) return;
+      Storage.clearDeviceKey();
+      renderLock();
+    };
 
-    // Always re-check on open — see the function doc comment above
-    // for why this replaced the old "only after redirect" behavior.
     refreshConnectionStatus();
+    renderRoutingSettings();
   }
 
   /**
    * refreshConnectionStatus
-   * Pings the Worker's /user endpoint and updates the #live-status
-   * line in Settings with a plain-language, current read of where
-   * things stand. Distinguishes failure kinds via the thrown error's
-   * `.status` (see clickup.js testConnection()) so the message is
-   * actually actionable rather than a generic "could not connect".
+   * Pings /user and shows a plain-language connection line.
    */
   async function refreshConnectionStatus() {
     const el = root.querySelector('#live-status');
@@ -1286,56 +2126,206 @@ const App = (() => {
     el.className = 'hint';
     try {
       const user = await ClickUp.testConnection();
-      el.textContent = `Connected as ${user.user ? user.user.username : 'ClickUp user'} ✓`;
+      if (!root.contains(el)) return;
+      el.textContent = `Connected as ${user && user.user ? user.user.username : 'ClickUp user'} ✓`;
       el.className = 'hint hint--good';
     } catch (err) {
-      if (err.status === 401) {
-        el.textContent = 'Not connected to ClickUp yet \u2014 tap \u201cConnect to ClickUp\u201d above.';
-      } else if (err.status === 403) {
-        el.textContent = 'This device\u2019s passcode was rejected. Reload the app to re-enter it.';
-      } else {
-        el.textContent = 'Couldn\u2019t reach the proxy \u2014 check your internet connection.';
-      }
+      if (!root.contains(el)) return;
+      el.textContent = UI.describeError(err).message;
       el.className = 'hint hint--bad';
     }
   }
 
+  /**
+   * renderRoutingSettings
+   * Fills #routing-body from /routing/status: what's set up, freshness,
+   * thresholds, and the sync / index / live-update controls. Every
+   * control saves immediately (shared across all devices via the
+   * Worker) and re-renders this section.
+   */
+  async function renderRoutingSettings() {
+    const body = root.querySelector('#routing-body');
+    if (!body) return;
+    let s;
+    try {
+      s = await Routing.status();
+    } catch (err) {
+      if (root.contains(body)) body.innerHTML = `<p class="hint hint--bad">${escapeHtml(UI.describeError(err).message)}</p>`;
+      return;
+    }
+    if (!root.contains(body)) return;
+    if (s.index) Routing.lists().catch(() => {});
+
+    const st = s.settings || {};
+    const ago = (ts) => ts ? UI.relativeTime(ts) : 'never';
+    const line = (ok, text) => `<li class="status-line status-line--${ok === true ? 'good' : ok === false ? 'bad' : 'warn'}">${text}</li>`;
+    const webhook = s.webhook || {};
+    const lines = [
+      s.gemini.configured
+        ? line(true, `Gemini connected · <code>${escapeHtml(s.gemini.model)}</code>`)
+        : line(false, 'Gemini not set up — add the <code>GEMINI_API_KEY</code> secret on the Worker (see README → Smart routing).'),
+      s.index
+        ? line(true, `${s.index.lists} lists in ${s.index.spaces} spaces · synced ${ago(s.index.synced_at)}${s.sync.fields && s.sync.fields.done < s.sync.fields.total ? ` · field names ${s.sync.fields.done}/${s.sync.fields.total}` : ''}`)
+        : line(null, 'Workspace not synced yet — tap “Sync workspace”. Until then, routing uses your configured lists only.'),
+      !s.vectors.available
+        ? line(null, 'Duplicate detection off — the Vectorize index isn’t set up on the Worker.')
+        : (s.sync.tasks_indexed_through
+          ? line(true, `Task index built${typeof s.vectors.count === 'number' ? ` · ${s.vectors.count.toLocaleString()} open tasks` : ''}`)
+          : line(null, 'Task index not built — tap “Build task index” to turn on duplicate detection.')),
+      webhook.enabled
+        ? line(webhook.health === 'active' || webhook.health === 'unknown', `Live updates ${webhook.health === 'active' ? 'on' : escapeHtml(webhook.health || 'on')}${webhook.fail_count ? ` (${webhook.fail_count} failed deliveries)` : ''}`)
+        : line(null, 'Live updates off — changes in ClickUp are picked up every 15 minutes instead.'),
+      s.accuracy && s.accuracy.suggested
+        ? line(true, `${s.accuracy.pct}% of ${s.accuracy.suggested} suggestions kept · ${s.accuracy.auto} auto-filed · ${s.accuracy.undone} undone`)
+        : ''
+    ];
+    if (s.sync.last_error) lines.push(line(false, `Last sync error (${ago(s.sync.last_error.at)}): ${escapeHtml(s.sync.last_error.message)}`));
+
+    const seg = (id, options, current) => `
+      <div class="segmented" id="${id}">
+        ${options.map(o => `<button type="button" class="segmented-btn${Math.abs(o.v - current) < 0.001 ? ' active' : ''}" data-v="${o.v}">${o.label}</button>`).join('')}
+      </div>`;
+
+    body.innerHTML = `
+      <ul class="status-list">${lines.join('')}</ul>
+      <div class="toggle-row">
+        <span>Auto-file when confident</span>
+        <button type="button" class="switch${st.auto_enabled ? ' on' : ''}" role="switch" aria-checked="${Boolean(st.auto_enabled)}" id="auto-toggle" aria-label="Auto-file when confident"><span></span></button>
+      </div>
+      ${seg('threshold-seg', [{ label: 'Cautious 92%', v: 0.92 }, { label: 'Balanced 85%', v: 0.85 }, { label: 'Bold 75%', v: 0.75 }], st.auto_threshold)}
+      <p class="hint">Below the threshold — or whenever a likely duplicate is found — you’re always asked first. Every auto-filed capture can be undone from Activity.</p>
+      <div class="field-label">Duplicate check on manual sends</div>
+      ${seg('dup-seg', [{ label: 'Strict', v: 0.93 }, { label: 'Normal', v: 0.9 }, { label: 'Loose', v: 0.86 }], st.dup_threshold)}
+      <p class="hint">How similar an open task must be before a manual send asks “update this instead?”. Loose catches more, but asks more often.</p>
+      <div class="btn-row">
+        <button class="pill-btn" id="sync-now">${icon('refresh')} Sync workspace</button>
+        <button class="pill-btn" id="build-index"${s.vectors.available && s.gemini.configured ? '' : ' disabled'}>${icon('list')} ${s.sync.tasks_indexed_through ? 'Rebuild' : 'Build'} task index</button>
+        <button class="pill-btn" id="webhook-btn">${webhook.enabled && webhook.health !== 'suspended' ? 'Turn off live updates' : (webhook.enabled ? 'Re-enable live updates' : 'Turn on live updates')}</button>
+      </div>
+      <p class="hint" id="sync-progress" aria-live="polite"></p>
+    `;
+
+    root.querySelector('#auto-toggle').onclick = () => saveRoutingSetting({ auto_enabled: !st.auto_enabled });
+    root.querySelectorAll('#threshold-seg [data-v]').forEach(b => { b.onclick = () => saveRoutingSetting({ auto_threshold: Number(b.dataset.v) }); });
+    root.querySelectorAll('#dup-seg [data-v]').forEach(b => { b.onclick = () => saveRoutingSetting({ dup_threshold: Number(b.dataset.v) }); });
+
+    const progress = root.querySelector('#sync-progress');
+    const lockButtons = (on) => root.querySelectorAll('#routing-body .btn-row .pill-btn').forEach(b => { if (on) { b.dataset.wasDisabled = b.disabled ? '1' : ''; b.disabled = true; } else { b.disabled = b.dataset.wasDisabled === '1'; } });
+
+    root.querySelector('#sync-now').onclick = async () => {
+      lockButtons(true);
+      progress.textContent = 'Syncing workspace…';
+      try {
+        await Routing.syncNow((r) => {
+          if (!root.contains(progress)) return;
+          progress.textContent = r.phase === 'hierarchy' ? `Found ${r.lists} lists in ${r.spaces} spaces…`
+            : r.phase === 'fields' ? `Reading custom fields… ${r.done}/${r.total}`
+            : r.phase === 'tasks' ? `Checking recently changed tasks… (${r.changed || 0})`
+            : 'Up to date.';
+        });
+        await Routing.lists().catch(() => {});
+        UI.toast('Workspace synced.', { kind: 'good' });
+        renderRoutingSettings();
+      } catch (err) {
+        lockButtons(false);
+        progress.textContent = UI.describeError(err).message;
+      }
+    };
+
+    root.querySelector('#build-index').onclick = async () => {
+      lockButtons(true);
+      const cancel = { cancelled: false };
+      progress.textContent = 'Reading open tasks from ClickUp…';
+      try {
+        const res = await Routing.buildTaskIndex((p) => {
+          if (!root.contains(progress)) { cancel.cancelled = true; return; }
+          progress.textContent = p.waiting
+            ? `Gemini rate limit — pausing 20s… (${p.indexed} indexed so far)`
+            : `Indexed ${p.indexed} open tasks… (page ${p.page + 1})`;
+        }, cancel);
+        if (!res.cancelled) UI.toast(`Task index built — ${res.indexed} open tasks.`, { kind: 'good' });
+        if (root.contains(progress)) renderRoutingSettings();
+      } catch (err) {
+        lockButtons(false);
+        if (root.contains(progress)) progress.textContent = `Stopped: ${UI.describeError(err).message} (progress so far is kept — tap again to continue).`;
+      }
+    };
+
+    root.querySelector('#webhook-btn').onclick = async () => {
+      const turningOff = webhook.enabled && webhook.health !== 'suspended';
+      lockButtons(true);
+      progress.textContent = turningOff ? 'Turning off live updates…' : 'Registering with ClickUp…';
+      try {
+        await Routing.setWebhook(turningOff ? 'disable' : 'enable');
+        UI.toast(turningOff ? 'Live updates off.' : 'Live updates on — new lists and task changes sync within seconds.', { kind: 'good' });
+        renderRoutingSettings();
+      } catch (err) {
+        lockButtons(false);
+        progress.textContent = UI.describeError(err).message;
+      }
+    };
+  }
+
+  /**
+   * saveRoutingSetting — saves one shared setting and refreshes the section.
+   * @param {object} patch
+   */
+  async function saveRoutingSetting(patch) {
+    try {
+      await Routing.saveSettings(patch);
+      renderRoutingSettings();
+    } catch (err) {
+      UI.toast(`Couldn’t save: ${UI.describeError(err).message}`, { kind: 'bad' });
+    }
+  }
+
   // ---------------------------------------------------------------
-  // Submit flow
+  // Submit flow (manual path)
   // ---------------------------------------------------------------
   /**
    * collectFields
-   * Reads the current form's input values into a plain object, keyed
-   * by field key. Also picks up #field-assigneeId if present — that
-   * field is rendered outside the schema array (see renderForm), since
-   * its options are fetched dynamically rather than fixed per type.
-   * @param {object[]} schema - the FIELD_SCHEMAS entry for this capture type
-   * @returns {object} fields keyed by f.key (only non-empty values included)
+   * Reads the form's inputs into a plain object (non-empty values only),
+   * plus the dynamically-rendered Assignee select.
+   * @param {object[]} schema
+   * @returns {object}
    */
   function collectFields(schema) {
     const fields = {};
     schema.forEach(f => {
       const el = root.querySelector(`#field-${f.key}`);
-      if (el && el.value) fields[f.key] = el.value;
+      if (el && el.value.trim()) fields[f.key] = el.value.trim();
     });
     const assigneeEl = root.querySelector('#field-assigneeId');
     if (assigneeEl && assigneeEl.value) fields.assigneeId = assigneeEl.value;
     return fields;
   }
 
+  /**
+   * submitCapture
+   * Validates, optionally checks for a semantic duplicate, sends, and
+   * handles every failure kind (see clickup.js header):
+   *   rejection        → inline error, nothing queued (retrying the same
+   *                      payload can't succeed)
+   *   unknown outcome  → queued as maybeSent (checked before re-sending)
+   *   network/offline  → queued for automatic retry
+   * Add to Accounts is never queued (credentials stay off the device);
+   * on a connectivity failure it stays on screen to resend.
+   * @param {object} entity
+   * @param {object} type
+   * @param {object[]} schema
+   */
   async function submitCapture(entity, type, schema) {
     stopRecognizer();
     if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    const errBox = root.querySelector('#form-error');
+    UI.clearFormError(errBox);
+    const isAccount = type.schema === 'account';
 
     let action = type.action || 'task';
     let effectiveListId = type.listId;
-    // "Add to Accounts" destination toggle (see renderForm): flips
-    // this specific capture from a Chat post to a normal task
-    // creation against the one known account-directory List.
-    // Everything downstream (performSend, buildTaskPayload) already
-    // knows how to handle action:'task' — no new code path needed,
-    // just picking which one applies for this submission.
-    if (type.schema === 'account' && type.directListId && state.accountDestination === 'direct') {
+    // Add to Accounts "Direct to List" flips this submission from a
+    // Chat post to a normal task in the account-directory List.
+    if (isAccount && type.directListId && state.accountDestination === 'direct') {
       action = 'task';
       effectiveListId = type.directListId;
     }
@@ -1343,76 +2333,47 @@ const App = (() => {
     const fields = collectFields(schema);
     const requiredMissing = schema.find(f => f.required && !fields[f.key]);
     if (requiredMissing) {
-      alert(`${requiredMissing.label} is required.`);
+      UI.markFieldError(root.querySelector(`#field-${requiredMissing.key}`), `${requiredMissing.label} is required.`);
       return;
     }
-    // Follow-up/Reminder (action:'comment') needs a target task chosen
-    // via the required search UI (see renderForm) — this isn't a
-    // schema field, so the check above wouldn't have caught a missing
-    // one on its own.
     if (action === 'comment' && !state.parentTaskId) {
-      alert('Search for and select the task you\u2019re following up on.');
+      UI.showFormError(errBox, 'Search for and select the task you’re following up on.');
+      const search = root.querySelector('#subtask-search');
+      if (search) search.focus();
       return;
     }
 
-    // Direct-to-List "Add to Accounts": resolve real ClickUp custom
-    // field IDs for whichever of Admin Username/Email/Password/Title
-    // have a matching field in this List (see getAccountFieldMapping's
-    // doc comment). Awaited here (usually instant, since renderForm
-    // already prefetches this the moment Direct is selected) rather
-    // than fired-and-forgotten, since Send needs the real IDs before
-    // building the task payload — but a failure here doesn't block
-    // sending: buildTaskPayload() falls back to plain description
-    // text for whichever fields didn't resolve.
-    //
-    // NOTE: associatedAccount is deliberately NOT attempted as a
-    // structured custom field here (it was, briefly — see v10 in the
-    // version history above). A real submission confirmed the
-    // guessed value format for that field was wrong, which caused
-    // ClickUp to reject the ENTIRE task creation, not just that one
-    // field — a much worse outcome than the field simply not
-    // resolving. buildTaskPayload() in clickup.js already always
-    // writes a plain-text "Associated Client Account" line in the
-    // description regardless, which is the sole mechanism for this
-    // field now — reliable, if less structured.
+    // Direct-to-List Add to Accounts: resolve real custom field IDs
+    // (prefetched when Direct was selected). A lookup failure doesn't
+    // block sending — buildTaskPayload falls back to description text.
     let customFields = [];
     let customFieldKeys = [];
-    if (action === 'task' && type.schema === 'account') {
+    if (action === 'task' && isAccount) {
       try {
         const mapping = await getAccountFieldMapping(effectiveListId);
         const candidates = {
           adminUsername: fields.adminUsername,
           adminEmail: fields.adminEmail,
           password: fields.password,
-          // Not a form field — comes from the Associated Account
-          // autocomplete (renderAssociatedAccountBlock), stored on
-          // `state` rather than `fields` since it isn't part of
-          // FIELD_SCHEMAS.account. Targets "Related Account ID".
           associatedAccount: state.associatedAccountId
         };
         Object.keys(candidates).forEach(key => {
           const match = mapping[key];
           if (!match || !candidates[key]) return;
-          // Gate ONLY the newly-reintroduced associatedAccount write
-          // behind the type-safety check — see TEXT_LIKE_FIELD_TYPES's
-          // doc comment for why it exists. adminUsername/adminEmail/
-          // password are deliberately left ungated: they're already
-          // confirmed working via a real production submission, and
-          // adding an unproven type-string check to them risks a
-          // regression if the guessed allowlist strings don't exactly
-          // match whatever ClickUp actually calls their real types.
+          // Only associatedAccount is type-gated (see TEXT_LIKE_FIELD_TYPES).
           if (key === 'associatedAccount' && !TEXT_LIKE_FIELD_TYPES.has((match.type || '').toLowerCase())) return;
           customFields.push({ id: match.id, value: candidates[key] });
           customFieldKeys.push(key);
         });
       } catch (err) {
-        // Swallow — see doc comment above.
+        // Swallow — description fallback covers it.
       }
     }
 
     const sendBtn = root.querySelector('#send-btn');
     sendBtn.disabled = true;
-    sendBtn.textContent = 'Sending…';
+    sendBtn.innerHTML = `<span class="spinner"></span> Sending…`;
+    const resetBtn = () => { if (root.contains(sendBtn)) { sendBtn.disabled = false; sendBtn.textContent = 'Send to ClickUp'; } };
 
     const entry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1422,6 +2383,7 @@ const App = (() => {
       color: entity.color,
       typeId: type.id,
       typeLabel: type.label,
+      schema: type.schema,
       listId: effectiveListId,
       channelId: type.channelId || null,
       fields,
@@ -1429,146 +2391,236 @@ const App = (() => {
       customFieldKeys,
       title: fields.title || fields.name || (action === 'comment' ? 'Follow-up' : '(untitled)'),
       createdAt: Date.now(),
-      // For action:'task' + "Make this a subtask": the chosen parent.
-      // For action:'comment' (Follow-up): the task being followed up
-      // on — same fields, different meaning; see clickup.js
-      // logCapture()'s action-aware message building.
+      // Subtask parent (task) or followed-up task (comment).
       parentTaskId: state.parentTaskId || null,
       parentTaskName: state.parentTaskName || null,
       parentTaskUrl: state.parentTaskUrl || null,
-      // Associated Client Account — set whenever Account Type = MKC
-      // Client, regardless of Review-Channel vs. Direct-to-List (see
-      // formatAccountMessage() and buildTaskPayload() in clickup.js,
-      // which both surface it when present).
       associatedAccountId: state.associatedAccountId || null,
       associatedAccountName: state.associatedAccountName || null
     };
 
+    // Semantic duplicate check (task creates only, not subtasks, not
+    // accounts). Fast vector lookup; any failure just skips it.
+    if (action === 'task' && !isAccount && !state.parentTaskId && navigator.onLine && Routing.canCheckDuplicates()) {
+      const choice = await checkManualDuplicate(fields);
+      if (choice === 'cancel') { resetBtn(); return; }
+      if (choice && choice.update) {
+        entry.action = 'update';
+        entry.parentTaskId = choice.update.task_id;
+        entry.parentTaskName = choice.update.name;
+        entry.parentTaskUrl = choice.update.url;
+      }
+    }
+
     try {
-      if (!navigator.onLine) throw new Error('OFFLINE');
+      if (!navigator.onLine) throw Object.assign(new Error('OFFLINE'), { network: true, offline: true });
       await performSend(entry, state.attachments);
-      // "Add to Accounts" carries a password field — never let it
-      // persist into the local Recent-captures log, even after a
-      // successful send. (The offline queue is a separate, shorter-
-      // lived store and does still need the real value to actually
-      // send on retry — see queueForRetry()'s comment on that
-      // trade-off.)
       Storage.addRecent(sanitizeForRecent(entry));
-      showSuccess();
+      Storage.clearDraft();
+      recordSend(entry);
+      showSuccess(false, entry.action === 'update' ? 'Added as an update to the existing task.' : null);
     } catch (err) {
-      if (err.status) {
-        // A real HTTP response came back (err.status is only set by
-        // clickup.js's apiError() — see its callers), meaning ClickUp
-        // or the Worker actively rejected this request. Retrying the
-        // identical payload would just fail the same way again, so
-        // surface it instead of silently queuing forever — this is
-        // exactly what went wrong once already (a malformed custom
-        // field caused a submission to disappear into the queue with
-        // no visible error, retrying invisibly and never succeeding).
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send to ClickUp';
-        alert(`ClickUp rejected this submission (error ${err.status}). Nothing was sent or queued \u2014 check the details and try again.\n\n${err.message || ''}`);
+      // 1. Real rejection: surface it, don't queue.
+      if (err.status && err.outcome !== 'unknown') {
+        resetBtn();
+        UI.showFormError(errBox, err, err.status === 401 || err.status === 403 ? { label: 'Open Settings', onClick: () => go('/settings') } : null);
         return;
       }
-      // No .status means a genuine connectivity problem (offline, or
-      // the Worker itself unreachable) rather than a rejection — safe
-      // to queue and retry automatically once back online.
-      await queueForRetry(entry);
-      showSuccess(true);
+      // 2. Credentials never go into the offline queue.
+      if (isAccount) {
+        resetBtn();
+        UI.showFormError(errBox, err.outcome === 'unknown'
+          ? `${err.timeout ? 'ClickUp answered too slowly' : 'The connection dropped before ClickUp confirmed'}, so this may or may not have been saved. Account details aren’t stored on this device for safety — check ClickUp before sending again.`
+          : 'Couldn’t reach ClickUp. Account details aren’t stored on this device for safety — tap Send again once you’re back online.');
+        return;
+      }
+      // 3. Unknown outcome or connectivity: queue for retry.
+      if (err.outcome === 'unknown') entry.maybeSent = true;
+      const stored = await queueForRetry(entry);
+      if (!stored) {
+        resetBtn();
+        UI.showFormError(errBox, 'Couldn’t send, and this device is out of space to save it for later (attachments are large). Try again when you have a connection, or remove an attachment.');
+        return;
+      }
+      Storage.clearDraft();
+      showSuccess(true, entry.maybeSent ? 'ClickUp didn’t confirm this one. Saved — Dispatch It will check whether it landed before sending again.' : null);
     }
   }
 
   /**
-   * performSend
-   * The one place that actually talks to ClickUp for a capture,
-   * branching on entry.action. Shared by submitCapture() (live path)
-   * and processQueue() (offline-retry path) so the branching logic
-   * exists exactly once. Mutates entry.clickupUrl as a side effect —
-   * both callers rely on this being set afterward for Storage/Recent.
-   * @param {object} entry
-   * @param {File[]} attachments - passed explicitly (not read from
-   *   the shared `state` object) so a background retry (processQueue,
-   *   possibly firing from an 'online' event while a *different*
-   *   capture form is open) can never clobber whatever the user is
-   *   currently mid-typing on screen.
-   * @throws whatever the underlying ClickUp.* call throws — callers
-   *   are responsible for queuing/retry on failure, this function
-   *   itself doesn't catch its own primary action's errors (though it
-   *   does swallow best-effort follow-on steps like attachments and
-   *   activity logging, same as before).
+   * checkManualDuplicate
+   * Asks the Worker for open tasks semantically close to this capture;
+   * if any clear the owner's threshold, asks what to do.
+   * @param {object} fields - collected form fields
+   * @returns {Promise<'create'|'cancel'|{update: object}>}
+   *   'create' when nothing matched, the check failed, or the owner chose
+   *   "Create new anyway".
    */
-  async function performSend(entry, attachments) {
-    if (entry.action === 'comment') {
-      await ClickUp.addComment(entry.parentTaskId, entry.fields.note);
-      entry.clickupUrl = entry.parentTaskUrl;
-      if (entry.clickupUrl) ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
+  async function checkManualDuplicate(fields) {
+    let res;
+    try {
+      res = await Routing.duplicates(fields.title || '', fields.description || '');
+    } catch (err) {
+      return 'create'; // never block a send on the duplicate check
+    }
+    const match = res && res.available && res.matches && res.matches[0];
+    if (!match) return 'create';
+    const others = res.matches.slice(1, 3);
+    const choice = await UI.sheet({
+      title: 'This might already exist',
+      html: `
+        <div class="dup-sheet">
+          <div class="dup-name">${escapeHtml(match.name)}</div>
+          <div class="dup-meta">${escapeHtml(match.list_path || '')}${match.status ? ` · ${escapeHtml(match.status)}` : ''} · ${Math.round(match.similarity * 100)}% similar</div>
+          <a class="link-btn" href="${escapeHtml(match.url)}" target="_blank" rel="noopener">View task</a>
+          ${others.length ? `<p class="hint">Also similar: ${others.map(o => `“${escapeHtml(truncate(o.name, 40))}”`).join(', ')}</p>` : ''}
+        </div>
+        <p class="hint">“Add as update” posts your note as a comment on that task instead of creating a copy.</p>`,
+      actions: [
+        { label: 'Add as update', value: 'update', kind: 'primary' },
+        { label: 'Create new anyway', value: 'create' },
+        { label: 'Cancel', value: 'cancel' }
+      ]
+    });
+    if (choice === 'update') return { update: match };
+    return choice || 'cancel';
+  }
+
+  /**
+   * performSend
+   * The one place a manual (or queued) capture talks to ClickUp,
+   * branching on entry.action:
+   *   'comment' / 'update' → comment on an existing task (Follow-up, or
+   *                          a duplicate turned into an update)
+   *   'chat'               → Add to Accounts review channel post
+   *   'task' (default)     → create task, then attachments, then logs
+   * Sets entry.clickupUrl / taskId / commentId as side effects.
+   * @param {object} entry
+   * @param {File[]} attachments - passed explicitly so a background retry
+   *   can't clobber whatever is on screen
+   * @param {{onCreated?: Function}} [hooks] - onCreated(entry) fires the
+   *   moment the task/comment exists (before attachments); the queue uses
+   *   it to mark the entry so a retry never creates it twice.
+   *   entry.createdOk = true skips straight to the follow-up steps.
+   * @throws whatever the primary ClickUp call throws (callers decide
+   *   queue vs. surface); best-effort follow-ups are swallowed.
+   */
+  async function performSend(entry, attachments, hooks = {}) {
+    if (entry.action === 'comment' || entry.action === 'update') {
+      if (!entry.createdOk) {
+        const text = entry.action === 'comment' ? entry.fields.note : buildUpdateComment(entry);
+        const res = await ClickUp.addComment(entry.parentTaskId, text);
+        entry.commentId = res && res.id != null ? String(res.id) : null;
+        entry.createdOk = true;
+        if (hooks.onCreated) hooks.onCreated(entry);
+      }
+      entry.clickupUrl = entry.parentTaskUrl || `https://app.clickup.com/t/${entry.parentTaskId}`;
+      if (entry.action === 'update' && attachments && attachments.length) {
+        for (const file of attachments) await ClickUp.uploadAttachment(entry.parentTaskId, file).catch(() => {});
+      }
+      ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
       return;
     }
 
     if (entry.action === 'chat') {
-      const content = formatAccountMessage(entry);
-      await ClickUp.postToChannel(entry.channelId, content);
-      // Reference link back to the Chat channel itself — there's no
-      // individual "message URL" the way a task has a task URL.
+      await ClickUp.postToChannel(entry.channelId, formatAccountMessage(entry));
       entry.clickupUrl = `https://app.clickup.com/${WORKSPACE_ID}/chat/r/${entry.channelId}`;
-      return; // deliberately no logCapture() call — the chat post IS the log, to the accounts channel specifically, not the general one
+      return; // the chat post IS the log (accounts channel, not the general one)
     }
 
-    // action === 'task' (default, covers everything predating this
-    // branch: To-Dos, Light Bulbs, Contacts, Requests, etc.)
-    const result = await ClickUp.createTask(entry.listId, entry);
-    // ClickUp's create-task response includes a direct URL to the
-    // task — stashed on the entry so Home's Recent list can offer
-    // "View in ClickUp" without reconstructing or guessing the URL.
-    entry.clickupUrl = result.url || (result.id ? `https://app.clickup.com/t/${result.id}` : null);
-    if (attachments && attachments.length && result.id) {
+    // action === 'task'
+    if (!entry.createdOk) {
+      // A queued capture that timed out / dropped last time may already
+      // exist — look before creating it again (v14 duplicate-on-retry fix).
+      if (entry.maybeSent) {
+        const existing = await ClickUp.findRecentTaskByName(entry.listId, entry.fields.title || entry.fields.name || '', entry.createdAt - 60000).catch(() => null);
+        if (existing) {
+          entry.taskId = existing.id;
+          entry.clickupUrl = existing.url || `https://app.clickup.com/t/${existing.id}`;
+          entry.recoveredDuplicate = true;
+          return;
+        }
+      }
+      const result = await ClickUp.createTask(entry.listId, entry);
+      entry.taskId = result && result.id;
+      entry.clickupUrl = (result && result.url) || (entry.taskId ? `https://app.clickup.com/t/${entry.taskId}` : null);
+      entry.createdOk = true;
+      // Persist "created" before the (possibly long) attachment uploads.
+      if (hooks.onCreated) hooks.onCreated(entry);
+    }
+    if (attachments && attachments.length && entry.taskId) {
       for (const file of attachments) {
-        await ClickUp.uploadAttachment(result.id, file).catch(() => {});
+        await ClickUp.uploadAttachment(entry.taskId, file).catch(() => {});
       }
     }
-    // Best-effort activity log to Chat — never lets a logging hiccup
-    // undo or block a capture that already succeeded.
-    if (entry.clickupUrl) {
-      ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
-    }
-    // "Add to Accounts", Direct-to-List path specifically: entry.
-    // channelId is only ever set for this one capture type (see
-    // config.js — no other entry defines it), so this is naturally
-    // scoped to just Add to Accounts even though the check itself is
-    // generic. Per the user: even when filing straight into the List,
-    // still post a note to the accounts review channel too — just
-    // worded as "already added" rather than "needs review", since
-    // there's nothing left to action on it.
+    if (entry.clickupUrl) ClickUp.logCapture(entry, entry.clickupUrl).catch(() => {});
+    // Add to Accounts, Direct-to-List: also note it in the accounts
+    // channel ("already added", not "needs review").
     if (entry.channelId) {
-      const note = `\u2705 **Added directly to list** \u2014 ${entry.fields.accountType || ''}\n${entry.title}\n${entry.clickupUrl}`;
+      const note = `✅ **Added directly to list** — ${entry.fields.accountType || ''}\n${entry.title}\n${entry.clickupUrl}`;
       ClickUp.postToChannel(entry.channelId, note).catch(() => {});
     }
   }
 
   /**
-   * formatAccountMessage
-   * Builds the Markdown message posted for "Add to Accounts" — every
-   * field labeled plainly. Password included as plain text, same as
-   * how ClickUp Chat already works for anything typed directly into
-   * it; see the security note in this file's version history.
-   * @param {object} fields - from FIELD_SCHEMAS.account
+   * buildUpdateComment — comment text when a capture becomes an update
+   * on an existing (duplicate) task.
+   * @param {object} entry
    * @returns {string}
    */
+  function buildUpdateComment(entry) {
+    const f = entry.fields || {};
+    return [
+      `🔁 Update via ${APP_NAME}`,
+      f.title || entry.title,
+      f.description || '',
+      f.dueDate ? `Due date given: ${f.dueDate}` : '',
+      f.priority ? `Priority given: ${f.priority}` : ''
+    ].filter(Boolean).join('\n\n');
+  }
+
+  /**
+   * recordSend
+   * Best-effort: logs a manual/queued send to the shared Activity history
+   * so it can be undone from any device. Add to Accounts review-channel
+   * posts aren't recorded (nothing undoable, and nothing sensitive leaves
+   * the device for this); Direct-to-List account tasks are recorded by
+   * title only (`sensitive`) and never embedded.
+   * @param {object} entry
+   */
+  function recordSend(entry) {
+    if (entry.action === 'chat' || entry.recoveredDuplicate) return;
+    const isAccount = entry.schema === 'account';
+    let body;
+    if (entry.action === 'task' && entry.taskId) {
+      body = {
+        kind: 'create_task', task_id: entry.taskId, task_url: entry.clickupUrl, list_id: entry.listId,
+        list_path: `${entry.entityName} › ${entry.typeLabel}`, title: entry.title,
+        text: isAccount ? '' : (entry.fields.description || ''), sensitive: isAccount
+      };
+    } else if ((entry.action === 'comment' || entry.action === 'update') && entry.commentId) {
+      body = {
+        kind: 'add_comment', task_id: entry.parentTaskId, task_url: entry.clickupUrl, comment_id: entry.commentId,
+        list_path: entry.parentTaskName ? `On: ${entry.parentTaskName}` : '', title: entry.action === 'comment' ? `Follow-up: ${truncate(entry.fields.note || '', 80)}` : entry.title
+      };
+    }
+    if (!body) return;
+    Routing.record(body).then(r => {
+      if (r && r.audit_id) Storage.patchRecent(entry.id, { auditId: r.audit_id });
+    }).catch(() => { /* Activity is a convenience; never fail a send over it */ });
+  }
+
   /**
    * formatAccountMessage
-   * Builds the Markdown message posted for "Add to Accounts" — every
-   * field labeled plainly. Password included as plain text, same as
-   * how ClickUp Chat already works for anything typed directly into
-   * it; see the security note in this file's version history.
-   * @param {object} entry - the full capture entry (not just .fields)
-   *   so the Associated Client Account (state-derived, not a schema
-   *   field) can be included too.
+   * Markdown message for "Add to Accounts" (review channel). Password is
+   * included as plain text — same as typing it into ClickUp Chat.
+   * @param {object} entry - full entry (Associated Account lives outside .fields)
    * @returns {string}
    */
   function formatAccountMessage(entry) {
     const fields = entry.fields;
     const lines = [
-      `🔑 **New Account** \u2014 ${fields.accountType || ''}`,
+      `🔑 **New Account** — ${fields.accountType || ''}`,
       fields.title || ''
     ];
     if (fields.adminUsername) lines.push(`Username: ${fields.adminUsername}`);
@@ -1581,54 +2633,38 @@ const App = (() => {
 
   /**
    * sanitizeForRecent
-   * Returns a shallow copy of an entry safe to keep in the local
-   * Recent-captures log — currently strips fields.password (Add to
-   * Accounts, Chat-review path) and any matching value inside
-   * customFields (Add to Accounts, Direct-to-List path — the password
-   * can end up there too once resolved to a real ClickUp custom
-   * field; see submitCapture()'s customFields resolution). Everything
-   * else about the entry is unchanged.
+   * Copy of an entry safe for the local Recent log: strips the password
+   * (fields.password and the matching customFields value) and account
+   * notes (may hold recovery codes).
    * @param {object} entry
    * @returns {object}
    */
   function sanitizeForRecent(entry) {
-    const hasPasswordField = entry.fields && entry.fields.password;
-    const hasPasswordCustomField = entry.customFieldKeys && entry.customFieldKeys.includes('password');
-    if (!hasPasswordField && !hasPasswordCustomField) return entry;
-
+    if (entry.schema !== 'account' && !(entry.fields && entry.fields.password)) return entry;
     const clone = { ...entry, fields: { ...entry.fields } };
     delete clone.fields.password;
-    if (hasPasswordCustomField) {
-      clone.customFields = (entry.customFields || []).filter(cf => {
-        const idx = entry.customFieldKeys.indexOf('password');
-        const passwordFieldId = idx > -1 ? entry.customFields[idx].id : null;
-        return cf.id !== passwordFieldId;
-      });
+    delete clone.fields.notes;
+    const idx = (entry.customFieldKeys || []).indexOf('password');
+    if (idx > -1) {
+      const passwordFieldId = entry.customFields[idx].id;
+      clone.customFields = (entry.customFields || []).filter(cf => cf.id !== passwordFieldId);
     }
     return clone;
   }
 
   /**
    * queueForRetry
-   * Saves a capture locally (attachments as base64) for automatic
-   * resend once back online — see processQueue().
+   * Saves a capture locally (attachments as base64) for automatic resend.
+   * Never called for Add to Accounts (v14) — credentials stay off disk.
    * @param {object} entry
-   * SECURITY NOTE: for "Add to Accounts" captures, entry.fields still
-   * contains the real password at this point (unlike Storage.addRecent,
-   * which gets a sanitized copy — see sanitizeForRecent()). This is a
-   * deliberate, unavoidable trade-off: a queued entry has to keep the
-   * real value to actually be able to send it once connectivity
-   * returns. Practically this means an offline "Add to Accounts"
-   * capture sits in this device's localStorage in plain text until it
-   * sends — same general caveat as any offline-first tool handling
-   * sensitive data, worth knowing rather than assuming away.
+   * @returns {Promise<boolean>} false if the device refused to store it
    */
   async function queueForRetry(entry) {
-    const attachments = await Promise.all(state.attachments.map(fileToDataUrl));
-    entry.pendingAttachments = attachments;
-    Storage.enqueue(entry);
+    entry.pendingAttachments = await Promise.all(state.attachments.map(fileToDataUrl));
+    return Storage.enqueue(entry);
   }
 
+  /** fileToDataUrl — File → {name, type, dataUrl} for the queue. */
   function fileToDataUrl(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -1637,6 +2673,7 @@ const App = (() => {
     });
   }
 
+  /** dataUrlToFile — inverse of fileToDataUrl, for retries. */
   function dataUrlToFile({ name, type, dataUrl }) {
     const [, base64] = dataUrl.split(',');
     const bytes = atob(base64);
@@ -1645,71 +2682,126 @@ const App = (() => {
     return new File([arr], name, { type });
   }
 
+  // Guards against two overlapping queue runs (e.g. 'online' event firing
+  // while Home's own processQueue call is mid-flight) sending twice.
+  let queueRunning = false;
+
   /**
    * processQueue
-   * Retries every entry currently in the offline queue. Distinguishes
-   * two failure kinds the same way submitCapture() does (see its
-   * comment for the fuller "why this matters" story):
-   *   - A real API rejection (err.status set) means this exact
-   *     payload will never succeed no matter how many times it's
-   *     retried — remove it and tell the user, then keep going with
-   *     the rest of the queue rather than getting stuck on one bad
-   *     entry forever.
-   *   - A connectivity failure (no err.status) means everything is
-   *     probably still unreachable — stop for now rather than burning
-   *     through the whole queue against a dead connection; the next
-   *     'online' event or app open will try again from the top.
-   * @param {boolean} manual - true when triggered by the "Retry now"
-   *   button (shows an alert on a connectivity failure); false for
-   *   the automatic background checks, which stay silent.
+   * Retries every queued entry:
+   *   - permanently rejected (400/404/413/422, FIELD_ errors) → removed
+   *     + toast (can't succeed); temporary HTTP errors (401/403/429/5xx)
+   *     stay queued
+   *   - connectivity failure → stop for now; next 'online'/open retries
+   *   - entries marked createdOk skip creation (see performSend hooks)
+   *   - maybeSent entries are checked before re-creating (performSend)
+   * @param {boolean} manual - "Retry now" tapped (reports failures)
    */
   async function processQueue(manual) {
+    if (queueRunning) return;
     const settings = Storage.getSettings();
-    if (!settings.proxyUrl || !navigator.onLine) return;
+    if (!settings.proxyUrl) return;
+    if (!navigator.onLine) {
+      if (manual) UI.toast('Still offline — will retry automatically when you’re back.', { kind: 'bad' });
+      return;
+    }
     const queue = Storage.getQueue();
     if (!queue.length) return;
 
-    for (const entry of queue) {
-      try {
-        const attachments = (entry.pendingAttachments || []).map(dataUrlToFile);
-        await performSend(entry, attachments);
-        Storage.removeFromQueue(entry.id);
-        Storage.addRecent(sanitizeForRecent(entry));
-      } catch (e) {
-        if (e.status) {
+    queueRunning = true;
+    let sent = 0;
+    try {
+      for (const entry of queue) {
+        try {
+          const attachments = (entry.pendingAttachments || []).map(dataUrlToFile);
+          await performSend(entry, attachments, {
+            onCreated: (e) => Storage.patchQueue(e.id, { createdOk: true, taskId: e.taskId || null, commentId: e.commentId || null, clickupUrl: e.clickupUrl || null, maybeSent: false })
+          });
           Storage.removeFromQueue(entry.id);
-          alert(`A queued capture ("${entry.title}") was rejected by ClickUp and has been removed from the queue \u2014 you\u2019ll need to redo it.\n\n${e.message || ''}`);
-          continue;
+          const clean = sanitizeForRecent({ ...entry, pendingAttachments: undefined });
+          Storage.addRecent(clean);
+          recordSend(entry);
+          sent++;
+        } catch (e) {
+          if (e.status && e.outcome !== 'unknown') {
+            // Only errors that will fail the same way forever drop the
+            // capture. Outages (5xx), rate limits (429) and auth problems
+            // (401/403 — fixable in Settings) keep it queued: before the
+            // v14 review these discarded captures on a temporary glitch.
+            const permanent = [400, 404, 413, 422].includes(e.status) || /^FIELD_/.test(e.code || '');
+            if (permanent) {
+              Storage.removeFromQueue(entry.id);
+              UI.toast(`A queued capture (“${truncate(entry.title, 40)}”) was rejected by ClickUp and removed — you’ll need to redo it. ${UI.describeError(e).message}`, { kind: 'bad', duration: 10000 });
+              continue;
+            }
+            if (manual) UI.toast(`Couldn’t send queued captures yet: ${UI.describeError(e).message}`, { kind: 'bad', duration: 7000 });
+            break;
+          }
+          if (e.outcome === 'unknown') {
+            // Mark so the next attempt checks before re-creating.
+            entry.maybeSent = true;
+            Storage.removeFromQueue(entry.id);
+            Storage.enqueue(entry);
+          }
+          if (manual) UI.toast('Still can’t reach ClickUp. Will keep retrying automatically.', { kind: 'bad' });
+          break;
         }
-        if (manual) alert('Still can\u2019t reach ClickUp. Will keep retrying automatically.');
-        break;
       }
+    } finally {
+      queueRunning = false;
     }
-    if (window.location.hash.includes('home') || !window.location.hash) renderHome();
+    if (sent) UI.toast(`Sent ${sent} queued capture${sent > 1 ? 's' : ''}.`, { kind: 'good' });
+    if (!currentRoute()[0] || currentRoute()[0] === 'home') renderHome();
   }
 
-  function showSuccess(queued) {
+  /**
+   * showSuccess
+   * Brief confirmation screen, then back to Home.
+   * @param {boolean} queued - saved for later rather than sent
+   * @param {string} [message] - overrides the default line
+   */
+  function showSuccess(queued, message) {
+    UI.vibrate(queued ? [10, 60, 10] : 12);
     root.innerHTML = `
-      <main class="success">
-        <div class="success-mark">${icon(queued ? 'clock' : 'check-big')}</div>
-        <p class="success-text">${queued ? 'Saved. It\u2019ll send once you\u2019re back online.' : 'Sent to ClickUp.'}</p>
+      <main class="success" role="status">
+        <div class="success-mark${queued ? ' success-mark--queued' : ''}">${icon(queued ? 'clock' : 'check-big')}</div>
+        <p class="success-text">${escapeHtml(message || (queued ? 'Saved. It’ll send once you’re back online.' : 'Sent to ClickUp.'))}</p>
       </main>
     `;
-    setTimeout(() => go('/home'), 1100);
+    clearTimeout(successTimer);
+    successTimer = setTimeout(() => {
+      // Only if the success screen is still what's showing.
+      if (root.querySelector('.success')) go('/home');
+    }, queued ? 1800 : 1100);
   }
 
   // ---------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------
+  /** bindBack — wires the topbar back button (history, else Home). */
   function bindBack() {
     const btn = root.querySelector('[data-nav="back"]');
     if (btn) btn.onclick = () => history.length > 1 ? history.back() : go('/home');
   }
 
+  /** escapeHtml — HTML-escapes user/ClickUp text before interpolation. */
   function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    return UI.escape(str);
   }
 
+  /** truncate — shortens text to n characters with an ellipsis. */
+  function truncate(str, n) {
+    str = String(str || '');
+    return str.length > n ? `${str.slice(0, n - 1)}…` : str;
+  }
+
+  /** lastSegment — "Space › Folder › List" → "List". */
+  function lastSegment(path) {
+    const parts = String(path || '').split(' › ');
+    return parts[parts.length - 1] || path || '';
+  }
+
+  // Inline SVG icon paths (24×24, stroke-based, currentColor).
   const ICONS = {
     gear: '<path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09A1.65 1.65 0 0015 4.6a1.65 1.65 0 001.82.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
     back: '<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>',
@@ -1731,21 +2823,22 @@ const App = (() => {
     nest: '<path d="M7 3v10a4 4 0 004 4h6"/><path d="M13 13l4 4-4 4"/>',
     refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>',
     bell: '<path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
-    key: '<circle cx="8" cy="15" r="4"/><path d="M10.5 12.5L20 3"/><path d="M17 6l3 3"/><path d="M14 9l3 3"/>'
+    key: '<circle cx="8" cy="15" r="4"/><path d="M10.5 12.5L20 3"/><path d="M17 6l3 3"/><path d="M14 9l3 3"/>',
+    // v14 additions
+    spark: '<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
+    history: '<path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
+    copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>'
   };
+  /** icon — inline SVG for a named icon (unknown names render empty). */
   function icon(name) {
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
   }
 
   /**
-   * init — app entry point (called on DOMContentLoaded).
-   * Gates entry behind the device passcode: if this device hasn't
-   * stored (and had verified) a passcode yet, shows the lock screen
-   * instead of the normal router. See renderLock()/attemptUnlock().
-   * This is a convenience gate, not the real security boundary — the
-   * Worker re-checks the passcode on every single request regardless
-   * (clickup-proxy.js checkPasscode()), so even a bypass of this
-   * client-side check can't actually reach ClickUp.
+   * init — app entry point (DOMContentLoaded).
+   * Gates entry behind the device passcode (a convenience gate — the
+   * Worker re-checks it on every request regardless).
    */
   function init() {
     if (!Storage.getDeviceKey()) {
@@ -1758,19 +2851,19 @@ const App = (() => {
 
   /**
    * renderLock
-   * Shows a simple passcode entry screen, blocking access to the rest
-   * of the app until attemptUnlock() confirms it against the Worker.
-   * @param {string} [errorMsg] - shown above the input, e.g. after a
-   *   wrong attempt ("Wrong passcode — try again.")
+   * Passcode entry screen. Uses a normal text keyboard (v14): the old
+   * numeric keypad made non-numeric passcodes impossible to type on
+   * phones. autocomplete="current-password" lets password managers fill it.
+   * @param {string} [errorMsg]
    */
   function renderLock(errorMsg) {
     root.innerHTML = `
       <main class="lock">
         <div class="lock-mark">${icon('lock')}</div>
-        <h1 class="lock-title">Dispatch</h1>
+        <h1 class="lock-title">${escapeHtml(APP_NAME)}</h1>
         <p class="lock-sub">Enter the passcode to continue.</p>
-        <input type="password" inputmode="numeric" autocomplete="off" id="lock-input" class="lock-input" placeholder="Passcode">
-        ${errorMsg ? `<p class="lock-error">${escapeHtml(errorMsg)}</p>` : ''}
+        <input type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" id="lock-input" class="lock-input" placeholder="Passcode" aria-label="Passcode">
+        ${errorMsg ? `<p class="lock-error" role="alert">${escapeHtml(errorMsg)}</p>` : ''}
         <button class="send-btn" id="lock-submit">Unlock</button>
       </main>
     `;
@@ -1783,19 +2876,12 @@ const App = (() => {
 
   /**
    * attemptUnlock
-   * Verifies a candidate passcode against the Worker before letting
-   * the device in permanently. Saves it to Storage optimistically
-   * (so the very next request carries it), then rolls back on a
-   * confirmed-wrong (403) response.
-   * @param {string} candidate - passcode text from the lock screen input
-   * Edge cases:
-   *   - 403 (Worker confirms it's wrong) → clear it, show error, retry.
-   *   - 401 ("passcode fine, ClickUp not connected yet") → let them
-   *     in; that's a separate, later step (Settings → Connect).
-   *   - any other failure (Worker unreachable, offline) → let them in
-   *     rather than block on a check we can't complete; this isn't a
-   *     real security gap since the Worker re-validates every future
-   *     request independently regardless of what this screen decided.
+   * Verifies a passcode against the Worker before remembering it.
+   *   403 → wrong: forget it, show error
+   *   401 → right passcode, ClickUp not connected yet: let them in
+   *   network failure → let them in (the Worker re-validates every
+   *     request anyway, so this is not a security gap)
+   * @param {string} candidate
    */
   async function attemptUnlock(candidate) {
     if (!candidate) return;

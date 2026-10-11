@@ -1,7 +1,7 @@
 {
-  "name": "Dispatch",
-  "short_name": "Dispatch",
-  "description": "Capture a task, note, or idea in seconds and send it straight to the right ClickUp list.",
+  "name": "Dispatch It",
+  "short_name": "Dispatch It",
+  "description": "Say it once, it lands in the right ClickUp list. Smart routing, duplicate checks and one-tap undo.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -12,5 +12,9 @@
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New capture", "short_name": "Capture", "url": "./index.html#/smart", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Activity", "short_name": "Activity", "url": "./index.html#/activity", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

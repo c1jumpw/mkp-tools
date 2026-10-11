@@ -1,0 +1,10 @@
+# .gitignore — Dispatch It (mkp-tools/mkp-dispatch)
+# v1 2026-10-10  Added during the v14 cleanup: Wrangler's local cache
+#                (worker/.wrangler) had been committed by accident. It's
+#                machine-specific build state, not source — and could hold
+#                local dev data. Remove the already-committed copy once with:
+#                  git rm -r --cached --ignore-unmatch mkp-dispatch/worker/.wrangler
+worker/.wrangler/
+node_modules/
+.dev.vars
+*.log

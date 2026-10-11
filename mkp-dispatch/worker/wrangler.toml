@@ -2,7 +2,8 @@
 # wrangler.toml — Cloudflare Worker deployment config for dispatch-clickup-proxy
 # =============================================================================
 # PURPOSE
-#   Deployment + binding config for the proxy Worker (clickup-proxy.js).
+#   Deployment + binding config for the proxy Worker (clickup-proxy.js and
+#   its ./lib modules, bundled automatically by `wrangler deploy`).
 #   Values here are either public (safe to commit) or references to
 #   secrets stored separately in Cloudflare (never written to this file).
 #
@@ -14,20 +15,22 @@
 #                    namespace binding used to persist the OAuth access
 #                    token. CLICKUP_CLIENT_SECRET set via `wrangler
 #                    secret put`, same as CLICKUP_TOKEN was previously.
-#   v3  2026-07-24  Added APP_PASSCODE (secret, set via `wrangler secret
-#                    put APP_PASSCODE`) — a shared-secret device gate,
-#                    since the public GitHub Pages URL + an already-
-#                    connected OAuth token meant anyone with the link
-#                    could create ClickUp tasks with no login at all.
-#                    See clickup-proxy.js v3 for enforcement details.
+#   v3  2026-07-24  Added APP_PASSCODE (secret) — a shared-secret device
+#                    gate. See clickup-proxy.js v3 for enforcement details.
 #   v4  2026-07-25  Added WORKSPACE_ID and CHAT_CHANNEL_ID vars for the
-#                    new auto-log-to-Chat feature (clickup-proxy.js v4).
-#                    CHAT_CHANNEL_ID is a best-effort placeholder, not
-#                    yet confirmed correct — see its inline comment.
+#                    auto-log-to-Chat feature (clickup-proxy.js v4).
 #   v5  2026-07-25  Corrected CHAT_CHANNEL_ID after verifying via GET
 #                    /chat/channels — the real value is the full slug
 #                    (e.g. "4-90170798185-8"), not the numeric-only
 #                    value guessed from the app URL in v4.
+#   v6  2026-10-10  Smart routing (clickup-proxy.js v8):
+#                    - Gemini vars: GEMINI_MODEL, GEMINI_THINKING_LEVEL,
+#                      GEMINI_EMBED_MODEL, EMBED_DIMS. Key itself is the
+#                      new GEMINI_API_KEY secret (never in this file).
+#                    - PRIVATE_LIST_IDS: lists never sent to Gemini.
+#                    - [[vectorize]] binding TASK_VECTORS → index
+#                      "dispatch-tasks" (create it first, see below).
+#                    - [triggers] cron: one sync step every 15 minutes.
 # =============================================================================
 
 name = "dispatch-clickup-proxy"
@@ -41,52 +44,80 @@ compatibility_date = "2024-11-01"
 ALLOWED_ORIGIN = "https://c1jumpw.github.io"
 
 # Full URL (including path) of the deployed app. Used only as the
-# redirect target after a successful/failed OAuth handshake — this is
-# where the Worker sends the browser back to after ClickUp hands back
-# control. Trailing slash is stripped automatically in code either way.
+# redirect target after a successful/failed OAuth handshake.
 APP_URL = "https://c1jumpw.github.io/mkp-tools/mkp-dispatch/"
 
-# ClickUp OAuth app's Client ID. This is meant to be public (comparable
-# to a username) and is safe to commit — it identifies the app to
-# ClickUp but grants no access on its own. Copied from ClickUp →
-# Settings → Apps → ClickUp API Settings → your app.
+# ClickUp OAuth app's Client ID. Public by design (identifies the app,
+# grants no access on its own).
 CLICKUP_CLIENT_ID = "CB58HH6R33DAM091WKD5OG4EO5NSWP0I"
 
 # ClickUp Workspace ID — public, same value used in js/config.js.
-# Needed for the v3 Chat endpoints, which are scoped by workspace.
 WORKSPACE_ID = "25724879"
 
-# Destination Chat channel for the auto-log-to-chat feature (every
-# capture posts a short activity message here after it sends). ClickUp
-# Chat's API is "experimental" per their own docs. VERIFIED against
-# GET <worker-url>/chat/channels on 2026-07-25 — this is the channel
-# named "MKP Space" (matches the URL originally provided). Note the ID
-# is the full slug (type-numericId-variant), not just the numeric
-# portion visible in the app URL — that was the initial wrong guess.
+# Default Chat channel for the activity log. VERIFIED via
+# GET <worker-url>/chat/channels on 2026-07-25 ("MKP Space").
 CHAT_CHANNEL_ID = "4-90170798185-8"
 
+# --- Smart routing (v6) -------------------------------------------------
+# Reasoning model for placement / due dates / duplicate verdicts.
+# "gemini-3.8-flash" is Google's GA Flash model as of 2026-09-02. Swap to
+# any generateContent-capable model ID here and redeploy — no code change.
+GEMINI_MODEL = "gemini-3.8-flash"
+
+# Gemini 3.x "thinking" depth: low | medium | high. "low" keeps routing
+# answers to ~1–3 seconds, which matters for a capture app. Ignored for
+# non-3.x models.
+GEMINI_THINKING_LEVEL = "low"
+
+# Embedding model + vector size for duplicate detection. EMBED_DIMS MUST
+# match the Vectorize index's --dimensions (768). Changing either means
+# deleting/recreating the index and rebuilding it from Settings.
+GEMINI_EMBED_MODEL = "gemini-embedding-2"
+EMBED_DIMS = "768"
+
+# Lists whose names and task contents must NEVER be sent to Gemini —
+# comma-separated ClickUp list IDs. Ships with MKC Client Accounts
+# (901711853904), whose tasks hold admin logins and passwords. Add any
+# other sensitive list here and redeploy.
+PRIVATE_LIST_IDS = "901711853904"
+
 # -----------------------------------------------------------------------
-# KV namespace: persists the OAuth access_token between requests (the
-# Worker itself has no memory between invocations). Created once via:
+# KV namespace: persists the OAuth access_token AND all smart-routing
+# state (workspace index, settings, feedback, audit log — see
+# lib/store.js for the key layout). Created once via:
 #   wrangler kv namespace create TOKEN_STORE
-# The id below is that namespace's permanent identifier — not a secret,
-# just a storage reference (comparable to a database name).
 # -----------------------------------------------------------------------
 [[kv_namespaces]]
 binding = "TOKEN_STORE"
 id = "529827efc99e46b6aab8d32bb154edef"
 
 # -----------------------------------------------------------------------
+# Vectorize index for semantic duplicate detection (one vector per open
+# task). Create ONCE before the first deploy of v8:
+#   wrangler vectorize create dispatch-tasks --dimensions=768 --metric=cosine
+# Free plan includes 5M stored dimensions (~6,500 open tasks at 768 dims)
+# and 30M queried dimensions/month (~39,000 lookups).
+# -----------------------------------------------------------------------
+[[vectorize]]
+binding = "TASK_VECTORS"
+index_name = "dispatch-tasks"
+
+# -----------------------------------------------------------------------
+# Cron: one bounded sync step every 15 minutes (structure refresh, custom
+# field names, or a page of recently-changed tasks). The free plan allows
+# 5 cron triggers per account; this uses 1.
+# -----------------------------------------------------------------------
+[triggers]
+crons = ["*/15 * * * *"]
+
+# -----------------------------------------------------------------------
 # Secrets (NOT stored in this file — set via terminal, held encrypted
 # by Cloudflare):
-#   wrangler secret put CLICKUP_CLIENT_SECRET   ← already done
-#   wrangler secret put APP_PASSCODE            ← the passcode this app
-#                                                  requires on every
-#                                                  device before it will
-#                                                  touch ClickUp
+#   CLICKUP_CLIENT_SECRET   ← already set
+#   APP_PASSCODE            ← already set
+#   GEMINI_API_KEY          ← NEW in v6 (Google AI Studio key)
 #
 # CLICKUP_TOKEN (from the old personal-token setup) may still exist as
-# a secret on this Worker from v1 — it's unused by v2+'s code and safe
-# to leave in place, or remove later with:
+# a secret on this Worker from v1 — unused since v2. Remove it with:
 #   wrangler secret delete CLICKUP_TOKEN
 # -----------------------------------------------------------------------
