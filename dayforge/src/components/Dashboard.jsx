@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/Dashboard.jsx
- * VERSION: v9 (previously v1-v8 — see REVISION HISTORY below)
+ * VERSION: v11 (previously v1-v10 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   The main authenticated screen: header (branding, actions, account menu),
@@ -89,6 +89,14 @@
  *       the account dropdown menu, since mobile browsers — especially a
  *       site added to the home screen — often have no visible way to force
  *       a fresh reload after a new deployment goes out.
+ *   v10 — passes note LABELS (categories) through to
+ *       NotesPanel: the labels list, its fetch error, and the create/
+ *       rename/delete/set-on-note functions from useDayForgeData v4.
+ *   v11 (this version) — added "Help & guide" to the ⋮ menu: a plain link
+ *       to /guide/index.html (public/guide/, the illustrated user + admin
+ *       guide, copied into the build as a static page). Same-tab link so
+ *       the installed home-screen app opens it in place; the guide has its
+ *       own "Back to DayForge" link and follows the theme set here.
  * =============================================================================
  */
 
@@ -435,6 +443,16 @@ export default function Dashboard() {
                   >
                     ↻ Refresh app
                   </button>
+                  {/* Help & guide (v11) — a real link, not a button, so it
+                      works as normal navigation (and long-press/open-in-new-tab
+                      on desktop). The guide is a static page under public/guide/. */}
+                  <a
+                    href="/guide/index.html"
+                    onClick={() => setMenuOpen(false)}
+                    className="block w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition"
+                  >
+                    ? Help &amp; guide
+                  </a>
                   <button
                     onClick={signOut}
                     className="w-full text-left px-3 py-2 text-sm text-[var(--color-ember)] hover:bg-[var(--color-surface-raised)] transition"
@@ -521,10 +539,16 @@ export default function Dashboard() {
       {notesOpen && (
         <NotesPanel
           notes={data.notes}
+          labels={data.noteLabels}
+          labelsError={data.noteLabelsError}
           onAddBulk={data.addNotesBulk}
           onUpdate={data.updateNote}
           onDelete={data.deleteNote}
           onConvert={data.convertNoteToTask}
+          onCreateLabel={data.createNoteLabel}
+          onRenameLabel={data.renameNoteLabel}
+          onDeleteLabel={data.deleteNoteLabel}
+          onSetNoteLabels={data.setNoteLabelsFor}
           onClose={() => setNotesOpen(false)}
         />
       )}

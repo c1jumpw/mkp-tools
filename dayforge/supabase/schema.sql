@@ -108,6 +108,7 @@ create table if not exists notes (
   converted_task_id uuid references tasks(id) on delete set null,
   color text,
   pinned boolean not null default false,
+  label_ids uuid[] not null default '{}',  -- ids from note_labels below; empty = unlabeled (migration 008)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -119,6 +120,47 @@ create policy "own notes" on notes for all
 
 create index if not exists notes_user_created_idx on notes (user_id, created_at desc);
 create index if not exists notes_user_pinned_created_idx on notes (user_id, pinned desc, created_at desc);
+create index if not exists notes_label_ids_gin on notes using gin (label_ids);
+
+-- =============================================================================
+-- Note labels / categories (added in migrations/008_note_labels.sql for
+-- already-deployed projects; included here so a FRESH install gets it in one
+-- pass). A note can carry several labels via notes.label_ids above. See that
+-- migration's comments for the full design rationale.
+-- =============================================================================
+create table if not exists note_labels (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 40),
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table note_labels enable row level security;
+
+create policy "own note labels" on note_labels for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create unique index if not exists note_labels_user_name_uniq on note_labels (user_id, lower(name));
+
+-- Removes a label from every note that has it, then deletes the label, in one
+-- transaction. Runs with the caller's permissions (RLS still applies).
+create or replace function delete_note_label(p_label_id uuid)
+returns void
+language sql
+security invoker
+set search_path = public
+as $$
+  update notes
+     set label_ids = array_remove(label_ids, p_label_id)
+   where user_id = auth.uid()
+     and p_label_id = any(label_ids);
+  delete from note_labels
+   where id = p_label_id
+     and user_id = auth.uid();
+$$;
+
+grant execute on function delete_note_label(uuid) to authenticated;
 
 -- =============================================================================
 -- Labeled file attachments for tasks and notes — any file type, not just

@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/NotesPanel.jsx
- * VERSION: v16 (previously v1-v15 — see REVISION HISTORY below)
+ * VERSION: v17 (previously v1-v16 — see REVISION HISTORY below)
  * =============================================================================
  * PURPOSE
  *   A Google-Keep-style notepad for raw, unstructured quick capture — the
@@ -20,17 +20,54 @@
  *     EDITOR overlay with autosave — see NOTE EDITOR OVERLAY below.
  *   - A "Show converted" toggle (default OFF) so the active view stays
  *     focused on the un-sorted backlog.
+ *   - LABELS (v17): a "Labels" button beside the search box (opens Manage
+ *     labels), a row of filter chips (All · each label · Unlabeled), label
+ *     pills on each card, a "Labels" picker on each card and in the editor,
+ *     and a "Manage labels" panel. See LABELS below.
  *
  * PROPS
  *   notes           {array}    Full notes list (newest first).
- *   onAddBulk       {function} (contents: string[]) -> Promise; creates one
- *                              note per already-split topic string.
+ *   labels          {array}    All note labels (unsorted; sorted here).
+ *   labelsError     {object|null} The labels fetch error, if any (usually
+ *                              means migration 008 hasn't been run).
+ *   onAddBulk       {function} (contents: string[], extraFields?) -> Promise;
+ *                              creates one note per already-split topic string.
  *   onUpdate        {function} (id, fields) -> Promise; used by autosave
  *                              while the editor overlay is open.
  *   onDelete        {function} (id) -> Promise.
  *   onConvert       {function} (note) -> Promise<task>; creates a task from
  *                              this note and links it.
+ *   onCreateLabel   {function} (name) -> Promise<label>; reuses a same-named
+ *                              label instead of duplicating it.
+ *   onRenameLabel   {function} (id, name) -> Promise<label>.
+ *   onDeleteLabel   {function} (id) -> Promise; also strips it from notes.
+ *   onSetNoteLabels {function} (noteId, labelIds[]) -> Promise<note>.
  *   onClose         {function} () -> void.
+ *
+ * LABELS (v17)
+ *   Per the user's choices: a note can carry SEVERAL labels (Keep-style,
+ *   not one-folder-per-note); browsing is by FILTER CHIPS; labels are
+ *   assigned with a PICKER (not by typing #tags in the text).
+ *   - Filter order: search -> converted toggle -> active label chip.
+ *   - Chip counts respect the converted toggle but NOT the search text, so
+ *     counts don't jump around while typing (same reasoning as the
+ *     converted count below).
+ *   - While a label chip is active, notes added from the capture box get
+ *     that label automatically (and a hint line says so) — otherwise a
+ *     new note would vanish from the filtered list the moment it's added.
+ *   - A note whose label picker is open stays visible even if un-ticking
+ *     removes it from the active filter, so the picker doesn't disappear
+ *     mid-tap; it drops out once the picker closes.
+ *   - Label toggles show instantly (optimistic `pendingLabels`) and are
+ *     computed from the latest pending set, so quick successive taps on
+ *     the same note build on each other instead of overwriting.
+ *   - Tapping a label pill on a card jumps the filter to that label.
+ *   - If the active label is deleted (here or on another device), the
+ *     filter falls back to All.
+ *   - The "Labels" button sits beside search (not at the end of the chip
+ *     row) because the chip row scrolls sideways and hid it on phones.
+ *   TODO: remember the last-used filter per device (localStorage) if the
+ *   user wants Notes to reopen on the same label.
  *
  * NOTE EDITOR OVERLAY (v6)
  *   Editing no longer happens inline in the list (a small 3-row textarea
@@ -144,6 +181,12 @@
  *       handlers now call applyBulletAutoContinue AND applySpaceFlip
  *       together — safe to call both unconditionally since each ignores
  *       keys it doesn't care about (mutually exclusive on e.key).
+ *   v17 (this version) — added note LABELS (categories), per user request
+ *       for a way to sort notes: filter chips, label pills on cards, a
+ *       Labels picker on each card and in the editor overlay, a Manage
+ *       labels panel, and new captures inheriting the active label. See
+ *       LABELS above, components/NoteLabelControls.jsx, lib/noteLabels.js,
+ *       and supabase/migrations/008_note_labels.sql.
  * =============================================================================
  */
 
@@ -153,6 +196,18 @@ import { NOTE_COLORS, getNoteColorHex, hexToRgba } from '../lib/noteColors'
 import { linkifyText } from '../lib/linkify'
 import { useAutosave } from '../hooks/useAutosave'
 import FileAttachments from './FileAttachments'
+import { NoteLabelPicker, NoteLabelManager, pillClass } from './NoteLabelControls'
+import {
+  ALL_FILTER,
+  UNLABELED_FILTER,
+  sortLabels,
+  getNoteLabelIds,
+  getLiveNoteLabels,
+  toggleLabelId,
+  noteMatchesFilter,
+  countNotesByFilter,
+  isMissingLabelSchemaError,
+} from '../lib/noteLabels'
 
 const MAX_PREVIEW_BULLETS = 3 // how many bullet lines a collapsed list card shows before "+N more"
 const NOTE_COLOR_WASH_ALPHA = 0.16 // transparent background tint strength — "noticeable but not overbearing"
@@ -178,7 +233,20 @@ function formatTimestamp(iso) {
   })
 }
 
-export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onConvert, onClose }) {
+export default function NotesPanel({
+  notes,
+  labels = [],
+  labelsError = null,
+  onAddBulk,
+  onUpdate,
+  onDelete,
+  onConvert,
+  onCreateLabel,
+  onRenameLabel,
+  onDeleteLabel,
+  onSetNoteLabels,
+  onClose,
+}) {
   const [draft, setDraft] = useState('')
   const draftRef = useRef(null)
   const [busy, setBusy] = useState(false)
@@ -189,6 +257,29 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   const [expandedFilesId, setExpandedFilesId] = useState(null) // note id whose Files section is expanded, if any
   const [colorPickerId, setColorPickerId] = useState(null) // note id whose color swatch picker is open
   const [search, setSearch] = useState('')
+
+  // ---- Label state (see LABELS in the header) ----
+  const [activeFilter, setActiveFilter] = useState(ALL_FILTER) // ALL_FILTER, UNLABELED_FILTER, or a label id
+  const [labelPickerId, setLabelPickerId] = useState(null) // note id whose Labels picker is open on its card
+  const [manageLabelsOpen, setManageLabelsOpen] = useState(false) // "Manage labels" panel visible
+  const [editorLabelsOpen, setEditorLabelsOpen] = useState(false) // Labels picker visible inside the editor overlay
+  // Optimistic label sets for notes with a save in flight: { [noteId]: labelIds[] }.
+  // The ref is read synchronously when computing the next toggle (so rapid
+  // taps build on each other); the state copy only exists to re-render.
+  const pendingLabelsRef = useRef({})
+  const [pendingLabels, setPendingLabels] = useState({})
+
+  const sortedLabels = sortLabels(labels)
+  const liveIdSet = new Set(labels.map((l) => l.id))
+  const activeLabel = labels.find((l) => l.id === activeFilter) || null // the label object when a label chip is active
+
+  // A deleted label can't stay selected as the filter (it would show an
+  // empty list with no chip highlighted) — fall back to All.
+  useEffect(() => {
+    if (activeFilter !== ALL_FILTER && activeFilter !== UNLABELED_FILTER && !liveIdSet.has(activeFilter)) {
+      setActiveFilter(ALL_FILTER)
+    }
+  }, [activeFilter, labels]) // eslint-disable-line react-hooks/exhaustive-deps -- liveIdSet is derived from labels
 
   // Skip-tracking state for the ENTER-key outline shortcut (see
   // lib/notesParsing.js's applyBulletAutoContinue/computeBulletContinuation)
@@ -212,6 +303,7 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   useEffect(() => {
     editSkipStateRef.current = { streak: 0 }
     editSpaceStateRef.current = 0
+    setEditorLabelsOpen(false) // each opened note starts with its label picker collapsed
   }, [editingId])
 
   // Search applies first (against the raw content — matches whatever the
@@ -224,7 +316,20 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
   const searchMatched = searchLower
     ? notes.filter((n) => n.content.toLowerCase().includes(searchLower))
     : notes
-  const visibleNotes = showConverted ? searchMatched : searchMatched.filter((n) => !n.converted)
+  const convertedFiltered = showConverted ? searchMatched : searchMatched.filter((n) => !n.converted)
+  // Label filter last. The note whose picker is open is kept regardless,
+  // so un-ticking the active label doesn't yank the picker away mid-tap.
+  const visibleNotes = convertedFiltered.filter(
+    (n) => n.id === labelPickerId || noteMatchesFilter(withPendingLabels(n), activeFilter, liveIdSet)
+  )
+  // Chip counts: respect the converted toggle, ignore the search text (see
+  // LABELS in the header). The Manage panel counts EVERY note instead,
+  // since deleting a label affects converted notes too.
+  const chipCounts = countNotesByFilter(
+    (showConverted ? notes : notes.filter((n) => !n.converted)).map(withPendingLabels),
+    liveIdSet
+  )
+  const allNoteCounts = countNotesByFilter(notes.map(withPendingLabels), liveIdSet)
   // Pinned notes float to the top of the list. Array.prototype.sort is
   // stable (guaranteed since ES2019, true in every current browser), so
   // this only reorders by pinned-status and otherwise preserves each
@@ -242,6 +347,88 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
     }
   }
   const convertedCount = notes.filter((n) => n.converted).length
+
+  // ---- Label handlers ----
+
+  /**
+   * A note with its optimistic (not-yet-saved) label set applied, if any.
+   * Function declaration (hoisted) because the filtering above uses it.
+   * @param {object} note
+   * @returns {object} the same note, or a shallow copy with label_ids replaced.
+   */
+  function withPendingLabels(note) {
+    const pending = pendingLabels[note.id]
+    return pending ? { ...note, label_ids: pending } : note
+  }
+
+  /**
+   * Shows a label-related failure in the panel's error line. When the cause
+   * is the database not having the labels table/column yet, says exactly
+   * that instead of the raw database message.
+   * @param {string} action - e.g. 'create the label'.
+   * @param {Error} err
+   */
+  function reportLabelError(action, err) {
+    setError(
+      isMissingLabelSchemaError(err)
+        ? 'Labels need a one-time database update first (migration 008 in Supabase).'
+        : `Could not ${action}: ${err?.message || 'unknown error'}`
+    )
+  }
+
+  /**
+   * Saves a note's new label set, showing it immediately (optimistic) and
+   * rolling back the display if the save fails.
+   * @param {string} noteId
+   * @param {string[]} nextIds - the complete new label set.
+   */
+  async function saveNoteLabels(noteId, nextIds) {
+    pendingLabelsRef.current = { ...pendingLabelsRef.current, [noteId]: nextIds }
+    setPendingLabels(pendingLabelsRef.current)
+    try {
+      await onSetNoteLabels(noteId, nextIds)
+    } catch (err) {
+      reportLabelError('update labels', err)
+    } finally {
+      // Only clear if no newer toggle replaced this set while it was saving;
+      // otherwise that newer save will clear it when it settles.
+      if (pendingLabelsRef.current[noteId] === nextIds) {
+        const { [noteId]: _done, ...rest } = pendingLabelsRef.current // eslint-disable-line no-unused-vars
+        pendingLabelsRef.current = rest
+        setPendingLabels(rest)
+      }
+    }
+  }
+
+  /**
+   * Adds or removes one label on a note, building on any in-flight change
+   * so quick successive taps don't overwrite each other.
+   * TODO: if two saves for the same note ever complete out of order, the
+   * older response could briefly win in local state until the next refresh;
+   * acceptable for a single-user app on one connection.
+   * @param {object} note
+   * @param {string} labelId
+   */
+  function handleToggleNoteLabel(note, labelId) {
+    const base = pendingLabelsRef.current[note.id] ?? getNoteLabelIds(note)
+    saveNoteLabels(note.id, toggleLabelId(base, labelId, liveIdSet))
+  }
+
+  /**
+   * Creates a label from the picker's text box (or reuses a same-named
+   * one) and makes sure THIS note carries it.
+   * @param {object} note
+   * @param {string} name - already cleaned by the picker.
+   */
+  async function handleCreateAndApply(note, name) {
+    const label = await onCreateLabel(name) // throws -> the picker reports it
+    const base = pendingLabelsRef.current[note.id] ?? getNoteLabelIds(note)
+    if (base.includes(label.id)) return // reused an existing label the note already has
+    // The new label isn't in this render's liveIdSet yet, so add it before
+    // toggling (toggleLabelId drops ids it doesn't consider live).
+    const live = new Set([...liveIdSet, label.id])
+    await saveNoteLabels(note.id, toggleLabelId(base, label.id, live))
+  }
 
   async function handleSetColor(note, colorKey) {
     setColorPickerId(null)
@@ -283,7 +470,11 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
     setBusy(true)
     try {
       const topics = splitIntoTopics(draft)
-      if (topics.length) await onAddBulk(topics)
+      // While a label chip is active, new notes join that label (see
+      // LABELS in the header). Only sent when a label exists, which also
+      // guarantees the label_ids column exists (migration 008 has run).
+      const extraFields = activeLabel ? { label_ids: [activeLabel.id] } : {}
+      if (topics.length) await onAddBulk(topics, extraFields)
       setDraft('')
       // A successful Add ends this typing session — the next thing typed
       // into the (now-empty) box starts a fresh streak for both shortcuts.
@@ -310,6 +501,10 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
     (payload) => onUpdate(editingId, payload),
     { enabled: !!editingId }
   )
+
+  // The note open in the editor overlay, looked up fresh each render so its
+  // labels reflect saves made while the overlay is open.
+  const editingNote = editingId ? notes.find((n) => n.id === editingId) || null : null
 
   async function handleDoneEditing() {
     await flushEditAutosave()
@@ -376,18 +571,100 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
             Add
           </button>
         </div>
+        {/* Says where new notes will go while a label chip is active, since
+            handleCapture tags them with that label automatically. */}
+        {activeLabel && (
+          <p className="text-[10px] text-[var(--color-muted)] -mt-2 mb-4">
+            New notes will be labeled <span className="text-[var(--color-paper)] font-semibold">{activeLabel.name}</span>.
+          </p>
+        )}
 
-        {/* Search — plain client-side substring match against each note's
-            raw content (not just the parsed topic), since the notes list
-            is always already fully loaded for this user (no separate
-            server-side search needed at this scale). */}
-        {notes.length > 0 && (
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search notes…"
-            className="w-full bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-1.5 text-sm mb-3 focus:border-[var(--color-ember)] outline-none"
+        {/* Search + Labels button share one row. Search is a plain
+            client-side substring match against each note's raw content
+            (not just the parsed topic), since the notes list is always
+            already fully loaded for this user. The Labels button lives
+            here rather than at the end of the chip row because the chip
+            row scrolls sideways, which hid it off-screen on a phone. */}
+        {(notes.length > 0 || labels.length > 0) && (
+          <div className="flex items-center gap-2 mb-3">
+            {notes.length > 0 && (
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search notes…"
+                className="flex-1 min-w-0 bg-[var(--color-ink)] border border-[var(--color-line)] rounded px-3 py-1.5 text-sm focus:border-[var(--color-ember)] outline-none"
+              />
+            )}
+            <button
+              type="button"
+              aria-expanded={manageLabelsOpen}
+              onClick={() => setManageLabelsOpen((o) => !o)}
+              className={pillClass(manageLabelsOpen) + ' whitespace-nowrap flex-shrink-0'}
+            >
+              {manageLabelsOpen ? 'Labels ▴' : 'Labels ▾'}
+            </button>
+          </div>
+        )}
+
+        {/* LABEL FILTER CHIPS — only once at least one label exists (an
+            "All" chip on its own would just be clutter). One horizontally
+            scrollable row that never wraps, so many labels don't push the
+            notes list down on a phone. "Unlabeled" hides at 0 unless it's
+            the active filter. Tapping an active label chip clears it. */}
+        {labels.length > 0 && (
+          <div
+            role="group"
+            aria-label="Filter notes by label"
+            className="flex gap-2 overflow-x-auto pb-1 mb-3 -mx-1 px-1"
+          >
+            <button
+              type="button"
+              aria-pressed={activeFilter === ALL_FILTER}
+              onClick={() => setActiveFilter(ALL_FILTER)}
+              className={pillClass(activeFilter === ALL_FILTER) + ' whitespace-nowrap flex-shrink-0'}
+            >
+              All {chipCounts.all}
+            </button>
+            {sortedLabels.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                aria-pressed={activeFilter === l.id}
+                onClick={() => setActiveFilter(activeFilter === l.id ? ALL_FILTER : l.id)}
+                className={pillClass(activeFilter === l.id) + ' whitespace-nowrap flex-shrink-0'}
+              >
+                {l.name} {chipCounts.byLabel.get(l.id) || 0}
+              </button>
+            ))}
+            {(chipCounts.unlabeled > 0 || activeFilter === UNLABELED_FILTER) && (
+              <button
+                type="button"
+                aria-pressed={activeFilter === UNLABELED_FILTER}
+                onClick={() => setActiveFilter(activeFilter === UNLABELED_FILTER ? ALL_FILTER : UNLABELED_FILTER)}
+                className={pillClass(activeFilter === UNLABELED_FILTER) + ' whitespace-nowrap flex-shrink-0'}
+              >
+                Unlabeled {chipCounts.unlabeled}
+              </button>
+            )}
+          </div>
+        )}
+        {/* Fetch failed because the labels table isn't there yet — say so
+            once, quietly, instead of failing on the first tap. */}
+        {labelsError && isMissingLabelSchemaError(labelsError) && (
+          <p className="text-[10px] text-[var(--color-muted)] -mt-1 mb-3">
+            Labels need a one-time database update (migration 008) before they can be used.
+          </p>
+        )}
+        {manageLabelsOpen && (
+          <NoteLabelManager
+            labels={sortedLabels}
+            counts={allNoteCounts.byLabel}
+            onCreate={onCreateLabel}
+            onRename={onRenameLabel}
+            onDelete={onDeleteLabel}
+            onClose={() => setManageLabelsOpen(false)}
+            onError={reportLabelError}
           />
         )}
 
@@ -402,7 +679,11 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           {sortedVisibleNotes.length === 0 && (
             <p className="text-sm text-[var(--color-muted)]">
               {searchLower
-                ? `No notes match "${search.trim()}".`
+                ? `No notes match "${search.trim()}"${activeLabel ? ` in ${activeLabel.name}` : ''}.`
+                : activeLabel
+                ? `No notes labeled ${activeLabel.name} yet — add one above and it will land here.`
+                : activeFilter === UNLABELED_FILTER
+                ? 'Every note has a label.'
                 : notes.length === 0
                 ? 'Nothing jotted yet.'
                 : 'Nothing left to sort — everything visible has been converted.'}
@@ -410,6 +691,9 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
           )}
           {sortedVisibleNotes.map((note) => {
             const { topic, bullets } = parseNoteDisplay(note.content)
+            // Labels as displayed: includes any not-yet-saved toggle, and
+            // skips ids of labels that no longer exist.
+            const noteLabelsShown = getLiveNoteLabels(withPendingLabels(note), sortedLabels)
             // Compact preview: cap the visible bullets, note how many are hidden.
             const previewBullets = bullets.slice(0, MAX_PREVIEW_BULLETS)
             const hiddenCount = bullets.length - previewBullets.length
@@ -502,6 +786,24 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                   )}
                 </div>
 
+                {/* This note's labels. Tapping one filters the list to it
+                    (stopPropagation keeps it from also opening the editor). */}
+                {noteLabelsShown.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1 mb-1">
+                    {noteLabelsShown.map((l) => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveFilter(l.id) }}
+                        title={`Show notes labeled ${l.name}`}
+                        className="text-[10px] rounded-full px-2 py-0.5 border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-paper)]"
+                      >
+                        {l.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center gap-3 mt-1">
                   {note.converted ? (
                     <span className="text-xs text-[var(--color-good)]">✓ Converted to task</span>
@@ -533,7 +835,28 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
                     />
                     Color
                   </button>
+                  <button
+                    onClick={() => setLabelPickerId(labelPickerId === note.id ? null : note.id)}
+                    aria-expanded={labelPickerId === note.id}
+                    className="text-xs text-[var(--color-muted)] hover:text-[var(--color-paper)]"
+                  >
+                    {labelPickerId === note.id
+                      ? 'Hide labels ▴'
+                      : `Labels${noteLabelsShown.length ? ` (${noteLabelsShown.length})` : ''} ▾`}
+                  </button>
                 </div>
+
+                {labelPickerId === note.id && (
+                  <div className="mt-2 pt-2 border-t border-[var(--color-line)]">
+                    <NoteLabelPicker
+                      labels={sortedLabels}
+                      selectedIds={noteLabelsShown.map((l) => l.id)}
+                      onToggle={(labelId) => handleToggleNoteLabel(note, labelId)}
+                      onCreateAndApply={(name) => handleCreateAndApply(note, name)}
+                      onError={reportLabelError}
+                    />
+                  </div>
+                )}
 
                 {colorPickerId === note.id && (
                   <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-[var(--color-line)]">
@@ -597,6 +920,51 @@ export default function NotesPanel({ notes, onAddBulk, onUpdate, onDelete, onCon
               </button>
             </div>
           </div>
+          {/* Labels bar: the open note's current labels plus a toggle for
+              the same picker used on list cards (the summary pills hide
+              while the picker is open, since it shows the same labels
+              ticked). Collapsed by default so the writing area keeps nearly
+              the full screen. Labels save right away (not through the
+              content autosave). */}
+          {editingNote && (() => {
+            const editorLabelsShown = getLiveNoteLabels(withPendingLabels(editingNote), sortedLabels)
+            return (
+              <div className="px-4 py-2 border-b border-[var(--color-line)] flex-shrink-0 max-h-[40vh] overflow-y-auto">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {!editorLabelsOpen && editorLabelsShown.map((l) => (
+                    <span
+                      key={l.id}
+                      className="text-[10px] rounded-full px-2 py-0.5 border border-[var(--color-line)] text-[var(--color-muted)]"
+                    >
+                      {l.name}
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setEditorLabelsOpen((o) => !o)}
+                    aria-expanded={editorLabelsOpen}
+                    className="text-xs text-[var(--color-muted)] hover:text-[var(--color-paper)] py-1"
+                  >
+                    {editorLabelsOpen ? 'Hide labels ▴' : editorLabelsShown.length ? 'Edit labels ▾' : '+ Add label ▾'}
+                  </button>
+                </div>
+                {editorLabelsOpen && (
+                  <div className="mt-2">
+                    <NoteLabelPicker
+                      labels={sortedLabels}
+                      selectedIds={editorLabelsShown.map((l) => l.id)}
+                      onToggle={(labelId) => handleToggleNoteLabel(editingNote, labelId)}
+                      onCreateAndApply={(name) => handleCreateAndApply(editingNote, name)}
+                      onError={reportLabelError}
+                    />
+                  </div>
+                )}
+                {/* Label errors normally show in the panel underneath, which
+                    this overlay covers — so repeat the message here. */}
+                {error && <p className="text-xs text-[var(--color-ember)] mt-2">{error}</p>}
+              </div>
+            )
+          })()}
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
