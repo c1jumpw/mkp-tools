@@ -28,6 +28,8 @@
  * VERSION HISTORY
  *   v1  2026-10-10  Created as part of the UX/error cleanup that shipped
  *                    with smart routing.
+ *   v2  2026-11-18  403 message names the real button ("Forget passcode on
+ *                    this device"); there is no "Lock this device".
  * =========================================================================
  */
 
@@ -150,7 +152,7 @@ const UI = (() => {
     if (e.outcome === 'unknown') return { message: e.timeout ? 'ClickUp is responding slowly — it may or may not have saved this.' : 'The connection dropped before ClickUp confirmed — it may or may not have saved this.', detail, kind: 'unknown_outcome' };
     if (e.network) return { message: 'Couldn’t reach the Dispatch It server. Check your connection and try again.', detail, kind: 'network' };
     const s = e.status;
-    if (s === 403) return { message: 'This device’s passcode was rejected. Re-enter it (Settings → Lock this device).', detail, kind: 'auth' };
+    if (s === 403) return { message: 'This device’s passcode was rejected. Re-enter it (Settings → Forget passcode on this device).', detail, kind: 'auth' };
     if (s === 401) {
       return /^OAUTH/.test(e.code || '')
         ? { message: 'The ClickUp connection expired. Open Settings → Connect to ClickUp.', detail, kind: 'auth' }

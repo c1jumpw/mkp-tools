@@ -12,3 +12,4 @@ Add a new entry at the top whenever you ship something people will notice:
 - New getting-started tour with real screenshots. Pick Everyday use or Owner / admin and step through the screens. Replay it from ⋮ › Getting started tour.
 - Notes can have labels, like Work or Travel. Tap a label at the top of Notes to see only those notes.
 - The guide under ⋮ › Help & guide now refreshes its screenshots automatically whenever the app changes.
+- Sign out now signs out only the phone or computer you are using. Your other devices stay signed in.

@@ -1,7 +1,7 @@
 """
 =============================================================================
 FILE: guides/lib/build.py
-VERSION: v1 (2026-11-18)
+VERSION: v2 (2026-11-18)
 =============================================================================
 PURPOSE
   Builds, for one tool, everything users see for help:
@@ -32,6 +32,14 @@ ASSUMPTIONS / EDGE CASES
     does a guide figure whose numbered list doesn't have one entry per marker.
   - What's new only changes when a NEW changelog entry is added, so routine
     pushes (which retake screenshots) don't pop it up again.
+  - Inside the app the tour runs in an overlay iframe. "Open the full guide"
+    there posts {type:'tour:close', href} so the app closes the overlay and
+    navigates itself; otherwise the guide would load inside the overlay.
+
+REVISION HISTORY
+  v1  2026-11-18  Initial build: guide, tour, version.json, share copies.
+  v2  2026-11-18  Legend/marker count check; "Open the full guide" closes the
+                  in-app tour layer and opens the guide in the app window.
 =============================================================================
 """
 import hashlib
@@ -240,6 +248,17 @@ TOUR_JS = r"""
   document.querySelectorAll('[data-start]').forEach(function (b) { b.addEventListener('click', function () { start(b.getAttribute('data-start')); }); });
   document.querySelectorAll('[data-home]').forEach(function (b) { b.addEventListener('click', function () { home(b.getAttribute('data-home') || 'start'); }); });
   document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', finish); });
+  // Inside the app the tour is a layer over the app with no close control of
+  // its own, so loading the guide in it would trap the user. Instead ask the
+  // app to close the layer (marking the tour seen) and open the guide itself.
+  document.querySelectorAll('a[data-guide]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      if (!(ctx === 'app' && inFrame)) return;           // shared copy / opened directly: normal link
+      e.preventDefault();
+      window.parent.postMessage({ type: 'tour:close', version: DATA.version,
+        href: new URL(a.getAttribute('href'), location.href).href }, location.origin);
+    });
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') finish();
     if (!path) return;
@@ -281,7 +300,7 @@ def build_tour(tour, tool_name, brand_svg, tokens_css, fonts_link, shots, out_im
     screens.append(f'<section class="screen" id="start"><p class="eyebrow">Getting started</p>'
                    f'<h1>Welcome to {esc(tool_name)}</h1><p class="lede">{esc(tour["intro"])}</p>'
                    f'<div class="choices">{choices}</div>'
-                   f'<p class="links"><a href="{guide_href}">Open the full guide</a>'
+                   f'<p class="links"><a href="{guide_href}" data-guide>Open the full guide</a>'
                    f'<button type="button" class="btn" data-close>Close</button></p></section>')
 
     if entry:
@@ -290,7 +309,7 @@ def build_tour(tour, tool_name, brand_svg, tokens_css, fonts_link, shots, out_im
                        f'<h1>{esc(entry["title"])}</h1><ul class="new-list">{items}</ul>'
                        f'<div class="choices"><button type="button" class="choice" data-home="start"><b>Take the tour</b>'
                        f'<small>Step through the screens, with pictures.</small></button></div>'
-                       f'<p class="links"><a href="{guide_href}">Open the full guide</a>'
+                       f'<p class="links"><a href="{guide_href}" data-guide>Open the full guide</a>'
                        f'<button type="button" class="btn btn--primary" data-close>Done</button></p></section>')
 
     for key in ('user', 'admin'):
@@ -327,7 +346,7 @@ def build_tour(tour, tool_name, brand_svg, tokens_css, fonts_link, shots, out_im
                        f'<h1>You\'re set.</h1><p class="lede">{esc(tour["done"][key])}</p>'
                        f'<div class="choices"><button type="button" class="choice" data-start="{other}">'
                        f'<b>{esc(tour["paths"][other]["label"])} tour</b><small>{esc(tour["paths"][other]["blurb"])}</small></button></div>'
-                       f'<p class="links"><a href="{guide_href}">Open the full guide</a>'
+                       f'<p class="links"><a href="{guide_href}" data-guide>Open the full guide</a>'
                        f'<button type="button" class="btn btn--primary" data-close>Done</button></p></section>')
 
     data = {'version': entry['version'] if entry else 'none', 'backHref': back_href, 'guideHref': guide_href,

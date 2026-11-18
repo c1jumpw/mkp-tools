@@ -1,7 +1,7 @@
 /**
  * =============================================================================
  * FILE: src/components/GettingStartedTour.jsx
- * VERSION: v1 (initial)
+ * VERSION: v2
  * =============================================================================
  * PURPOSE
  *   Shows the getting-started tour (public/guide/tour.html — slides with real
@@ -25,12 +25,19 @@
  * CLOSING
  *   The tour page posts {type:'tour:close'} to this window (same origin)
  *   when its Close / Done buttons are tapped; Escape inside it does too.
+ *   "Open the full guide" posts the same message with an href: the layer
+ *   closes and this window opens the guide (same-origin URLs only).
  *
  * EDGE CASES
  *   - version.json missing (e.g. local dev before the guides are built):
  *     nothing auto-opens; the menu item still loads tour.html if present.
  *   - TOUR_SEEN_KEY === 'capture' is set by the screenshot script so the
  *     tour never covers the screens being captured.
+ *
+ * REVISION HISTORY
+ *   v1  2026-11-18  Initial: overlay, auto-open, seen marker.
+ *   v2  2026-11-18  Focus the tour on load; "Open the full guide" closes the
+ *                   layer and opens the guide in this window.
  * =============================================================================
  */
 
@@ -88,6 +95,14 @@ export default function GettingStartedTour({ mode, version, onClose }) {
       if (e.origin !== window.location.origin || e.data?.type !== 'tour:close') return
       writeSeen(e.data.version || version)
       onClose()
+      // "Open the full guide" from inside the tour: go there in this window
+      // (only same-origin pages, so a message can't send us elsewhere).
+      if (typeof e.data.href === 'string') {
+        try {
+          const dest = new URL(e.data.href, window.location.href)
+          if (dest.origin === window.location.origin) window.location.assign(dest.href)
+        } catch { /* bad URL: just close */ }
+      }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
