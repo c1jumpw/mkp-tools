@@ -1,0 +1,14 @@
+{
+ "version": "d26c5839f8",
+ "updated": "Nov 18, 2026",
+ "whatsNew": {
+  "date": "2026-11-18",
+  "title": "Getting-started tour and note labels",
+  "items": [
+   "New getting-started tour with real screenshots. Pick Everyday use or Owner / admin and step through the screens. Replay it from \u22ee \u203a Getting started tour.",
+   "Notes can have labels, like Work or Travel. Tap a label at the top of Notes to see only those notes.",
+   "The guide under \u22ee \u203a Help & guide now refreshes its screenshots automatically whenever the app changes."
+  ],
+  "version": "d26c5839f8"
+ }
+}

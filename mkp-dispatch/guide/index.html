@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en" data-context="app">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Dispatch It Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="How to use Dispatch It: smart capture, confirming, undo, manual destinations and every setting, plus admin setup.">
+<!--
+  =============================================================================
+  FILE: dispatch it guide (source: src/dispatch.body.html + shared styles,
+        assembled by make_dispatch_src.py -> build_guides.py)
+  VERSION: v2 (2026-11-18; v1 2026-10-30)
+  PURPOSE
+    Visual user guide for Dispatch It. Two audiences:
+      - Everyday use: anyone who unlocks the app with the passcode and
+        captures to ClickUp.
+      - Admin: whoever connects ClickUp, sets up smart routing, edits
+        destinations, manages the passcode and the Worker.
+    IMPORTANT: the app has no accounts or roles. Anyone who unlocks can
+    open Settings; the split here is by agreement, and the guide says so.
+  SCREENSHOTS
+    Real Dispatch It screens rendered against a fake Worker with EXAMPLE
+    captures and tasks (no real ClickUp data).
+  REVISION HISTORY
+    v1 — initial guide.
+    v2 — moved into the repo (guides/) so screenshots refresh on every
+         update; added the getting-started tour button, an automatic
+         "Updated" date and What's new (from CHANGELOG.md), the new Help /
+         tour menu items, and a "Keeping help current" admin chapter.
+  =============================================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: same manual layout as the DayForge guide; skin is Dispatch It's
+   own (ink + amber, IBM Plex, mono labels like the app's top bar). */
+:root {
+  --bg: #F3F4F6;        /* page ground (cool light) */
+  --surface: #FFFFFF;
+  --raised: #EEF0F3;
+  --line: #D7DAE1;
+  --text: #14161C;
+  --muted: #565C68;
+  --ember: #9A5D0C;     /* accent (amber, darkened for contrast on light) */
+  --steel: #3A67A0;     /* admin accent */
+  --good: #2E7D53;
+  --pin-ink: #FFFFFF;
+  --shadow: 0 1px 0 rgba(20,22,28,.04), 0 6px 18px -10px rgba(20,22,28,.25);
+  --font-display: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141A; --surface: #1B1E27; --raised: #232733; --line: #2E323F;
+    --text: #F3F1EA; --muted: #9AA0AE; --ember: #E8A33D; --steel: #8DB6EA;
+    --good: #4CAF7D; --pin-ink: #12141A;
+    --shadow: 0 1px 0 rgba(0,0,0,.2), 0 8px 22px -12px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12141A; --surface: #1B1E27; --raised: #232733; --line: #2E323F;
+  --text: #F3F1EA; --muted: #9AA0AE; --ember: #E8A33D; --steel: #8DB6EA;
+  --good: #4CAF7D; --pin-ink: #12141A;
+  --shadow: 0 1px 0 rgba(0,0,0,.2), 0 8px 22px -12px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(72px + env(safe-area-inset-top, 0px)); }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 400 16px/1.6 var(--font-body);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+a { color: var(--ember); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; border-radius: 4px; }
+img { max-width: 100%; display: block; }
+h1, h2, h3 { text-wrap: balance; }
+code, kbd { font-family: var(--font-mono); font-size: .88em; }
+code { background: var(--raised); border: 1px solid var(--line); padding: .05em .35em; border-radius: 4px; }
+kbd {
+  display: inline-block; min-width: 1.6em; text-align: center; padding: .1em .45em;
+  background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* ---- Top bar ---- */
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+}
+.topbar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); margin-right: auto; }
+.brand svg { flex: none; }
+.brand b { font: 700 22px/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.brand span { font: 500 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.back-to-app { display: none; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; text-decoration: none; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); color: var(--text); min-height: 40px; }
+[data-context="app"] .back-to-app { display: inline-flex; }
+.aud { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--raised); }
+.aud button {
+  font: 500 13px/1 var(--font-body); color: var(--muted); background: none; border: 0;
+  padding: 10px 12px; min-height: 40px; cursor: pointer;
+}
+.aud button + button { border-left: 1px solid var(--line); }
+.aud button[aria-pressed="true"] { background: var(--ember); color: var(--pin-ink); font-weight: 600; }
+
+/* ---- Hero ---- */
+.hero { padding-block: 40px 24px; }
+.eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.hero h1 { font: 700 clamp(42px, 7vw, 68px)/.95 var(--font-display); text-transform: uppercase; letter-spacing: .01em; margin: 0 0 16px; }
+.hero h1 em { font-style: normal; color: var(--ember); }
+.hero p.lede { font-size: 18px; max-width: 62ch; margin: 0 0 18px; color: var(--text); }
+.hero .meta { font: 400 13px/1.5 var(--font-mono); color: var(--muted); margin: 0; }
+
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; margin-top: 22px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 14px; box-shadow: var(--shadow); min-width: 0; }
+.role h2 { font: 700 22px/1.1 var(--font-display); text-transform: uppercase; letter-spacing: .03em; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+.role p { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
+.role ul { margin: 0; padding-left: 18px; font-size: 15px; }
+.role li { margin: 3px 0; }
+.tag { font: 500 11px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; padding: 5px 7px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.tag--user { color: var(--ember); }
+.tag--admin { color: var(--steel); }
+
+/* ---- Layout: contents rail + main ---- */
+.layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; padding-block: 18px 64px; }
+.toc { position: sticky; top: calc(76px + env(safe-area-inset-top, 0px)); align-self: start; max-height: calc(100vh - 96px); overflow: auto; font-size: 14px; }
+.toc p { font: 500 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 6px 0 10px; }
+.toc ol { list-style: none; margin: 0 0 18px; padding: 0; }
+.toc a { display: flex; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--text); text-decoration: none; line-height: 1.3; }
+.toc a span { font: 500 12px/1.3 var(--font-mono); color: var(--muted); min-width: 1.6em; }
+.toc a:hover { background: var(--raised); }
+.toc a.is-active { background: var(--raised); box-shadow: inset 3px 0 0 var(--ember); }
+.toc-mobile { display: none; }
+
+main { min-width: 0; }
+section.chapter { padding-block: 8px 34px; border-top: 1px solid var(--line); }
+section.chapter:first-child { border-top: 0; }
+.chapter-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; margin: 22px 0 6px; }
+.chapter-head .num { font: 500 14px/1 var(--font-mono); color: var(--ember); }
+.chapter-head h2 { font: 700 clamp(30px, 4.4vw, 40px)/1 var(--font-display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+.chapter > p, .chapter > ul, .chapter > ol, .chapter .prose { max-width: 68ch; }
+h3 { font: 600 21px/1.2 var(--font-display); text-transform: uppercase; letter-spacing: .04em; margin: 28px 0 8px; }
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 12px 0; max-width: 68ch; }
+.steps > li { counter-increment: s; position: relative; padding: 2px 0 10px 40px; }
+.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid var(--ember); color: var(--ember); font: 600 13px/23px var(--font-mono); text-align: center;
+}
+.note {
+  max-width: 68ch; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--steel);
+  border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 15px;
+}
+.note--warn { border-left-color: var(--ember); }
+.note strong:first-child { display: block; font: 500 11px/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+
+/* ---- Annotated screenshots ---- */
+figure.shot { margin: 18px 0 26px; display: grid; gap: 14px 26px; align-items: start; }
+figure.shot--phone { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+figure.shot--wide { grid-template-columns: minmax(0, 1fr); }
+.frame { position: relative; width: 100%; max-width: min(100%, var(--w)); margin-left: 14px; }
+figure.shot--wide .frame { max-width: min(calc(100% - 14px), var(--w)); }
+.zoom { display: block; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); cursor: zoom-in; width: 100%; box-shadow: var(--shadow); }
+.zoom img { width: 100%; height: auto; }
+.pin {
+  position: absolute; left: var(--x); top: var(--y); width: 24px; height: 24px; border-radius: 50%;
+  background: var(--ember); color: var(--pin-ink); font: 600 12px/24px var(--font-mono); text-align: center;
+  box-shadow: 0 0 0 2px var(--surface), 0 2px 6px rgba(0,0,0,.35); transform: translate(-50%, -50%);
+  pointer-events: none; transition: transform .15s ease, box-shadow .15s ease;
+}
+.pin[data-a="left"] { transform: translate(-100%, -50%); }
+.pin[data-a="right"] { transform: translate(0, -50%); }
+.pin.is-hot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 6px color-mix(in srgb, var(--ember) 45%, transparent); }
+.pin[data-a="left"].is-hot { transform: translate(-100%, -50%) scale(1.15); }
+.pin[data-a="right"].is-hot { transform: translate(0, -50%) scale(1.15); }
+.pin:not([data-a="left"]):not([data-a="right"]).is-hot { transform: translate(-50%, -50%) scale(1.15); }
+figcaption { grid-column: 1 / -1; font-size: 14px; color: var(--muted); max-width: 72ch; order: -1; }
+figcaption b { color: var(--text); font-weight: 600; }
+ol.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+figure.shot--wide ol.legend { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 2px 18px; }
+ol.legend li { counter-increment: lg; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 7px 8px; border-radius: 8px; font-size: 15px; line-height: 1.45; }
+ol.legend { counter-reset: lg; }
+ol.legend li::before {
+  content: counter(lg); width: 24px; height: 24px; border-radius: 50%; background: var(--ember); color: var(--pin-ink);
+  font: 600 12px/24px var(--font-mono); text-align: center; margin-top: 1px;
+}
+ol.legend li.is-hot { background: var(--raised); }
+ol.legend li b { font-weight: 600; }
+
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; align-items: start; }
+.pair figure.shot { margin: 0; grid-template-columns: minmax(0, 1fr); }
+.pair figure.shot .frame { max-width: min(calc(100% - 14px), var(--w), 360px); }
+.pair figure.shot--wide .frame { max-width: min(calc(100% - 14px), var(--w)); }
+
+/* ---- Flow diagram ---- */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0 20px; max-width: 860px; }
+.flow .node { flex: 1 1 140px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--ember); border-radius: 8px; padding: 10px 12px; }
+.flow .node.alt { border-top-color: var(--steel); }
+.flow .node.done { border-top-color: var(--good); }
+.flow .node b { display: block; font: 700 18px/1.1 var(--font-display); text-transform: uppercase; letter-spacing: .03em; }
+.flow .node small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 4px; }
+.flow .arrow { flex: 0 0 auto; align-self: center; color: var(--muted); font: 500 18px/1 var(--font-mono); }
+
+/* ---- Architecture diagram ---- */
+.arch { display: grid; grid-template-columns: 1fr auto 1fr auto 1.2fr; gap: 10px; align-items: center; margin: 16px 0; max-width: 900px; }
+.arch .box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.arch .box b { display: block; font: 700 18px/1.1 var(--font-display); text-transform: uppercase; letter-spacing: .03em; }
+.arch .box small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 4px; }
+.arch .box ul { margin: 6px 0 0; padding-left: 16px; font-size: 13px; color: var(--muted); }
+.arch .link { color: var(--muted); font: 500 12px/1.3 var(--font-mono); text-align: center; }
+.arch .link::after { content: "→"; display: block; font-size: 20px; color: var(--ember); }
+
+/* ---- Tables ---- */
+.table-wrap { overflow-x: auto; margin: 14px 0 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); max-width: 900px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font: 500 11px/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); background: var(--raised); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+td.wrap-ok { white-space: normal; }
+
+/* ---- Lightbox ---- */
+.lightbox { position: fixed; inset: 0; z-index: 20; background: rgba(10,10,12,.86); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.lightbox img { max-height: 92vh; width: auto; max-width: 100%; border-radius: 8px; overflow: auto; }
+.lightbox button { position: absolute; top: max(12px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); background: #fff; color: #111; border: 0; border-radius: 6px; padding: 10px 14px; font: 600 14px/1 var(--font-body); min-height: 40px; }
+
+/* ---- Audience filter ---- */
+body[data-aud="user"] [data-for="admin"],
+body[data-aud="admin"] [data-for="user"] { display: none; }
+
+footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var(--muted); font-size: 14px; }
+/* ---- v2: tour button + What's new ---- */
+.hero-ctas { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 4px 0 14px; }
+.btn-tour { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 8px; background: var(--ember); color: var(--pin-ink); font-weight: 600; text-decoration: none; }
+.btn-tour:hover { filter: brightness(1.08); }
+.whats-new { border-left-color: var(--ember); max-width: 72ch; }
+.whats-new b { display: block; margin-bottom: 4px; }
+.whats-new ul { margin: 4px 0 0; padding-left: 18px; }
+
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .toc { display: none; }
+  .toc-mobile { display: block; margin: 0 0 8px; }
+  .toc-mobile details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  .toc-mobile summary { padding: 12px 14px; font-weight: 600; cursor: pointer; min-height: 44px; }
+  .toc-mobile .toc { display: block; position: static; max-height: none; padding: 0 8px 4px; }
+  figure.shot--phone { grid-template-columns: minmax(0, 1fr); }
+  figure.shot--phone .frame { max-width: min(calc(100% - 14px), 340px); }
+  .arch { grid-template-columns: minmax(0, 1fr); }
+  .arch .link::after { content: "↓"; }
+  .hero { padding-block: 28px 16px; }
+}
+@media (max-width: 640px) {
+  .flow { flex-direction: column; }
+  .flow .node { flex: 0 0 auto; }
+  .flow .arrow { transform: rotate(90deg); align-self: flex-start; margin-left: 18px; }
+}
+@media (max-width: 520px) {
+  .aud button { padding: 10px 9px; font-size: 12px; }
+  .brand span { display: none; }
+  .pin { width: 20px; height: 20px; font-size: 11px; line-height: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+
+/* ---- Dispatch It overrides ---- */
+.brand b { font: 600 15px/1 var(--font-mono); letter-spacing: .16em; }
+.hero h1 { font: 600 clamp(32px, 5.4vw, 52px)/1.08 var(--font-display); letter-spacing: -.01em; text-transform: none; }
+.chapter-head h2 { font: 600 clamp(22px, 3.2vw, 30px)/1.15 var(--font-display); text-transform: none; letter-spacing: -.005em; }
+.role h2 { font: 600 17px/1.2 var(--font-display); text-transform: none; letter-spacing: 0; }
+h3 { font: 600 15px/1.3 var(--font-mono); letter-spacing: .1em; }
+.flow .node b, .arch .box b { font: 600 15px/1.25 var(--font-mono); text-transform: none; letter-spacing: 0; }
+.chip { font: 500 11px/1 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; padding: 5px 8px; border-radius: 5px; background: var(--raised); color: var(--muted); white-space: nowrap; }
+.chip--auto { background: color-mix(in srgb, var(--ember) 18%, var(--surface)); color: var(--ember); }
+.chip--ai { background: color-mix(in srgb, #7C8AF6 20%, var(--surface)); color: color-mix(in srgb, #5A68D8 70%, var(--text)); }
+.plain { color: var(--muted); font-size: 14px; }
+main li code, main p code { overflow-wrap: anywhere; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c); margin-right: 8px; vertical-align: 0; }
+/* Confidence scale, drawn to scale: positions are % of 0-100. */
+.scale { max-width: 760px; margin: 22px 0 18px; padding: 34px 14px 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.scale-bar { position: relative; height: 30px; border-radius: 6px; overflow: visible; }
+.band { position: absolute; top: 0; bottom: 0; left: calc(var(--from) * 1%); width: calc((var(--to) - var(--from)) * 1%); display: grid; place-items: center; font: 500 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text); }
+.band--low { background: color-mix(in srgb, #E2604F 22%, var(--surface)); border-radius: 6px 0 0 6px; }
+.band--mid { background: color-mix(in srgb, #E8A33D 26%, var(--surface)); }
+.band--high { background: color-mix(in srgb, #4CAF7D 26%, var(--surface)); border-radius: 0 6px 6px 0; }
+.mark { position: absolute; top: -8px; bottom: -8px; left: calc(var(--at) * 1%); width: 0; border-left: 2px dashed var(--muted); }
+.mark--on { border-left: 2px solid var(--ember); }
+.mark i { position: absolute; bottom: 100%; transform: translateX(-50%); white-space: nowrap; font: 500 11px/1.4 var(--font-mono); font-style: normal; color: var(--muted); padding-bottom: 2px; }
+.mark--on i { color: var(--ember); font-weight: 600; }
+.scale-axis { position: relative; height: 22px; margin-top: 8px; font: 400 11px/1 var(--font-mono); color: var(--muted); }
+.scale-axis span { position: absolute; left: calc(var(--at) * 1%); transform: translateX(-50%); }
+.scale-axis span:first-child { transform: none; }
+.scale-axis span:last-child { transform: translateX(-100%); }
+.scale-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 8px; font-size: 14px; color: var(--muted); }
+.scale-key b { font: 600 13px/1 var(--font-mono); color: var(--text); margin-right: 4px; }
+.scale-key .on, .scale-key .on b { color: var(--ember); }
+@media (max-width: 520px) { .band { font-size: 9px; letter-spacing: .04em; } }
+
+</style>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Dispatch It Guide, back to top">
+      <svg width="28" height="28" viewBox="0 0 512 512" aria-hidden="true"><mask id="dg-notch"><rect x="-58" y="-58" width="629" height="629" fill="#fff"/><circle cx="20" cy="256" r="42" fill="#000"/><circle cx="492" cy="256" r="42" fill="#000"/></mask><rect x="20" y="20" width="472" height="472" rx="96" fill="#E8A33D" mask="url(#dg-notch)"/><path d="M125.7 256H347" stroke="#12141A" stroke-width="56.5" stroke-linecap="round"/><path d="M248.6 150.3L359.3 256L248.6 361.7" fill="none" stroke="#12141A" stroke-width="56.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <b>Dispatch It</b><span>Guide</span>
+    </a>
+    <a class="back-to-app" href="../">← Back to Dispatch It</a>
+    <div class="aud" role="group" aria-label="Show sections for">
+      <button type="button" data-aud="all" aria-pressed="true">Everyone</button>
+      <button type="button" data-aud="user" aria-pressed="false">Everyday use</button>
+      <button type="button" data-aud="admin" aria-pressed="false">Admin</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap" id="top">
+  <div class="hero">
+    <p class="eyebrow">Help &amp; guide</p>
+    <h1>Say it once. <em>It lands in the right list.</em></h1>
+    <p class="lede">Dispatch It sends quick captures into ClickUp. Type or dictate a thought and smart routing picks the list, tidies the title, reads dates and checks for duplicates. If you prefer, you can pick the business and list yourself. This guide shows every screen and setting with real screenshots. The numbers on each picture match the list beside it.</p>
+    <p class="meta">Updated Nov 18, 2026 · Screenshots are retaken automatically with each update, using example data</p>
+    <p class="hero-ctas"><a class="btn-tour" href="tour.html">Take the getting-started tour →</a></p>
+    <div class="note whats-new"><strong>What's new · 2026-11-18</strong><b>Getting-started tour and guide</b><ul><li>New getting-started tour with real screenshots. Pick Everyday use or Admin and step through the screens.</li><li>Tap the ? on Home for the tour or the full guide. Admins also find both under Settings › Help.</li><li>The guide and tour now refresh their screenshots automatically whenever the app changes.</li></ul></div>
+    <div class="roles">
+      <div class="role" data-for="user">
+        <h2>Everyday use <span class="tag tag--user">Everyone</span></h2>
+        <p>Anyone who has unlocked the app on their device with the passcode.</p>
+        <ul>
+          <li>Capture with smart routing or pick the list yourself</li>
+          <li>Confirm suggestions, add updates to existing tasks</li>
+          <li>Follow-ups, Add to Accounts, voice and attachments</li>
+          <li>Activity and Undo</li>
+        </ul>
+      </div>
+      <div class="role" data-for="admin">
+        <h2>Admin <span class="tag tag--admin">Admin</span></h2>
+        <p>Whoever runs the setup: ClickUp connection, smart routing, destinations and the passcode.</p>
+        <ul>
+          <li>Settings: auto-filing, duplicate checks, sync</li>
+          <li>Destinations and new ClickUp lists</li>
+          <li>Passcode, secrets and the Worker</li>
+          <li>Limits and troubleshooting</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note note--warn" data-for="admin"><strong>Settings aren't locked</strong>Dispatch It has one shared passcode and no separate admin login. Anyone who unlocks the app can open Settings. Changes to auto-filing and duplicate checks apply to every device. Share the passcode only with people you trust, and agree that Settings is for admins.</div>
+  </div>
+</div>
+
+<div class="wrap layout">
+  <nav class="toc" aria-label="Contents">
+    <p>Everyday use</p>
+    <ol data-for="user">
+      <li><a href="#unlock"><span>01</span>Unlock &amp; install</a></li>
+      <li><a href="#home"><span>02</span>Home</a></li>
+      <li><a href="#smart"><span>03</span>Smart capture</a></li>
+      <li><a href="#confirm"><span>04</span>The Confirm screen</a></li>
+      <li><a href="#autofile"><span>05</span>Auto-filed &amp; Undo</a></li>
+      <li><a href="#manual"><span>06</span>Pick the list yourself</a></li>
+      <li><a href="#followup"><span>07</span>Follow-ups</a></li>
+      <li><a href="#accounts"><span>08</span>Add to Accounts</a></li>
+      <li><a href="#activity"><span>09</span>Activity &amp; Undo</a></li>
+      <li><a href="#offline"><span>10</span>Offline &amp; drafts</a></li>
+    </ol>
+    <p>Admin</p>
+    <ol data-for="admin">
+      <li><a href="#how-built"><span>A1</span>How it's put together</a></li>
+      <li><a href="#settings"><span>A2</span>Settings reference</a></li>
+      <li><a href="#confidence"><span>A3</span>Auto-filing &amp; confidence</a></li>
+      <li><a href="#setup"><span>A4</span>First-time setup</a></li>
+      <li><a href="#destinations"><span>A5</span>Destinations</a></li>
+      <li><a href="#passcode"><span>A6</span>Passcode &amp; secrets</a></li>
+      <li><a href="#limits"><span>A7</span>Limits &amp; Undo rules</a></li>
+      <li><a href="#trouble"><span>A8</span>Troubleshooting</a></li>
+      <li><a href="#upkeep"><span>A9</span>Keeping help current</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="toc-mobile"><details><summary>Contents</summary><div class="toc-slot"></div></details></div>
+
+    <!-- ================= EVERYDAY ================= -->
+    <section class="chapter" id="unlock" data-for="user">
+      <div class="chapter-head"><span class="num">01</span><h2>Unlock &amp; install</h2><span class="tag tag--user">Everyday</span></div>
+      <figure class="shot shot--phone" data-src="lock" data-alt="Dispatch It passcode screen"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Dispatch It passcode screen"><img src="img/lock.webp" width="780" height="1688" alt="Dispatch It passcode screen" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:16.15%;--y:53.38%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:16.15%;--y:61.61%" aria-hidden="true">2</span></div>
+        <figcaption><b>First open on a device.</b> You enter the passcode once; the device remembers it.</figcaption>
+        <ol class="legend">
+          <li><span><b>Passcode</b> ask your admin for it.</span></li>
+          <li><span><b>Unlock.</b> "Wrong passcode — try again." means it didn't match.</span></li>
+        </ol>
+      </figure>
+      <h3>Put it on your home screen</h3>
+      <ol class="steps">
+        <li><b>iPhone:</b> in Safari tap <b>Share</b> › <b>Add to Home Screen</b>.</li>
+        <li><b>Android:</b> in Chrome tap <b>⋮</b> › <b>Add to Home screen</b>. Long-press the icon later for <b>New capture</b> and <b>Activity</b> shortcuts.</li>
+      </ol>
+    </section>
+
+    <section class="chapter" id="home" data-for="user">
+      <div class="chapter-head"><span class="num">02</span><h2>Home</h2><span class="tag tag--user">Everyday</span></div>
+      <figure class="shot shot--phone" data-src="home" data-alt="Dispatch It home screen"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Dispatch It home screen"><img src="img/home.webp" width="780" height="1688" alt="Dispatch It home screen" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="right" style="--x:13.85%;--y:4.27%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="center" style="--x:71.79%;--y:4.27%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="center" style="--x:81.54%;--y:4.27%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="right" style="--x:96.41%;--y:4.27%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:72.34%;--y:10.96%" aria-hidden="true">5</span><span class="pin" data-n="6" data-a="top" style="--x:6.67%;--y:16.94%" aria-hidden="true">6</span><span class="pin" data-n="7" data-a="left" style="--x:22.32%;--y:36.43%" aria-hidden="true">7</span><span class="pin" data-n="8" data-a="left" style="--x:4.62%;--y:42.36%" aria-hidden="true">8</span></div>
+        <figcaption><b>Home.</b> One big button and the last things you sent from this device.</figcaption>
+        <ol class="legend">
+          <li><span><b>Check for updates</b> reloads with the newest version.</span></li>
+          <li><span><b>Help &amp; guide</b> the getting-started tour or this guide.</span></li>
+          <li><span><b>Activity</b> everything sent from every device, with Undo (section 09).</span></li>
+          <li><span><b>Settings</b> mostly for admins (A2).</span></li>
+          <li><span><b>Waiting to send</b> shows when captures are saved offline. <b>Retry now</b> sends them.</span></li>
+          <li><span><b>New Capture.</b> "Auto-routed" means smart routing is on (section 03).</span></li>
+          <li><span><b>Choose the destination yourself</b> skips smart routing (section 06).</span></li>
+          <li><span><b>Recent</b> the last 20 sends from this device. Tap the link icon to open one in ClickUp.</span></li>
+        </ol>
+      </figure>
+      <h3>Recent badges</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Badge</th><th>Means</th></tr></thead>
+          <tbody>
+            <tr><td><span class="chip chip--auto">Auto 94%</span></td><td class="wrap-ok">Smart routing filed it on its own, 94% sure</td></tr>
+            <tr><td><span class="chip chip--ai">AI 78%</span></td><td class="wrap-ok">Smart routing suggested it and you confirmed</td></tr>
+            <tr><td><span class="chip chip--ai">Update</span></td><td class="wrap-ok">Added as a comment on an existing task</td></tr>
+            <tr><td><span class="chip">Undone</span></td><td class="wrap-ok">Undone from the toast or Activity</td></tr>
+            <tr><td><span class="plain">To-Do</span></td><td class="wrap-ok">Sent with the manual picker; shows the capture type</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="chapter" id="smart" data-for="user">
+      <div class="chapter-head"><span class="num">03</span><h2>Smart capture</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Write it the way you'd say it: "Call Jim Friday about the overdue invoice, urgent". Smart routing (Gemini) picks the list, cleans up the title, turns "Friday" into a date and "urgent" into a priority, and checks whether the same work already exists.</p>
+      <div class="flow" role="img" aria-label="Type, Route and Send, then either auto-filed with Undo, or the Confirm screen">
+        <div class="node"><b>Type or dictate</b><small>Optional business hint</small></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="node alt"><b>Route &amp; Send</b><small>Picks list, title, dates, priority; checks duplicates</small></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="node done"><b>Sure &amp; no duplicate</b><small>Files itself. Undo for 8 seconds</small></div>
+        <span class="arrow" aria-hidden="true">or</span>
+        <div class="node"><b>Not sure</b><small>Opens the Confirm screen so you decide</small></div>
+      </div>
+      <figure class="shot shot--phone" data-src="smart" data-alt="Smart capture screen with a note typed in"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Smart capture screen with a note typed in"><img src="img/smart.webp" width="780" height="1352" alt="Smart capture screen with a note typed in" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="top" style="--x:6.67%;--y:14.05%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:4.62%;--y:43.99%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:57.0%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="top" style="--x:6.67%;--y:86.24%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:25.36%;--y:96.52%" aria-hidden="true">5</span></div>
+        <figcaption><b>New Capture.</b> Only the text is required.</figcaption>
+        <ol class="legend">
+          <li><span><b>What's on your mind?</b> One thought per capture works best.</span></li>
+          <li><span><b>Hint</b> (optional): tap a business to nudge the choice. Tap again to clear.</span></li>
+          <li><span><b>Dictate</b> types as you speak. <b>Voice note</b> records audio and <b>Attach</b> adds files (each up to 90 MB).</span></li>
+          <li><span><b>Route &amp; Send.</b> Shows "Finding the right list…" while it works.</span></li>
+          <li><span><b>Choose the destination myself</b> carries your text to the manual picker.</span></li>
+        </ol>
+      </figure>
+      <div class="note"><strong>Offline?</strong>Smart routing needs a connection. Offline, the app hands your text to the manual picker, which saves it and sends it once you're back online.</div>
+    </section>
+
+    <section class="chapter" id="confirm" data-for="user">
+      <div class="chapter-head"><span class="num">04</span><h2>The Confirm screen</h2><span class="tag tag--user">Everyday</span></div>
+      <p>When smart routing isn't sure, or finds a task that looks the same, it asks first. Everything here can be changed before sending.</p>
+      <figure class="shot shot--phone" data-src="review" data-alt="Confirm screen with a duplicate warning and suggested destination"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Confirm screen with a duplicate warning and suggested destination"><img src="img/review.webp" width="780" height="2020" alt="Confirm screen with a duplicate warning and suggested destination" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:8.46%;--y:9.31%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:8.46%;--y:21.25%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:8.46%;--y:35.95%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="left" style="--x:8.46%;--y:44.77%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:8.46%;--y:54.28%" aria-hidden="true">5</span><span class="pin" data-n="6" data-a="left" style="--x:8.46%;--y:58.19%" aria-hidden="true">6</span><span class="pin" data-n="7" data-a="left" style="--x:4.62%;--y:65.41%" aria-hidden="true">7</span><span class="pin" data-n="8" data-a="top" style="--x:6.67%;--y:93.66%" aria-hidden="true">8</span></div>
+        <figcaption><b>Confirm.</b> In this example the capture looks like an existing task, so you choose.</figcaption>
+        <ol class="legend">
+          <li><span><b>Looks like an existing task.</b> Shows the task, where it is, its status and how similar it is.</span></li>
+          <li><span><b>Add as update</b> posts your note as a comment on that task instead of making a copy. <b>View</b> opens it.</span></li>
+          <li><span><b>Suggested destination</b> with a confidence bar and the reason.</span></li>
+          <li><span><b>★ Top pick,</b> then other likely lists with their percentages. Tap one to choose it.</span></li>
+          <li><span><b>Other list…</b> search every ClickUp list.</span></li>
+          <li><span><b>Why 78%?</b> shows what raised or lowered the score, and the level needed to file on its own.</span></li>
+          <li><span><b>Title, Due date, Start date, Priority</b> filled in for you; edit any of them.</span></li>
+          <li><span><b>Send to</b> the chosen list, or <b>Create new in</b> it when a duplicate was found.</span></li>
+        </ol>
+      </figure>
+      <figure class="shot shot--phone" data-src="list-chooser" data-alt="Choose a list sheet"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Choose a list sheet"><img src="img/list-chooser.webp" width="780" height="1736" alt="Choose a list sheet" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:9.84%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:82.82%;--y:15.77%" aria-hidden="true">2</span></div>
+        <figcaption><b>Other list…</b> opens this sheet.</figcaption>
+        <ol class="legend">
+          <li><span><b>Search</b> by business or list name.</span></li>
+          <li><span><b>yours</b> marks the lists set up as Dispatch It destinations. The rest come from syncing ClickUp.</span></li>
+        </ol>
+      </figure>
+      <div class="note"><strong>Smart routing learns</strong>When you pick a different list, or undo a capture, later suggestions take that into account.</div>
+    </section>
+
+    <section class="chapter" id="autofile" data-for="user">
+      <div class="chapter-head"><span class="num">05</span><h2>Auto-filed &amp; Undo</h2><span class="tag tag--user">Everyday</span></div>
+      <figure class="shot shot--phone" data-src="autofile" data-alt="Home screen with the Auto-filed message and Undo"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Home screen with the Auto-filed message and Undo"><img src="img/autofile.webp" width="780" height="1688" alt="Home screen with the Auto-filed message and Undo" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="top" style="--x:10.0%;--y:84.56%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:81.12%;--y:85.49%" aria-hidden="true">2</span></div>
+        <figcaption><b>Filed on its own.</b> You land back on Home with a message at the bottom.</figcaption>
+        <ol class="legend">
+          <li><span><b>Auto-filed to Receivable · 91%</b> says where it went and how sure it was.</span></li>
+          <li><span><b>Undo</b> stays for 8 seconds. After that, undo it from Activity.</span></li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="chapter" id="manual" data-for="user">
+      <div class="chapter-head"><span class="num">06</span><h2>Pick the list yourself</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Tap <b>Choose the destination yourself →</b> on Home. Three taps: business, type, form.</p>
+      <div class="pair">
+        <figure class="shot shot--phone" data-src="entities" data-alt="Business picker"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Business picker"><img src="img/entities.webp" width="780" height="1688" alt="Business picker" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="top" style="--x:6.67%;--y:8.77%" aria-hidden="true">1</span></div>
+          <figcaption><b>Where's this going?</b> One tile per business.</figcaption>
+          <ol class="legend">
+            <li><span><b>Tap a business</b> to see its capture types.</span></li>
+          </ol>
+        </figure>
+        <figure class="shot shot--phone" data-src="types" data-alt="Capture types for MKP"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Capture types for MKP"><img src="img/types.webp" width="780" height="1688" alt="Capture types for MKP" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="top" style="--x:6.67%;--y:8.77%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="top" style="--x:6.67%;--y:55.69%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:66.05%" aria-hidden="true">3</span></div>
+          <figcaption><b>Capture types</b> for the chosen business.</figcaption>
+          <ol class="legend">
+            <li><span><b>Capture type</b> each one goes to a specific ClickUp list.</span></li>
+            <li><span><b>Follow-up / Reminder</b> comments on an existing task (section 07).</span></li>
+            <li><span><b>More lists in this space</b> any other ClickUp lists in that business, added automatically.</span></li>
+          </ol>
+        </figure>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Business</th><th>What it covers</th><th>Capture types</th></tr></thead>
+          <tbody>
+            <tr><td><span class="sw" style="--c:#E8A33D"></span>MKP</td><td class="wrap-ok">Personal</td><td class="wrap-ok">To-Do, Light Bulb, New Contact Activity, New Meeting/Apt/Event, Accounting Item, Subscription, Follow-up</td></tr>
+            <tr><td><span class="sw" style="--c:#7C8AF6"></span>Super Admin</td><td class="wrap-ok">Org management</td><td class="wrap-ok">Task, Light Bulb, Process / System Idea, Receivable, Payable, Subscription, Team Directory Update, Automation Idea, Follow-up, Add to Accounts</td></tr>
+            <tr><td><span class="sw" style="--c:#4CAF7D"></span>CRM &amp; Operations</td><td class="wrap-ok">Clients &amp; pipeline</td><td class="wrap-ok">New Lead, Pipeline Update, New Contact, Company / Account Note, CRM Task, Activity Log, Email Follow-up, Lead Magnet Idea, Plan/Product Idea, Follow-up</td></tr>
+            <tr><td><span class="sw" style="--c:#E2604F"></span>JTG Admin</td><td class="wrap-ok">Jump Tech Group agency</td><td class="wrap-ok">F5 CEO Task, BMS Task, F5 Task, Light Bulb, Content Idea, Follow-up</td></tr>
+            <tr><td><span class="sw" style="--c:#D06BC2"></span>Mambay Co</td><td class="wrap-ok">Independent projects &amp; brand</td><td class="wrap-ok">Task, Light Bulb, Content Idea, Follow-up</td></tr>
+            <tr><td><span class="sw" style="--c:#3FA7D6"></span>Unywebs</td><td class="wrap-ok">Marketplace / reseller</td><td class="wrap-ok">Task, Light Bulb, Content Idea, New Hosting Account Request, New Systems.io Account Request, New Zoho Email Request, Follow-up</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="shot shot--phone" data-src="form" data-alt="Capture form for an MKP To-Do"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Capture form for an MKP To-Do"><img src="img/form.webp" width="780" height="1586" alt="Capture form for an MKP To-Do" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:14.63%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:4.62%;--y:37.89%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:55.3%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="left" style="--x:4.62%;--y:69.92%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:4.62%;--y:76.61%" aria-hidden="true">5</span><span class="pin" data-n="6" data-a="left" style="--x:31.97%;--y:83.8%" aria-hidden="true">6</span><span class="pin" data-n="7" data-a="top" style="--x:6.67%;--y:91.93%" aria-hidden="true">7</span></div>
+        <figcaption><b>The form</b> for a task-type capture (MKP › To-Do). Other types have fewer fields.</figcaption>
+        <ol class="legend">
+          <li><span><b>Title</b> (required, marked ✱). Words are capitalized when sent.</span></li>
+          <li><span><b>Priority:</b> Urgent, High, Normal or Low.</span></li>
+          <li><span><b>Start and Due dates.</b> Tags take a comma-separated list.</span></li>
+          <li><span><b>Make this a subtask</b> search tasks in the same list by name or ID and pick the parent.</span></li>
+          <li><span><b>Assignee</b> anyone on that list, or Unassigned.</span></li>
+          <li><span><b>Dictate, Voice note, Attach</b> (90 MB per file).</span></li>
+          <li><span><b>Send to ClickUp.</b> A check mark confirms, then you're back on Home.</span></li>
+        </ol>
+      </figure>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Form</th><th>Fields (✱ required)</th></tr></thead>
+          <tbody>
+            <tr><td>Task</td><td class="wrap-ok">Title ✱, Details, Priority, Start date, Due date, Tags, subtask, Assignee</td></tr>
+            <tr><td>Note</td><td class="wrap-ok">Title ✱, Note</td></tr>
+            <tr><td>Light Bulb (idea)</td><td class="wrap-ok">Idea ✱, Details, Opportunity (High/Medium/Low), Category</td></tr>
+            <tr><td>Contact</td><td class="wrap-ok">Name ✱, Company, Best way to reach them, Notes, Follow up by</td></tr>
+            <tr><td>Lead</td><td class="wrap-ok">Lead name ✱, Company, Source, Notes</td></tr>
+            <tr><td>Log</td><td class="wrap-ok">Title ✱, Details</td></tr>
+            <tr><td>Request</td><td class="wrap-ok">What do you need? ✱, Details</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="shot shot--phone" data-src="dup-sheet" data-alt="This might already exist sheet"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: This might already exist sheet"><img src="img/dup-sheet.webp" width="780" height="756" alt="This might already exist sheet" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:59.93%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:4.62%;--y:74.48%" aria-hidden="true">2</span></div>
+        <figcaption><b>Duplicate check.</b> If an open task looks the same, the app asks before creating another.</figcaption>
+        <ol class="legend">
+          <li><span><b>Add as update</b> comments on the existing task (and adds your files to it).</span></li>
+          <li><span><b>Create new anyway</b> sends it as a new task. <b>Cancel</b> goes back to the form.</span></li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="chapter" id="followup" data-for="user">
+      <div class="chapter-head"><span class="num">07</span><h2>Follow-ups</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Every business has <b>Follow-up / Reminder</b>. It doesn't create a task: it adds your note as a comment on a task that already exists.</p>
+      <figure class="shot shot--phone" data-src="followup" data-alt="Follow-up form"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Follow-up form"><img src="img/followup.webp" width="780" height="1040" alt="Follow-up form" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:7.95%;--y:29.81%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:4.62%;--y:47.98%" aria-hidden="true">2</span></div>
+        <figcaption><b>Follow-up / Reminder.</b> Searches every task list in that business.</figcaption>
+        <ol class="legend">
+          <li><span><b>Search by name or ID</b> (at least 2 characters), then tap the task. Required.</span></li>
+          <li><span><b>Follow-up note</b> what to follow up on. Sent as a comment.</span></li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="chapter" id="accounts" data-for="user">
+      <div class="chapter-head"><span class="num">08</span><h2>Add to Accounts</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Under <b>Super Admin</b>. Records a new account or tool login for review.</p>
+      <figure class="shot shot--phone" data-src="accounts" data-alt="Add to Accounts form with MKC Client selected"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Add to Accounts form with MKC Client selected"><img src="img/accounts.webp" width="780" height="1972" alt="Add to Accounts form with MKC Client selected" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:11.87%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:4.62%;--y:58.82%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:67.85%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="left" style="--x:4.62%;--y:85.55%" aria-hidden="true">4</span></div>
+        <figcaption><b>Add to Accounts</b> with Account Type set to MKC Client.</figcaption>
+        <ol class="legend">
+          <li><span><b>Account Type:</b> MKC, MKC Client or MKP (required).</span></li>
+          <li><span><b>Associated Client Account</b> appears for MKC Client: search the company to link it.</span></li>
+          <li><span><b>Review Channel</b> posts to the accounts review channel (default). <b>Direct to List</b> also creates a task in the client accounts list; MKC Client only.</span></li>
+          <li><span><b>Never stored on the device:</b> no draft, no offline copy.</span></li>
+        </ol>
+      </figure>
+      <div class="note note--warn"><strong>Before you send</strong>Review Channel posts can't be undone from Dispatch It, and aren't listed in Activity. Offline, nothing is saved: tap Send again once you're connected.</div>
+    </section>
+
+    <section class="chapter" id="activity" data-for="user">
+      <div class="chapter-head"><span class="num">09</span><h2>Activity &amp; Undo</h2><span class="tag tag--user">Everyday</span></div>
+      <figure class="shot shot--phone" data-src="activity" data-alt="Activity screen with Undo armed on the first row"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Activity screen with Undo armed on the first row"><img src="img/activity.webp" width="780" height="1688" alt="Activity screen with Undo armed on the first row" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:11.38%;--y:14.81%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:8.21%;--y:26.36%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:72.2%;--y:23.93%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="right" style="--x:72.2%;--y:23.93%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="right" style="--x:96.41%;--y:4.27%" aria-hidden="true">5</span></div>
+        <figcaption><b>Activity</b> lists sends from every device. The first row's Undo has been tapped once.</figcaption>
+        <ol class="legend">
+          <li><span><b>Summary:</b> how often suggestions were kept, how many filed themselves, how many were undone.</span></li>
+          <li><span><b>Badges:</b> Auto, Confirmed or Manual, plus Update or Undone.</span></li>
+          <li><span><b>Undo takes two taps:</b> Undo, then <b>Confirm?</b> within 4 seconds.</span></li>
+          <li><span><b>Open in ClickUp.</b></span></li>
+          <li><span><b>Refresh</b> the list. <b>Load more</b> appears at the bottom when there's more.</span></li>
+        </ol>
+      </figure>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Undo can</th><th>Undo won't</th></tr></thead>
+          <tbody>
+            <tr><td class="wrap-ok">Delete a task it created (it goes to ClickUp's Trash)</td><td class="wrap-ok">Delete a task that now has subtasks, or was edited more than 10 minutes after filing</td></tr>
+            <tr><td class="wrap-ok">Remove a comment it added</td><td class="wrap-ok">Remove files added to an existing task (delete those in ClickUp)</td></tr>
+            <tr><td class="wrap-ok">Work from any device, for 180 days</td><td class="wrap-ok">Undo Add to Accounts review posts</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="chapter" id="offline" data-for="user">
+      <div class="chapter-head"><span class="num">10</span><h2>Offline &amp; drafts</h2><span class="tag tag--user">Everyday</span></div>
+      <ul>
+        <li><b>No connection?</b> Manual captures are saved with their files and sent automatically when you're back. Home shows "N captures waiting to send" with <b>Retry now</b>.</li>
+        <li><b>Not sure it went through?</b> "ClickUp didn't confirm this one" means it's saved. Before resending, the app checks whether it already arrived, so you won't get a copy.</li>
+        <li><b>Drafts.</b> Half-typed captures are kept for 7 days. Reopening shows "Draft restored." with <b>Discard</b>.</li>
+        <li><b>Old version showing?</b> Tap the refresh icon on Home.</li>
+      </ul>
+    </section>
+
+    <!-- ================= ADMIN ================= -->
+    <section class="chapter" id="how-built" data-for="admin">
+      <div class="chapter-head"><span class="num">A1</span><h2>How it's put together</h2><span class="tag tag--admin">Admin</span></div>
+      <div class="arch" role="img" aria-label="Devices talk to a Cloudflare Worker, which talks to ClickUp and Gemini">
+        <div class="box"><b>Devices</b><small>Dispatch It app on GitHub Pages (<code>mkp-tools/mkp-dispatch</code>). Holds no secrets; stores the passcode, Recent and drafts.</small></div>
+        <div class="link">passcode</div>
+        <div class="box"><b>Cloudflare Worker</b><small><code>dispatch-clickup-proxy</code></small><ul><li>Checks the passcode</li><li>Holds the ClickUp connection</li><li>Smart routing, duplicate index</li><li>Activity log and Undo</li></ul></div>
+        <div class="link">API</div>
+        <div class="box"><b>ClickUp &amp; Gemini</b><small>ClickUp: lists, tasks, comments, chat. Gemini: suggestions and duplicate matching. ClickUp sends live changes back; a sync runs every 15 minutes as backup.</small></div>
+      </div>
+    </section>
+
+    <section class="chapter" id="settings" data-for="admin">
+      <div class="chapter-head"><span class="num">A2</span><h2>Settings reference</h2><span class="tag tag--admin">Admin</span></div>
+      <figure class="shot shot--phone" data-src="settings" data-alt="Settings screen"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Settings screen"><img src="img/settings.webp" width="780" height="2420" alt="Settings screen" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:12.31%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="top" style="--x:51.66%;--y:10.95%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:26.98%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="left" style="--x:82.56%;--y:37.13%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:4.62%;--y:39.98%" aria-hidden="true">5</span><span class="pin" data-n="6" data-a="left" style="--x:4.62%;--y:51.59%" aria-hidden="true">6</span><span class="pin" data-n="7" data-a="left" style="--x:4.62%;--y:61.79%" aria-hidden="true">7</span><span class="pin" data-n="8" data-a="left" style="--x:44.91%;--y:61.79%" aria-hidden="true">8</span><span class="pin" data-n="9" data-a="left" style="--x:4.62%;--y:65.51%" aria-hidden="true">9</span><span class="pin" data-n="10" data-a="left" style="--x:4.62%;--y:82.21%" aria-hidden="true">10</span><span class="pin" data-n="11" data-a="left" style="--x:29.37%;--y:82.21%" aria-hidden="true">11</span><span class="pin" data-n="12" data-a="left" style="--x:4.62%;--y:96.01%" aria-hidden="true">12</span></div>
+        <figcaption><b>Settings</b> (gear icon on Home). Items 4–9 affect every device.</figcaption>
+        <ol class="legend">
+          <li><span><b>Connect to ClickUp</b> opens ClickUp's approval screen. Do it once; the connection is stored on the server.</span></li>
+          <li><span><b>Re-check</b> confirms the connection ("Connected as …").</span></li>
+          <li><span><b>Status:</b> Gemini, workspace sync, task index, live updates, accuracy. A red line names any problem.</span></li>
+          <li><span><b>Auto-file when confident</b> on or off. Off means every smart capture asks first.</span></li>
+          <li><span><b>Threshold:</b> Cautious 92%, Balanced 85%, Bold 75% (A3).</span></li>
+          <li><span><b>Duplicate check on manual sends:</b> Strict, Normal, Loose. Loose catches more but asks more often.</span></li>
+          <li><span><b>Sync workspace</b> reads every ClickUp space, list and field now.</span></li>
+          <li><span><b>Build / Rebuild task index</b> turns on duplicate detection. Keep the screen open while it runs.</span></li>
+          <li><span><b>Live updates</b> on, off or re-enable. With them on, ClickUp changes arrive within seconds.</span></li>
+          <li><span><b>Proxy Worker URL</b> advanced; only change it if the Worker moves. Save URL.</span></li>
+          <li><span><b>Forget passcode on this device</b> locks this device only.</span></li>
+          <li><span><b>Help:</b> replay the getting-started tour or open this guide.</span></li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="chapter" id="confidence" data-for="admin">
+      <div class="chapter-head"><span class="num">A3</span><h2>Auto-filing &amp; confidence</h2><span class="tag tag--admin">Admin</span></div>
+      <p>Every suggestion gets a confidence from 0 to 100%. A capture files itself only when auto-filing is on, it scores at or above the threshold, <b>and</b> no likely duplicate was found. Otherwise the person sees the Confirm screen.</p>
+      <div class="scale" role="img" aria-label="Confidence scale from 0 to 100 percent. Low below 60, medium 60 to 84, high 85 and up. Thresholds: Bold 75, Balanced 85 (default), Cautious 92.">
+        <div class="scale-bar">
+          <span class="band band--low" style="--from:0;--to:60">Low</span>
+          <span class="band band--mid" style="--from:60;--to:85">Medium</span>
+          <span class="band band--high" style="--from:85;--to:100">High</span>
+          <span class="mark" style="--at:75"><i>75</i></span>
+          <span class="mark mark--on" style="--at:85"><i>85</i></span>
+          <span class="mark" style="--at:92"><i>92</i></span>
+        </div>
+        <div class="scale-axis"><span style="--at:0">0%</span><span style="--at:50">50%</span><span style="--at:100">100%</span></div>
+        <p class="scale-key"><span><b>75</b> Bold</span><span class="on"><b>85</b> Balanced (default)</span><span><b>92</b> Cautious</span></p>
+      </div>
+      <ul>
+        <li><b>Cautious</b> files less on its own; people confirm more.</li>
+        <li><b>Balanced</b> (85%) is the default.</li>
+        <li><b>Bold</b> files more on its own; check Activity more often.</li>
+      </ul>
+      <p>Activity's summary shows how many suggestions were kept. If people often change the list or undo auto-filed captures, move toward Cautious.</p>
+    </section>
+
+    <section class="chapter" id="setup" data-for="admin">
+      <div class="chapter-head"><span class="num">A4</span><h2>First-time setup</h2><span class="tag tag--admin">Admin</span></div>
+      <p>Full commands are in <code>mkp-dispatch/README.md</code>. In order:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Step</th><th>Where</th><th>What</th></tr></thead>
+          <tbody>
+            <tr><td>1 · Worker</td><td>Terminal</td><td class="wrap-ok">Install Wrangler, log in, create the KV store, <code>wrangler deploy</code></td></tr>
+            <tr><td>2 · ClickUp app</td><td>ClickUp</td><td class="wrap-ok">Settings › Apps › ClickUp API Settings › Create an App; redirect URL <code>&lt;worker&gt;/oauth/callback</code>. Store the client secret on the Worker</td></tr>
+            <tr><td>3 · Passcode</td><td>Terminal</td><td class="wrap-ok"><code>wrangler secret put APP_PASSCODE</code></td></tr>
+            <tr><td>4 · Gemini</td><td>Google AI Studio</td><td class="wrap-ok">Create a key just for Dispatch It; store it as <code>GEMINI_API_KEY</code></td></tr>
+            <tr><td>5 · Duplicate index</td><td>Terminal</td><td class="wrap-ok"><code>wrangler vectorize create dispatch-tasks --dimensions=768 --metric=cosine</code>, then deploy</td></tr>
+            <tr><td>6 · Connect</td><td>App › Settings</td><td class="wrap-ok"><b>Connect to ClickUp</b></td></tr>
+            <tr><td>7 · Prime it</td><td>App › Settings</td><td class="wrap-ok"><b>Sync workspace</b>, <b>Build task index</b>, <b>Turn on live updates</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="chapter" id="destinations" data-for="admin">
+      <div class="chapter-head"><span class="num">A5</span><h2>Destinations</h2><span class="tag tag--admin">Admin</span></div>
+      <ul>
+        <li><b>New ClickUp lists appear on their own</b> under "More lists in this space" and in Other list…, after live updates or a sync.</li>
+        <li><b>To add or rename a capture type,</b> edit <code>mkp-dispatch/js/config.js</code> (business › capture type › List ID) and publish the change to GitHub.</li>
+        <li><b>Find a List ID</b> by opening the list in ClickUp: it's the number after <code>/li/</code> in <code>app.clickup.com/&lt;workspace&gt;/v/li/&lt;LIST_ID&gt;</code>.</li>
+        <li><b>Configured lists are "yours".</b> Smart routing prefers them and the list chooser tags them.</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="passcode" data-for="admin">
+      <div class="chapter-head"><span class="num">A6</span><h2>Passcode &amp; secrets</h2><span class="tag tag--admin">Admin</span></div>
+      <h3>Change the passcode</h3>
+      <ol class="steps">
+        <li>Run <code>wrangler secret put APP_PASSCODE</code> from <code>worker/</code> and enter the new one.</li>
+        <li>Every device then sees "passcode was rejected". On each: Settings › <b>Forget passcode on this device</b>, then enter the new one.</li>
+      </ol>
+      <h3>Where secrets live</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Secret</th><th>Kept in</th><th>Set by</th></tr></thead>
+          <tbody>
+            <tr><td><code>CLICKUP_CLIENT_SECRET</code></td><td>Worker secret</td><td><code>wrangler secret put</code></td></tr>
+            <tr><td><code>APP_PASSCODE</code></td><td>Worker secret, and each unlocked device</td><td><code>wrangler secret put</code></td></tr>
+            <tr><td><code>GEMINI_API_KEY</code></td><td>Worker secret</td><td><code>wrangler secret put</code></td></tr>
+            <tr><td>ClickUp connection</td><td>Worker storage</td><td>Connect to ClickUp</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--warn"><strong>Never paste these in chat or email</strong>Type them into <code>wrangler secret put</code> only. The Client ID, Workspace ID, List IDs and the Worker URL are safe to share; they identify things but grant nothing.</div>
+    </section>
+
+    <section class="chapter" id="limits" data-for="admin">
+      <div class="chapter-head"><span class="num">A7</span><h2>Limits &amp; Undo rules</h2><span class="tag tag--admin">Admin</span></div>
+      <ul>
+        <li><b>Attachments:</b> 90 MB per file.</li>
+        <li><b>Gemini:</b> limits depend on the key. When it's busy, smart capture says so and offers the manual picker with the text carried over.</li>
+        <li><b>Duplicate index:</b> the free Cloudflare tier holds about 6,500 open tasks.</li>
+        <li><b>Undo</b> won't delete a task with subtasks, one edited more than 10 minutes after filing, or one not created by that send. Records older than 180 days can't be undone.</li>
+        <li><b>Worker CPU:</b> if Settings shows "Exceeded CPU" sync errors, the $5/month Workers Paid plan removes the limit.</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="trouble" data-for="admin">
+      <div class="chapter-head"><span class="num">A8</span><h2>Troubleshooting</h2><span class="tag tag--admin">Admin</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+          <tbody>
+            <tr><td class="wrap-ok">A phone shows an old version</td><td class="wrap-ok">Tap the refresh icon on Home.</td></tr>
+            <tr><td class="wrap-ok">"Smart routing isn't set up"</td><td class="wrap-ok">The Gemini key is missing: store <code>GEMINI_API_KEY</code>, then <code>wrangler deploy</code>.</td></tr>
+            <tr><td class="wrap-ok">"Duplicate detection off"</td><td class="wrap-ok">Create the Vectorize index, deploy, then Build task index.</td></tr>
+            <tr><td class="wrap-ok">Live updates "suspended"</td><td class="wrap-ok">ClickUp paused it after failed deliveries: tap Re-enable live updates.</td></tr>
+            <tr><td class="wrap-ok">"The ClickUp connection expired"</td><td class="wrap-ok">Settings › Connect to ClickUp.</td></tr>
+            <tr><td class="wrap-ok">"Passcode was rejected"</td><td class="wrap-ok">The passcode changed: Settings › Forget passcode, then enter the new one.</td></tr>
+            <tr><td class="wrap-ok">"ClickUp answered too slowly"</td><td class="wrap-ok">Check Activity before sending again; it may already be there.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="chapter" id="upkeep" data-for="admin">
+      <div class="chapter-head"><span class="num">A9</span><h2>Keeping help current</h2><span class="tag tag--admin">Admin</span></div>
+      <p>This guide and the getting-started tour rebuild themselves. You only write the What's new note.</p>
+      <ol class="steps">
+        <li><b>Push an update</b> to the Dispatch It folder on GitHub as usual.</li>
+        <li><b>An automatic job</b> (GitHub › Actions › "Refresh guides and tours") opens the app with example data, retakes every screenshot, rebuilds this guide and the tour, and saves them back to GitHub. It takes a few minutes; then the live app shows the new pictures.</li>
+        <li><b>Say what changed</b> by adding an entry to the top of <code>mkp-dispatch/CHANGELOG.md</code>: a <code>## date · title</code> line and a few <code>- </code> lines. Everyone sees it once, as What's new, the next time they open the app.</li>
+      </ol>
+      <div class="note note--warn"><strong>If the job fails</strong>GitHub emails you when a numbered marker can't find its button, which means a screen changed. The log lists which picture and marker. Update the screenshot steps in <code>guides/</code> and the matching text, then push again. Until then the guide keeps its previous pictures.</div>
+      <p>Everything the job uses lives in the <code>guides/</code> folder: the screenshot steps, the guide text (<code>guide.src.html</code>), the tour slides (<code>tour.json</code>) and a README.</p>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">Dispatch It Guide · updated Nov 18, 2026. Screenshots show example data and refresh automatically with each update.</div>
+</footer>
+
+<script>
+/* Guide behaviors: audience filter, pin/legend highlighting, screenshot
+   zoom, contents highlighting. All optional; the page reads fine without JS. */
+(function () {
+  var KEY = 'dispatch-guide-audience';
+  var root = document.documentElement;
+
+  // In-app copy only: Dispatch It itself is dark-only, so match it.
+  if (root.getAttribute('data-context') === 'app') root.setAttribute('data-theme', 'dark');
+
+  // Audience filter (Everyone / Everyday use / Admin), remembered per viewer.
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.aud button'));
+  function setAud(v) {
+    document.body.setAttribute('data-aud', v);
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.aud === v)); });
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { setAud(b.dataset.aud); }); });
+  var saved = 'all';
+  try { saved = localStorage.getItem(KEY) || 'all'; } catch (e) {}
+  setAud(['all', 'user', 'admin'].indexOf(saved) >= 0 ? saved : 'all');
+
+  // Contents: copy the rail into the phone-sized dropdown.
+  var rail = document.querySelector('nav.toc');
+  var slot = document.querySelector('.toc-slot');
+  if (rail && slot) {
+    var copy = rail.cloneNode(true); copy.removeAttribute('aria-label'); slot.appendChild(copy);
+    slot.addEventListener('click', function (e) { if (e.target.closest('a')) slot.closest('details').open = false; });
+  }
+
+  // Legend item <-> pin highlighting.
+  document.querySelectorAll('figure.shot').forEach(function (fig) {
+    var items = fig.querySelectorAll('ol.legend > li');
+    items.forEach(function (li, i) {
+      var pin = fig.querySelector('.pin[data-n="' + (i + 1) + '"]');
+      if (!pin) return;
+      li.tabIndex = 0;
+      function on() { pin.classList.add('is-hot'); li.classList.add('is-hot'); }
+      function off() { pin.classList.remove('is-hot'); li.classList.remove('is-hot'); }
+      li.addEventListener('mouseenter', on); li.addEventListener('mouseleave', off);
+      li.addEventListener('focus', on); li.addEventListener('blur', off);
+    });
+  });
+
+  // Tap a screenshot to see it full size.
+  document.querySelectorAll('.zoom').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var img = btn.querySelector('img');
+      var box = document.createElement('div');
+      box.className = 'lightbox'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+      box.setAttribute('aria-label', img.alt || 'Screenshot');
+      box.innerHTML = '<img alt=""><button type="button">Close</button>';
+      box.querySelector('img').src = img.currentSrc || img.src;
+      box.querySelector('img').alt = img.alt;
+      function close() { box.remove(); document.removeEventListener('keydown', esc); btn.focus(); }
+      function esc(e) { if (e.key === 'Escape') close(); }
+      box.addEventListener('click', function (e) { if (e.target === box || e.target.tagName === 'BUTTON') close(); });
+      document.addEventListener('keydown', esc);
+      document.body.appendChild(box); box.querySelector('button').focus();
+    });
+  });
+
+  // Highlight the current chapter in the contents rail.
+  if ('IntersectionObserver' in window) {
+    var links = {};
+    document.querySelectorAll('nav.toc a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting && links[en.target.id]) {
+          Object.keys(links).forEach(function (k) { links[k].classList.remove('is-active'); });
+          links[en.target.id].classList.add('is-active');
+        }
+      });
+    }, { rootMargin: '-30% 0px -60% 0px' });
+    document.querySelectorAll('section.chapter').forEach(function (s) { io.observe(s); });
+  }
+})();
+
+</script>

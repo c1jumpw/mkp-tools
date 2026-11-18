@@ -1,0 +1,824 @@
+<title>DayForge Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="How to use DayForge: planning a day, notes, routines, calendar export, menus and settings, plus the owner's admin jobs.">
+<!--
+  =============================================================================
+  FILE: dayforge guide (source: src/dayforge.src.html -> build_guides.py)
+  VERSION: v2 (2026-11-18; v1 2026-10-30)
+  PURPOSE
+    Visual user guide for DayForge. Two audiences:
+      - Everyday use: planning, notes, routines, export, menus.
+      - Owner / admin: hosting, publishing updates, database updates,
+        account security, troubleshooting.
+    DayForge has ONE sign-in, so "admin" means the owner's upkeep jobs,
+    not a separate login or permission level.
+  HOW IT'S BUILT
+    build_guides.py injects each screenshot + numbered pins into every
+    <figure class="shot" data-src="NAME"> from captured PNG/JSON pairs, and
+    writes two outputs: the shareable page and the in-app copy served at
+    /guide/ (flagged data-context="app", which shows "Back to DayForge" and
+    follows the app's own light/dark setting).
+  SCREENSHOTS
+    Real DayForge screens rendered with EXAMPLE data (no real user data).
+  EDGE CASES / ASSUMPTIONS
+    - Section filtering (Everyone / Everyday / Admin) and the remembered
+      choice use localStorage inside try/catch; the page works without it.
+    - Note labels (Notes > Labels) need database update 008 to be run.
+  REVISION HISTORY
+    v1 — initial guide.
+    v2 — moved into the repo (guides/) so screenshots refresh on every
+         update; added the getting-started tour button, an automatic
+         "Updated" date and What's new (from CHANGELOG.md), the new Help /
+         tour menu items, and a "Keeping help current" admin chapter.
+  =============================================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a workshop manual — sticky contents rail on the left, numbered
+   sections on the right, real screenshots with ember pins tied to legends.
+   Tokens mirror DayForge's own forge theme (light and dark). */
+:root {
+  --bg: #EDEAE2;        /* page ground (DayForge light "ink") */
+  --surface: #FFFFFF;   /* plates, figures */
+  --raised: #F7F4EC;    /* insets, table stripes */
+  --line: #D6D0C1;      /* borders */
+  --text: #201C16;      /* body text */
+  --muted: #625C53;     /* secondary text */
+  --ember: #C94E1D;     /* accent: pins, active states, links */
+  --steel: #3E6E88;     /* "work" / admin accent */
+  --good: #3F7A4E;      /* ok / done */
+  --pin-ink: #FFFFFF;   /* text on ember pins */
+  --shadow: 0 1px 0 rgba(32,28,22,.04), 0 6px 18px -10px rgba(32,28,22,.25);
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1B1D22; --surface: #24272E; --raised: #2C3038; --line: #363B45;
+    --text: #F0EDE6; --muted: #A3A8B2; --ember: #E8622C; --steel: #7FA8C4;
+    --good: #7DB08A; --pin-ink: #1B1D22;
+    --shadow: 0 1px 0 rgba(0,0,0,.2), 0 8px 22px -12px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B1D22; --surface: #24272E; --raised: #2C3038; --line: #363B45;
+  --text: #F0EDE6; --muted: #A3A8B2; --ember: #E8622C; --steel: #7FA8C4;
+  --good: #7DB08A; --pin-ink: #1B1D22;
+  --shadow: 0 1px 0 rgba(0,0,0,.2), 0 8px 22px -12px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: calc(72px + env(safe-area-inset-top, 0px)); }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 400 16px/1.6 var(--font-body);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+a { color: var(--ember); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; border-radius: 4px; }
+img { max-width: 100%; display: block; }
+h1, h2, h3 { text-wrap: balance; }
+code, kbd { font-family: var(--font-mono); font-size: .88em; }
+code { background: var(--raised); border: 1px solid var(--line); padding: .05em .35em; border-radius: 4px; }
+kbd {
+  display: inline-block; min-width: 1.6em; text-align: center; padding: .1em .45em;
+  background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* ---- Top bar ---- */
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+}
+.topbar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); margin-right: auto; }
+.brand svg { flex: none; }
+.brand b { font: 700 22px/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.brand span { font: 500 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.back-to-app { display: none; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; text-decoration: none; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line); color: var(--text); min-height: 40px; }
+[data-context="app"] .back-to-app { display: inline-flex; }
+.aud { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--raised); }
+.aud button {
+  font: 500 13px/1 var(--font-body); color: var(--muted); background: none; border: 0;
+  padding: 10px 12px; min-height: 40px; cursor: pointer;
+}
+.aud button + button { border-left: 1px solid var(--line); }
+.aud button[aria-pressed="true"] { background: var(--ember); color: var(--pin-ink); font-weight: 600; }
+
+/* ---- Hero ---- */
+.hero { padding-block: 40px 24px; }
+.eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.hero h1 { font: 700 clamp(42px, 7vw, 68px)/.95 var(--font-display); text-transform: uppercase; letter-spacing: .01em; margin: 0 0 16px; }
+.hero h1 em { font-style: normal; color: var(--ember); }
+.hero p.lede { font-size: 18px; max-width: 62ch; margin: 0 0 18px; color: var(--text); }
+.hero .meta { font: 400 13px/1.5 var(--font-mono); color: var(--muted); margin: 0; }
+
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; margin-top: 22px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 14px; box-shadow: var(--shadow); min-width: 0; }
+.role h2 { font: 700 22px/1.1 var(--font-display); text-transform: uppercase; letter-spacing: .03em; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+.role p { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
+.role ul { margin: 0; padding-left: 18px; font-size: 15px; }
+.role li { margin: 3px 0; }
+.tag { font: 500 11px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; padding: 5px 7px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.tag--user { color: var(--ember); }
+.tag--admin { color: var(--steel); }
+
+/* ---- Layout: contents rail + main ---- */
+.layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; padding-block: 18px 64px; }
+.toc { position: sticky; top: calc(76px + env(safe-area-inset-top, 0px)); align-self: start; max-height: calc(100vh - 96px); overflow: auto; font-size: 14px; }
+.toc p { font: 500 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 6px 0 10px; }
+.toc ol { list-style: none; margin: 0 0 18px; padding: 0; }
+.toc a { display: flex; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--text); text-decoration: none; line-height: 1.3; }
+.toc a span { font: 500 12px/1.3 var(--font-mono); color: var(--muted); min-width: 1.6em; }
+.toc a:hover { background: var(--raised); }
+.toc a.is-active { background: var(--raised); box-shadow: inset 3px 0 0 var(--ember); }
+.toc-mobile { display: none; }
+
+main { min-width: 0; }
+section.chapter { padding-block: 8px 34px; border-top: 1px solid var(--line); }
+section.chapter:first-child { border-top: 0; }
+.chapter-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; margin: 22px 0 6px; }
+.chapter-head .num { font: 500 14px/1 var(--font-mono); color: var(--ember); }
+.chapter-head h2 { font: 700 clamp(30px, 4.4vw, 40px)/1 var(--font-display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+.chapter > p, .chapter > ul, .chapter > ol, .chapter .prose { max-width: 68ch; }
+h3 { font: 600 21px/1.2 var(--font-display); text-transform: uppercase; letter-spacing: .04em; margin: 28px 0 8px; }
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 12px 0; max-width: 68ch; }
+.steps > li { counter-increment: s; position: relative; padding: 2px 0 10px 40px; }
+.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid var(--ember); color: var(--ember); font: 600 13px/23px var(--font-mono); text-align: center;
+}
+.note {
+  max-width: 68ch; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--steel);
+  border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 15px;
+}
+.note--warn { border-left-color: var(--ember); }
+.note strong:first-child { display: block; font: 500 11px/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+
+/* ---- Annotated screenshots ---- */
+figure.shot { margin: 18px 0 26px; display: grid; gap: 14px 26px; align-items: start; }
+figure.shot--phone { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+figure.shot--wide { grid-template-columns: minmax(0, 1fr); }
+.frame { position: relative; width: 100%; max-width: min(100%, var(--w)); margin-left: 14px; }
+figure.shot--wide .frame { max-width: min(calc(100% - 14px), var(--w)); }
+.zoom { display: block; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); cursor: zoom-in; width: 100%; box-shadow: var(--shadow); }
+.zoom img { width: 100%; height: auto; }
+.pin {
+  position: absolute; left: var(--x); top: var(--y); width: 24px; height: 24px; border-radius: 50%;
+  background: var(--ember); color: var(--pin-ink); font: 600 12px/24px var(--font-mono); text-align: center;
+  box-shadow: 0 0 0 2px var(--surface), 0 2px 6px rgba(0,0,0,.35); transform: translate(-50%, -50%);
+  pointer-events: none; transition: transform .15s ease, box-shadow .15s ease;
+}
+.pin[data-a="left"] { transform: translate(-100%, -50%); }
+.pin[data-a="right"] { transform: translate(0, -50%); }
+.pin.is-hot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 6px color-mix(in srgb, var(--ember) 45%, transparent); }
+.pin[data-a="left"].is-hot { transform: translate(-100%, -50%) scale(1.15); }
+.pin[data-a="right"].is-hot { transform: translate(0, -50%) scale(1.15); }
+.pin:not([data-a="left"]):not([data-a="right"]).is-hot { transform: translate(-50%, -50%) scale(1.15); }
+figcaption { grid-column: 1 / -1; font-size: 14px; color: var(--muted); max-width: 72ch; order: -1; }
+figcaption b { color: var(--text); font-weight: 600; }
+ol.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+figure.shot--wide ol.legend { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 2px 18px; }
+ol.legend li { counter-increment: lg; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 7px 8px; border-radius: 8px; font-size: 15px; line-height: 1.45; }
+ol.legend { counter-reset: lg; }
+ol.legend li::before {
+  content: counter(lg); width: 24px; height: 24px; border-radius: 50%; background: var(--ember); color: var(--pin-ink);
+  font: 600 12px/24px var(--font-mono); text-align: center; margin-top: 1px;
+}
+ol.legend li.is-hot { background: var(--raised); }
+ol.legend li b { font-weight: 600; }
+
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; align-items: start; }
+.pair figure.shot { margin: 0; grid-template-columns: minmax(0, 1fr); }
+.pair figure.shot .frame { max-width: min(calc(100% - 14px), var(--w), 360px); }
+.pair figure.shot--wide .frame { max-width: min(calc(100% - 14px), var(--w)); }
+
+/* ---- Flow diagram ---- */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0 20px; max-width: 860px; }
+.flow .node { flex: 1 1 140px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--ember); border-radius: 8px; padding: 10px 12px; }
+.flow .node.alt { border-top-color: var(--steel); }
+.flow .node.done { border-top-color: var(--good); }
+.flow .node b { display: block; font: 700 18px/1.1 var(--font-display); text-transform: uppercase; letter-spacing: .03em; }
+.flow .node small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 4px; }
+.flow .arrow { flex: 0 0 auto; align-self: center; color: var(--muted); font: 500 18px/1 var(--font-mono); }
+
+/* ---- Architecture diagram ---- */
+.arch { display: grid; grid-template-columns: 1fr auto 1fr auto 1.2fr; gap: 10px; align-items: center; margin: 16px 0; max-width: 900px; }
+.arch .box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.arch .box b { display: block; font: 700 18px/1.1 var(--font-display); text-transform: uppercase; letter-spacing: .03em; }
+.arch .box small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 4px; }
+.arch .box ul { margin: 6px 0 0; padding-left: 16px; font-size: 13px; color: var(--muted); }
+.arch .link { color: var(--muted); font: 500 12px/1.3 var(--font-mono); text-align: center; }
+.arch .link::after { content: "→"; display: block; font-size: 20px; color: var(--ember); }
+
+/* ---- Tables ---- */
+.table-wrap { overflow-x: auto; margin: 14px 0 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); max-width: 900px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font: 500 11px/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); background: var(--raised); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+td.wrap-ok { white-space: normal; }
+
+/* ---- Lightbox ---- */
+.lightbox { position: fixed; inset: 0; z-index: 20; background: rgba(10,10,12,.86); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.lightbox img { max-height: 92vh; width: auto; max-width: 100%; border-radius: 8px; overflow: auto; }
+.lightbox button { position: absolute; top: max(12px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); background: #fff; color: #111; border: 0; border-radius: 6px; padding: 10px 14px; font: 600 14px/1 var(--font-body); min-height: 40px; }
+
+/* ---- Audience filter ---- */
+body[data-aud="user"] [data-for="admin"],
+body[data-aud="admin"] [data-for="user"] { display: none; }
+
+footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var(--muted); font-size: 14px; }
+/* ---- v2: tour button + What's new ---- */
+.hero-ctas { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 4px 0 14px; }
+.btn-tour { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 8px; background: var(--ember); color: var(--pin-ink); font-weight: 600; text-decoration: none; }
+.btn-tour:hover { filter: brightness(1.08); }
+.whats-new { border-left-color: var(--ember); max-width: 72ch; }
+.whats-new b { display: block; margin-bottom: 4px; }
+.whats-new ul { margin: 4px 0 0; padding-left: 18px; }
+
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .toc { display: none; }
+  .toc-mobile { display: block; margin: 0 0 8px; }
+  .toc-mobile details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  .toc-mobile summary { padding: 12px 14px; font-weight: 600; cursor: pointer; min-height: 44px; }
+  .toc-mobile .toc { display: block; position: static; max-height: none; padding: 0 8px 4px; }
+  figure.shot--phone { grid-template-columns: minmax(0, 1fr); }
+  figure.shot--phone .frame { max-width: min(calc(100% - 14px), 340px); }
+  .arch { grid-template-columns: minmax(0, 1fr); }
+  .arch .link::after { content: "↓"; }
+  .hero { padding-block: 28px 16px; }
+}
+@media (max-width: 640px) {
+  .flow { flex-direction: column; }
+  .flow .node { flex: 0 0 auto; }
+  .flow .arrow { transform: rotate(90deg); align-self: flex-start; margin-left: 18px; }
+}
+@media (max-width: 520px) {
+  .aud button { padding: 10px 9px; font-size: 12px; }
+  .brand span { display: none; }
+  .pin { width: 20px; height: 20px; font-size: 11px; line-height: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="DayForge Guide, back to top">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#FFFFFF" stroke="#D6D0C1"/><path d="M8 22 L16 8 L20 8 L14 18 L24 18 L14 26 Z" fill="#E8622C"/></svg>
+      <b>DayForge</b><span>Guide</span>
+    </a>
+    <a class="back-to-app" href="/">← Back to DayForge</a>
+    <div class="aud" role="group" aria-label="Show sections for">
+      <button type="button" data-aud="all" aria-pressed="true">Everyone</button>
+      <button type="button" data-aud="user" aria-pressed="false">Everyday use</button>
+      <button type="button" data-aud="admin" aria-pressed="false">Admin</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap" id="top">
+  <div class="hero">
+    <p class="eyebrow">Help &amp; guide</p>
+    <h1>Plan the day. <em>Catch the rest.</em></h1>
+    <p class="lede">DayForge puts your day on a timeline, keeps quick notes next to it, and shows the same plan on your phone and computer. This guide walks through every screen, menu and setting with real screenshots. The numbers on each picture match the list beside it.</p>
+    <p class="meta">Updated {{UPDATED}} · Screenshots are retaken automatically with each update, using example data</p>
+    <p class="hero-ctas"><a class="btn-tour" href="tour.html">Take the getting-started tour →</a></p>
+    {{WHATS_NEW}}
+    <div class="roles">
+      <div class="role" data-for="user">
+        <h2>Everyday use <span class="tag tag--user">Everyone</span></h2>
+        <p>For whoever plans with DayForge day to day.</p>
+        <ul>
+          <li>Capture tasks and drop them onto a timeline</li>
+          <li>Pinned reminders, repeating tasks and routines</li>
+          <li>Notes with labels, colors, voice notes and files</li>
+          <li>Export a day or week to Google Calendar or Outlook</li>
+        </ul>
+      </div>
+      <div class="role" data-for="admin">
+        <h2>Owner / admin <span class="tag tag--admin">Admin</span></h2>
+        <p>DayForge has one sign-in. "Admin" means the owner's upkeep jobs, not a separate login.</p>
+        <ul>
+          <li>Account email, password and sign-up control</li>
+          <li>Publishing an update and refreshing devices</li>
+          <li>Running database updates in Supabase</li>
+          <li>Security and troubleshooting</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap layout">
+  <nav class="toc" aria-label="Contents">
+    <p>Everyday use</p>
+    <ol data-for="user">
+      <li><a href="#sign-in"><span>01</span>Sign in &amp; install</a></li>
+      <li><a href="#dashboard"><span>02</span>The dashboard</a></li>
+      <li><a href="#plan"><span>03</span>Plan a day</a></li>
+      <li><a href="#task"><span>04</span>Task details</a></li>
+      <li><a href="#pinned"><span>05</span>Pinned reminders</a></li>
+      <li><a href="#routines"><span>06</span>Repeats &amp; routines</a></li>
+      <li><a href="#notes"><span>07</span>Notes</a></li>
+      <li><a href="#voice"><span>08</span>Voice notes &amp; files</a></li>
+      <li><a href="#export"><span>09</span>Export to a calendar</a></li>
+      <li><a href="#menu"><span>10</span>Menu &amp; account</a></li>
+    </ol>
+    <p>Admin</p>
+    <ol data-for="admin">
+      <li><a href="#how-built"><span>A1</span>How it's put together</a></li>
+      <li><a href="#publish"><span>A2</span>Publish an update</a></li>
+      <li><a href="#database"><span>A3</span>Database updates</a></li>
+      <li><a href="#security"><span>A4</span>Accounts &amp; security</a></li>
+      <li><a href="#trouble"><span>A5</span>Troubleshooting</a></li>
+      <li><a href="#upkeep"><span>A6</span>Keeping help current</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="toc-mobile"><details><summary>Contents</summary><div class="toc-slot"></div></details></div>
+
+    <!-- ================= EVERYDAY ================= -->
+    <section class="chapter" id="sign-in" data-for="user">
+      <div class="chapter-head"><span class="num">01</span><h2>Sign in &amp; install</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Open DayForge in any browser and sign in with your email and password. You stay signed in on that device until you sign out.</p>
+      <figure class="shot" data-src="login" data-alt="DayForge sign-in screen">
+        <figcaption><b>Sign-in screen.</b> The link under the form creates an account; the owner only needs it once.</figcaption>
+        <ol class="legend">
+          <li><span><b>Email</b> the address on the DayForge account.</span></li>
+          <li><span><b>Password</b> change it later under Menu › Account settings.</span></li>
+          <li><span><b>Sign in</b> opens your dashboard with today selected.</span></li>
+        </ol>
+      </figure>
+      <h3>Put it on your home screen</h3>
+      <p>DayForge works like an app once it's on your home screen: full screen, its own icon, no browser bars.</p>
+      <ol class="steps">
+        <li><b>iPhone or iPad:</b> open DayForge in Safari, tap <b>Share</b>, then <b>Add to Home Screen</b>.</li>
+        <li><b>Android:</b> open it in Chrome, tap <b>⋮</b>, then <b>Add to Home screen</b> (or <b>Install app</b>).</li>
+        <li><b>Computer:</b> bookmark it, or in Chrome use the install icon in the address bar.</li>
+      </ol>
+      <div class="note"><strong>Good to know</strong>Everything you add is saved to your account, not to the device, so your phone and computer always show the same plan. The only thing each device remembers on its own is light or dark mode.</div>
+    </section>
+
+    <section class="chapter" id="dashboard" data-for="user">
+      <div class="chapter-head"><span class="num">02</span><h2>The dashboard</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Everything happens on one screen. On a computer the panels sit side by side; on a phone they stack.</p>
+      <figure class="shot" data-src="dashboard" data-alt="DayForge dashboard on a computer">
+        <figcaption><b>Dashboard on a computer.</b> Today is Friday; the timeline shows its blocks and the tray holds tasks without a time.</figcaption>
+        <ol class="legend">
+          <li><span><b>Quick add</b> type several tasks at once, one per line. They land in the tray.</span></li>
+          <li><span><b>Pinned</b> reminders that stay in view with no time slot.</span></li>
+          <li><span><b>Forecast</b> the next 7 days with a task count each. Tap a day to plan it.</span></li>
+          <li><span><b>Date</b> the day you're looking at. Use <kbd>‹</kbd> <kbd>›</kbd> to step a day back or forward.</span></li>
+          <li><span><b>Timeline</b> 5 AM to 11 PM. Each block is as tall as the task is long.</span></li>
+          <li><span><b>Tray</b> tasks that don't have a time yet.</span></li>
+        </ol>
+      </figure>
+      <h3>The top bar</h3>
+      <figure class="shot" data-src="header" data-alt="DayForge top bar buttons">
+        <figcaption><b>Top bar.</b> On a phone the buttons wrap onto two rows.</figcaption>
+        <ol class="legend">
+          <li><span><b>Theme</b> switch between light and dark. Each device remembers its own choice.</span></li>
+          <li><span><b>Routines</b> saved sets of tasks you can drop onto any day (section 06).</span></li>
+          <li><span><b>Notes</b> your notepad. The number counts notes not yet turned into tasks.</span></li>
+          <li><span><b>Export</b> download a day or week for your calendar (section 09).</span></li>
+          <li><span><b>+ New task</b> opens a blank task with every option.</span></li>
+          <li><span><b>⋮ Menu</b> Account settings, Refresh app, Sign out (section 10).</span></li>
+        </ol>
+      </figure>
+      <div class="pair">
+        <figure class="shot" data-src="phone-dashboard" data-alt="DayForge on a phone">
+          <figcaption><b>On a phone,</b> Forecast, Timeline and Tray come first; Quick add and Pinned follow underneath.</figcaption>
+        </figure>
+        <figure class="shot" data-src="dashboard-light" data-alt="DayForge in light mode">
+          <figcaption><b>Light mode</b> uses the same layout. Tap the sun or moon button to switch.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter" id="plan" data-for="user">
+      <div class="chapter-head"><span class="num">03</span><h2>Plan a day</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Tasks move from left to right: you capture them, they wait in the tray, and you give them a slot on the timeline.</p>
+      <div class="flow" role="img" aria-label="Capture, then tray, then timeline, then done or export">
+        <div class="node"><b>Capture</b><small>Quick add, + New task, or a note turned into a task</small></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="node alt"><b>Tray</b><small>Waiting for a time</small></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="node"><b>Timeline</b><small>Dragged or given a date and start time</small></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="node done"><b>Done</b><small>Tick it off, or export it to your calendar</small></div>
+      </div>
+
+      <h3>1 · Capture with Quick add</h3>
+      <figure class="shot" data-src="quickadd" data-alt="Quick add panel with three tasks typed in">
+        <figcaption><b>Quick add</b> turns each line into its own task.</figcaption>
+        <ol class="legend">
+          <li><span><b>Type one task per line.</b> Paste a whole list if you like.</span></li>
+          <li><span><b>Personal or Work</b> applies to every line you're adding.</span></li>
+          <li><span><b>Todo, Reminder or Event</b> also applies to every line.</span></li>
+          <li><span><b>Add to tray</b> creates the tasks. Open any of them later to add details.</span></li>
+        </ol>
+      </figure>
+
+      <h3>2 · Give a task a time</h3>
+      <div class="pair">
+        <figure class="shot" data-src="tray" data-alt="Tray with three unscheduled tasks">
+          <figcaption><b>Tray.</b> Two ways to schedule a task.</figcaption>
+          <ol class="legend">
+            <li><span><b>Tap the name</b> to open it, tick <b>Give this a date and time block</b>, pick the date and start time. Easiest on a phone.</span></li>
+            <li><span><b>Drag the handle</b> <kbd>⠿</kbd> onto the timeline at the hour you want. Only the handle drags, so scrolling never moves a task by accident.</span></li>
+            <li><span><b>Clear tray</b> removes everything in the tray after you confirm.</span></li>
+          </ol>
+        </figure>
+        <figure class="shot" data-src="timeline" data-alt="Timeline task blocks">
+          <figcaption><b>Timeline blocks.</b> Overlapping tasks sit side by side.</figcaption>
+          <ol class="legend">
+            <li><span><b>Checkbox</b> marks the task done; it's struck through.</span></li>
+            <li><span><b>Tap the name</b> to open its details.</span></li>
+            <li><span><b>↻</b> means it repeats.</span></li>
+            <li><span><b>✕</b> deletes the task after you confirm.</span></li>
+            <li><span><b>Drag handle</b> moves it to another hour, or drop it on the tray to unschedule it.</span></li>
+          </ol>
+        </figure>
+      </div>
+      <div class="note"><strong>Moved something by mistake?</strong>After every drag, an <b>Undo</b> button appears at the bottom of the screen for 6 seconds. Tap it to put the task back where it was.</div>
+    </section>
+
+    <section class="chapter" id="task" data-for="user">
+      <div class="chapter-head"><span class="num">04</span><h2>Task details</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Tap any task, or <b>+ New task</b>, to open its details. On a phone this opens full screen.</p>
+      <figure class="shot" data-src="task" data-alt="Edit task window">
+        <figcaption><b>Edit task.</b> Changes to an existing task save on their own; a small <b>Saving…</b> then <b>Saved</b> shows while it does.</figcaption>
+        <ol class="legend">
+          <li><span><b>Title and Notes.</b> Notes can hold a list, links or anything else.</span></li>
+          <li><span><b>Record voice note</b> attaches a recording (section 08). Save a new task first.</span></li>
+          <li><span><b>Add file</b> attaches photos, PDFs or any other file, with a label.</span></li>
+          <li><span><b>Type and Category:</b> To-do, Reminder or Event; Personal or Work.</span></li>
+          <li><span><b>Pin as a general reminder</b> moves it to Pinned with no time slot.</span></li>
+          <li><span><b>Give this a date and time block.</b> Untick to send it to the tray.</span></li>
+          <li><span><b>Duration</b> in hours and minutes.</span></li>
+          <li><span><b>End time.</b> Change either one and the other updates to match.</span></li>
+          <li><span><b>Repeats:</b> Doesn't repeat, Daily, or Weekly on the days you pick.</span></li>
+          <li><span><b>Send to tray</b> clears the time and puts it back in the tray.</span></li>
+          <li><span><b>Save changes</b> (or <b>Add task</b> for a new one) and close.</span></li>
+          <li><span><b>Delete</b> removes the task for good.</span></li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="chapter" id="pinned" data-for="user">
+      <div class="chapter-head"><span class="num">05</span><h2>Pinned reminders</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Use Pinned for things to keep in mind that don't belong at a particular time: a deadline next month, a birthday this weekend.</p>
+      <figure class="shot" data-src="pinned" data-alt="Pinned reminders panel">
+        <figcaption><b>Pinned.</b> Tap a reminder's text to open it with all the task options.</figcaption>
+        <ol class="legend">
+          <li><span><b>Pin a reminder…</b> type it here.</span></li>
+          <li><span><b>Pin</b> adds it to the list.</span></li>
+          <li><span><b>Checkbox</b> marks it done; <b>✕</b> removes it.</span></li>
+          <li><span><b>Clear all</b> removes every pinned reminder after you confirm.</span></li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="chapter" id="routines" data-for="user">
+      <div class="chapter-head"><span class="num">06</span><h2>Repeats &amp; routines</h2><span class="tag tag--user">Everyday</span></div>
+      <h3>Repeating tasks</h3>
+      <p>In a task's details, set <b>Repeats</b> to <b>Daily</b> or <b>Weekly on selected days</b>. The task then shows on every matching day with a <b>↻</b>, and ticking it done on one day doesn't tick off the others.</p>
+      <h3>Routines</h3>
+      <p>A routine is a saved set of tasks, like a morning routine or a gym day. Applying it copies its tasks onto the day you're looking at, already timed.</p>
+      <figure class="shot" data-src="routines" data-alt="Routine templates window with one routine open">
+        <figcaption><b>Routines</b> (top bar). The routine "Weekday morning" is open, showing its three items.</figcaption>
+        <ol class="legend">
+          <li><span><b>Name a new routine</b> and tap <b>Create</b>.</span></li>
+          <li><span><b>Tap a routine</b> to open it and see its items.</span></li>
+          <li><span><b>Apply to day</b> adds all its items to the date selected on the dashboard. <b>Delete</b> removes the routine.</span></li>
+          <li><span><b>New item:</b> title, start time, minutes and Personal or Work.</span></li>
+          <li><span><b>Add item</b> saves it to the routine. <b>✕</b> next to an item removes it.</span></li>
+        </ol>
+      </figure>
+      <div class="note"><strong>Tip</strong>Pick the day first (Forecast or the ‹ › arrows), then open Routines and tap Apply to day.</div>
+    </section>
+
+    <section class="chapter" id="notes" data-for="user">
+      <div class="chapter-head"><span class="num">07</span><h2>Notes</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Notes are for anything that isn't a task yet. When a note is ready to act on, convert it: it becomes a task in the tray and the note is marked as converted.</p>
+      <div class="flow" role="img" aria-label="Note, then convert to task, then tray">
+        <div class="node alt"><b>Note</b><small>Quick thoughts, lists, links</small></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="node"><b>Convert to task</b><small>Title becomes the task name, bullets become its notes</small></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="node"><b>Tray</b><small>Ready to schedule</small></div>
+      </div>
+      <figure class="shot" data-src="notes" data-alt="Notes panel on a phone">
+        <figcaption><b>Notes</b> on a phone. Pinned notes stay at the top.</figcaption>
+        <ol class="legend">
+          <li><span><b>Capture box.</b> Tap it and today's date appears as the title (e.g. "Oct 30, 2026:"). Type, then tap <b>Add</b>.</span></li>
+          <li><span><b>Search</b> looks through the full text of every note.</span></li>
+          <li><span><b>Labels</b> opens Manage labels: create, rename or delete them.</span></li>
+          <li><span><b>Label filters.</b> Tap one to see only those notes; tap it again for all. New notes added while a label is selected get that label.</span></li>
+          <li><span><b>Pin</b> keeps the note at the top. It's colored when pinned.</span></li>
+          <li><span><b>Edit</b> opens the note full screen. Tapping the note does the same.</span></li>
+        </ol>
+      </figure>
+      <div class="pair">
+        <figure class="shot" data-src="note-card" data-alt="One note card and its actions">
+          <figcaption><b>A note card.</b> Long notes show the first few lines and "+N more…".</figcaption>
+          <ol class="legend">
+            <li><span><b>Convert to task</b> sends it to the tray. <b>Delete</b> removes it.</span></li>
+            <li><span><b>Files</b> attach or view files on this note.</span></li>
+            <li><span><b>Color</b> tints the whole card.</span></li>
+            <li><span><b>Labels</b> tick labels on or off, or type a new one.</span></li>
+            <li><span><b>Label pill.</b> Tap it to filter by that label.</span></li>
+          </ol>
+        </figure>
+        <figure class="shot" data-src="note-editor" data-alt="Full-screen note editor">
+          <figcaption><b>Editing a note.</b> Changes save on their own as you type.</figcaption>
+          <ol class="legend">
+            <li><span><b>Labels</b> for this note. Tap to show or hide the picker.</span></li>
+            <li><span><b>The note</b> fills the screen above the keyboard.</span></li>
+            <li><span><b>Done</b> saves anything pending and closes.</span></li>
+          </ol>
+        </figure>
+      </div>
+      <h3>Typing shortcuts</h3>
+      <p>Notes build an outline as you type. A dash (<code>-</code>) is a main point, a star (<code>*</code>) is a sub-point.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>You type</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Enter</kbd> after the title</td><td class="wrap-ok">The next line starts with <code>- </code></td></tr>
+            <tr><td><kbd>Enter</kbd> after a point</td><td class="wrap-ok">The next line continues the same kind: <code>- </code> after a dash, <code>* </code> after a star</td></tr>
+            <tr><td><kbd>Space</kbd> <kbd>Space</kbd> on an empty <code>-</code></td><td class="wrap-ok">It flips to <code>*</code> (a sub-point). Do it again to flip back</td></tr>
+            <tr><td><kbd>Enter</kbd> on an empty point</td><td class="wrap-ok">Skips a line and keeps the same kind of point</td></tr>
+            <tr><td><kbd>Enter</kbd> twice on empty points</td><td class="wrap-ok">Starts a new topic with <code>--)</code></td></tr>
+            <tr><td><code>--)</code> anywhere</td><td class="wrap-ok">When you tap Add, the text after it becomes a separate note</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="shot" data-src="labels-manage" data-alt="Manage labels panel">
+        <figcaption><b>Manage labels</b> (the Labels button next to search). Shows how many notes use each label.</figcaption>
+        <ol class="legend">
+          <li><span><b>Rename</b> by editing the name; it saves when you leave the field. Every note follows.</span></li>
+          <li><span><b>Delete</b> removes the label from its notes. The notes themselves stay.</span></li>
+          <li><span><b>New label</b> then <b>Add</b>.</span></li>
+        </ol>
+      </figure>
+      <div class="note"><strong>Also in notes</strong>Web links become tappable and open in a new tab. Each card shows when it was created and last edited. The <b>Show converted</b> box brings converted notes back into view.</div>
+    </section>
+
+    <section class="chapter" id="voice" data-for="user">
+      <div class="chapter-head"><span class="num">08</span><h2>Voice notes &amp; files</h2><span class="tag tag--user">Everyday</span></div>
+      <h3>Record a voice note on a task</h3>
+      <ol class="steps">
+        <li>Open a saved task. (New tasks need saving first, so the recording has somewhere to go.)</li>
+        <li>Tap <b>Record voice note</b> and allow the microphone. A timer shows <b>Recording…</b> while you speak; tap <b>Stop</b> when done.</li>
+        <li>Where the browser supports it, a live transcript appears. Tap <b>Copy transcript</b> to paste it into the task's notes.</li>
+        <li>Tap <b>Download audio (.wav)</b> to keep the recording as a standard audio file.</li>
+      </ol>
+      <div class="note note--warn"><strong>On iPhone</strong>Live transcription often doesn't start in Safari. The recording is still saved; you'll see a message saying transcription couldn't start.</div>
+      <h3>Attach files</h3>
+      <ol class="steps">
+        <li>In a task, tap <b>+ Add file</b>; in a note, tap <b>Files ▾</b>. Any file type works.</li>
+        <li>Give it a label if you like (<b>Label this file</b>). Photos are resized before upload to save space.</li>
+        <li>Tap a photo to view it full size, or any other file to download it. The <b>✕</b> badge deletes it after you confirm.</li>
+      </ol>
+    </section>
+
+    <section class="chapter" id="export" data-for="user">
+      <div class="chapter-head"><span class="num">09</span><h2>Export to a calendar</h2><span class="tag tag--user">Everyday</span></div>
+      <p>Export saves your scheduled tasks as an <code>.ics</code> file that Google Calendar, Outlook and Apple Calendar can import.</p>
+      <figure class="shot" data-src="export" data-alt="Export to calendar window">
+        <figcaption><b>Export</b> (top bar). Categories and types combine, e.g. Work + Events only gives just your work meetings.</figcaption>
+        <ol class="legend">
+          <li><span><b>Range:</b> this day, or this week (7 days starting from the selected day).</span></li>
+          <li><span><b>Category:</b> Personal, Work, or both.</span></li>
+          <li><span><b>Type:</b> To-dos, Reminders, Events / appointments.</span></li>
+          <li><span><b>Download .ics</b> saves the file.</span></li>
+        </ol>
+      </figure>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Calendar</th><th>How to import the file</th></tr></thead>
+          <tbody>
+            <tr><td>Google Calendar</td><td class="wrap-ok">On a computer: Settings › Import &amp; export › Import, choose the file and the calendar</td></tr>
+            <tr><td>Outlook</td><td class="wrap-ok">Open the file, or Add calendar › Upload from file</td></tr>
+            <tr><td>iPhone</td><td class="wrap-ok">Tap the downloaded file, then Add All</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><strong>Remember</strong>The file is a copy. If you change the plan in DayForge later, export again.</div>
+    </section>
+
+    <section class="chapter" id="menu" data-for="user">
+      <div class="chapter-head"><span class="num">10</span><h2>Menu &amp; account</h2><span class="tag tag--user">Everyday</span></div>
+      <div class="pair">
+        <figure class="shot" data-src="menu" data-alt="Account menu">
+          <figcaption><b>The ⋮ menu</b> at the end of the top bar.</figcaption>
+          <ol class="legend">
+            <li><span><b>Account settings</b> change your email or password.</span></li>
+            <li><span><b>Refresh app</b> loads the newest version. Use it after an update, or if the app looks out of date.</span></li>
+            <li><span><b>Getting started tour</b> replays the step-by-step tour.</span></li>
+            <li><span><b>Help &amp; guide</b> opens this guide.</span></li>
+            <li><span><b>Sign out</b> on this device only.</span></li>
+          </ol>
+        </figure>
+        <figure class="shot" data-src="account" data-alt="Account settings window">
+          <figcaption><b>Account settings.</b> Fill in only what you want to change.</figcaption>
+          <ol class="legend">
+            <li><span><b>New email.</b> A confirmation link goes to the new address; the change finishes when you open it.</span></li>
+            <li><span><b>New password.</b> Leave blank to keep the current one.</span></li>
+            <li><span><b>Save changes.</b></span></li>
+          </ol>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= ADMIN ================= -->
+    <section class="chapter" id="how-built" data-for="admin">
+      <div class="chapter-head"><span class="num">A1</span><h2>How it's put together</h2><span class="tag tag--admin">Admin</span></div>
+      <p>Three pieces. Knowing which is which tells you where to go when something needs changing.</p>
+      <div class="arch" role="img" aria-label="Devices connect to the DayForge web app on Vercel, which stores data in Supabase">
+        <div class="box"><b>Your devices</b><small>Any browser, or the home-screen app. Remembers only light/dark mode.</small></div>
+        <div class="link">opens</div>
+        <div class="box"><b>DayForge app</b><small>Hosted on Vercel, built from GitHub</small><ul><li><code>c1jumpw/mkp-tools</code></li><li>folder <code>dayforge</code></li></ul></div>
+        <div class="link">saves to</div>
+        <div class="box"><b>Supabase</b><small>Project <code>lmrbqkhefzbsnfxlszbs</code></small><ul><li>Sign-in (Authentication)</li><li>Tasks, notes, routines, labels (Database)</li><li>Voice notes and files (private Storage)</li></ul></div>
+      </div>
+    </section>
+
+    <section class="chapter" id="publish" data-for="admin">
+      <div class="chapter-head"><span class="num">A2</span><h2>Publish an update</h2><span class="tag tag--admin">Admin</span></div>
+      <ol class="steps">
+        <li><b>Commit the change to GitHub</b> on the <code>main</code> branch of <code>c1jumpw/mkp-tools</code>, inside the <code>dayforge</code> folder.</li>
+        <li><b>Vercel builds and publishes it automatically,</b> usually within a minute or two. The project's Deployments page shows progress.</li>
+        <li><b>If the update includes a database change,</b> run its file in Supabase (A3). Do this before or right after publishing.</li>
+        <li><b>On each device,</b> open ⋮ › <b>Refresh app</b> so it loads the new version.</li>
+      </ol>
+      <div class="note"><strong>Undo a bad release</strong>In Vercel › Deployments, pick the last good deployment and use <b>Instant Rollback</b> (or Promote to Production). Your data in Supabase isn't affected.</div>
+    </section>
+
+    <section class="chapter" id="database" data-for="admin">
+      <div class="chapter-head"><span class="num">A3</span><h2>Database updates</h2><span class="tag tag--admin">Admin</span></div>
+      <p>Some features need a one-time database change, shipped as a numbered <code>.sql</code> file in <code>dayforge/supabase/migrations</code>. Run each one once, in order.</p>
+      <ol class="steps">
+        <li>Open Supabase and the DayForge project.</li>
+        <li>Go to <b>SQL Editor</b> › <b>New query</b>.</li>
+        <li>Paste the whole file and tap <b>Run</b>. "Success. No rows returned" means it worked.</li>
+      </ol>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>File</th><th>What it adds</th></tr></thead>
+          <tbody>
+            <tr><td><code>schema.sql</code></td><td class="wrap-ok">The starting tables, for a brand-new project only</td></tr>
+            <tr><td><code>002_voice_notes.sql</code></td><td class="wrap-ok">Voice notes on tasks</td></tr>
+            <tr><td><code>003_notes.sql</code></td><td class="wrap-ok">The Notes notepad</td></tr>
+            <tr><td><code>004_entry_images.sql</code></td><td class="wrap-ok">Photos on tasks and notes</td></tr>
+            <tr><td><code>005_generic_attachments.sql</code></td><td class="wrap-ok">Any file type as an attachment</td></tr>
+            <tr><td><code>006_note_colors.sql</code></td><td class="wrap-ok">Note colors</td></tr>
+            <tr><td><code>007_note_pinning.sql</code></td><td class="wrap-ok">Pinning notes</td></tr>
+            <tr><td><code>008_note_labels.sql</code></td><td class="wrap-ok">Note labels and label filters. Safe to run more than once</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note note--warn"><strong>Signs one is missing</strong>Notes shows "Labels need a one-time database update (migration 008)", or a feature reports it couldn't save. Run the matching file, then Refresh app.</div>
+    </section>
+
+    <section class="chapter" id="security" data-for="admin">
+      <div class="chapter-head"><span class="num">A4</span><h2>Accounts &amp; security</h2><span class="tag tag--admin">Admin</span></div>
+      <ul>
+        <li><b>Private by account.</b> Database rules let each account read and change only its own rows. Voice notes and files sit in private storage.</li>
+        <li><b>The key inside the app is meant to be public.</b> Supabase's "anon" key only works within those rules. Never put the <code>service_role</code> key in the app or in chat.</li>
+        <li><b>Change email or password</b> from ⋮ › Account settings.</li>
+        <li><b>Forgot the password?</b> In Supabase › Authentication › Users, open the user and send a password recovery email.</li>
+        <li><b>Turn off new sign-ups.</b> The sign-in screen has a "Create your account" link. Once your account exists, switch off <b>Allow new users to sign up</b> in Supabase › Authentication › Sign In / Providers. New accounts couldn't see your data anyway, but this keeps the app to you alone.</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="trouble" data-for="admin">
+      <div class="chapter-head"><span class="num">A5</span><h2>Troubleshooting</h2><span class="tag tag--admin">Admin</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+          <tbody>
+            <tr><td class="wrap-ok">An old version on a phone</td><td class="wrap-ok">⋮ › Refresh app. On a home-screen app there's no pull-to-refresh, so this is the way.</td></tr>
+            <tr><td class="wrap-ok">"Labels need a one-time database update"</td><td class="wrap-ok">Run <code>008_note_labels.sql</code> (A3), then Refresh app.</td></tr>
+            <tr><td class="wrap-ok">A note won't save, or Add does nothing</td><td class="wrap-ok">Read the red message at the top of Notes. A missing database update is the usual cause.</td></tr>
+            <tr><td class="wrap-ok">Voice note has no transcript</td><td class="wrap-ok">Expected on many iPhones. The audio is saved; download it from the task.</td></tr>
+            <tr><td class="wrap-ok">Downloaded audio won't play</td><td class="wrap-ok">Use <b>Download audio (.wav)</b>; it plays everywhere.</td></tr>
+            <tr><td class="wrap-ok">Exported events don't match the app</td><td class="wrap-ok">The file is a snapshot. Export again after changes.</td></tr>
+            <tr><td class="wrap-ok">Can't sign in</td><td class="wrap-ok">Check the email, then reset the password in Supabase (A4).</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="chapter" id="upkeep" data-for="admin">
+      <div class="chapter-head"><span class="num">A6</span><h2>Keeping help current</h2><span class="tag tag--admin">Admin</span></div>
+      <p>This guide and the getting-started tour rebuild themselves. You only write the What's new note.</p>
+      <ol class="steps">
+        <li><b>Push an update</b> to the DayForge folder on GitHub as usual.</li>
+        <li><b>An automatic job</b> (GitHub › Actions › "Refresh guides and tours") opens the app with example data, retakes every screenshot, rebuilds this guide and the tour, and saves them back to GitHub. It takes a few minutes; then the live app shows the new pictures.</li>
+        <li><b>Say what changed</b> by adding an entry to the top of <code>dayforge/CHANGELOG.md</code>: a <code>## date · title</code> line and a few <code>- </code> lines. Everyone sees it once, as What's new, the next time they open the app.</li>
+      </ol>
+      <div class="note note--warn"><strong>If the job fails</strong>GitHub emails you when a numbered marker can't find its button, which means a screen changed. The log lists which picture and marker. Update the screenshot steps in <code>guides/</code> and the matching text, then push again. Until then the guide keeps its previous pictures.</div>
+      <p>Everything the job uses lives in the <code>guides/</code> folder: the screenshot steps, the guide text (<code>guide.src.html</code>), the tour slides (<code>tour.json</code>) and a README.</p>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">DayForge Guide · updated {{UPDATED}}. Screenshots show example data and refresh automatically with each update.</div>
+</footer>
+
+<script>
+/* Guide behaviors: audience filter, pin/legend highlighting, screenshot
+   zoom, contents highlighting. All optional; the page reads fine without JS. */
+(function () {
+  var KEY = 'dayforge-guide-audience';
+  var root = document.documentElement;
+
+  // In-app copy only: follow DayForge's own light/dark choice (same origin).
+  if (root.getAttribute('data-context') === 'app') {
+    try { var t = localStorage.getItem('dayforge-theme'); if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t); } catch (e) {}
+  }
+
+  // Audience filter (Everyone / Everyday use / Admin), remembered per viewer.
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.aud button'));
+  function setAud(v) {
+    document.body.setAttribute('data-aud', v);
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.aud === v)); });
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { setAud(b.dataset.aud); }); });
+  var saved = 'all';
+  try { saved = localStorage.getItem(KEY) || 'all'; } catch (e) {}
+  setAud(['all', 'user', 'admin'].indexOf(saved) >= 0 ? saved : 'all');
+
+  // Contents: copy the rail into the phone-sized dropdown.
+  var rail = document.querySelector('nav.toc');
+  var slot = document.querySelector('.toc-slot');
+  if (rail && slot) {
+    var copy = rail.cloneNode(true); copy.removeAttribute('aria-label'); slot.appendChild(copy);
+    slot.addEventListener('click', function (e) { if (e.target.closest('a')) slot.closest('details').open = false; });
+  }
+
+  // Legend item <-> pin highlighting.
+  document.querySelectorAll('figure.shot').forEach(function (fig) {
+    var items = fig.querySelectorAll('ol.legend > li');
+    items.forEach(function (li, i) {
+      var pin = fig.querySelector('.pin[data-n="' + (i + 1) + '"]');
+      if (!pin) return;
+      li.tabIndex = 0;
+      function on() { pin.classList.add('is-hot'); li.classList.add('is-hot'); }
+      function off() { pin.classList.remove('is-hot'); li.classList.remove('is-hot'); }
+      li.addEventListener('mouseenter', on); li.addEventListener('mouseleave', off);
+      li.addEventListener('focus', on); li.addEventListener('blur', off);
+    });
+  });
+
+  // Tap a screenshot to see it full size.
+  document.querySelectorAll('.zoom').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var img = btn.querySelector('img');
+      var box = document.createElement('div');
+      box.className = 'lightbox'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+      box.setAttribute('aria-label', img.alt || 'Screenshot');
+      box.innerHTML = '<img alt=""><button type="button">Close</button>';
+      box.querySelector('img').src = img.currentSrc || img.src;
+      box.querySelector('img').alt = img.alt;
+      function close() { box.remove(); document.removeEventListener('keydown', esc); btn.focus(); }
+      function esc(e) { if (e.key === 'Escape') close(); }
+      box.addEventListener('click', function (e) { if (e.target === box || e.target.tagName === 'BUTTON') close(); });
+      document.addEventListener('keydown', esc);
+      document.body.appendChild(box); box.querySelector('button').focus();
+    });
+  });
+
+  // Highlight the current chapter in the contents rail.
+  if ('IntersectionObserver' in window) {
+    var links = {};
+    document.querySelectorAll('nav.toc a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting && links[en.target.id]) {
+          Object.keys(links).forEach(function (k) { links[k].classList.remove('is-active'); });
+          links[en.target.id].classList.add('is-active');
+        }
+      });
+    }, { rootMargin: '-30% 0px -60% 0px' });
+    document.querySelectorAll('section.chapter').forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>

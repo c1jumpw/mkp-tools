@@ -54,6 +54,11 @@
  *                    Note: earlier snapshots of this file were saved in
  *                    versions/ with a .js extension by mistake — renamed
  *                    to .css in this release.
+ *   v8  2026-10-30  a.pill-btn / a.icon-btn: no underline and the same
+ *                    text color as their <button> versions, for the new
+ *                    "Help & guide" links (app.js v15).
+ *   v9  2026-11-18  #tour-overlay: full-screen layer holding the
+ *                    getting-started tour (app.js v16).
  * =========================================================================
  */
 
@@ -152,6 +157,9 @@ a { color: var(--amber); }
   color: var(--text-dim);
 }
 .icon-btn svg { width: 20px; height: 20px; }
+/* Links styled as buttons (v8): the Help & guide links are <a> elements. */
+a.icon-btn, a.pill-btn { text-decoration: none; }
+a.pill-btn { color: var(--text); }
 .icon-btn:active { background: var(--surface); }
 
 /* --------------------------- Home --------------------------- */
@@ -1017,3 +1025,10 @@ code {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---- Getting-started tour layer (v9; app.js v16 openTour) ---- */
+#tour-overlay {
+  position: fixed; inset: 0; z-index: 1000; background: var(--ink);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+#tour-overlay iframe { display: block; width: 100%; height: 100%; border: 0; }

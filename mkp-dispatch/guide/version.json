@@ -1,0 +1,14 @@
+{
+ "version": "99ac1c38ae",
+ "updated": "Nov 18, 2026",
+ "whatsNew": {
+  "date": "2026-11-18",
+  "title": "Getting-started tour and guide",
+  "items": [
+   "New getting-started tour with real screenshots. Pick Everyday use or Admin and step through the screens.",
+   "Tap the ? on Home for the tour or the full guide. Admins also find both under Settings \u203a Help.",
+   "The guide and tour now refresh their screenshots automatically whenever the app changes."
+  ],
+  "version": "99ac1c38ae"
+ }
+}

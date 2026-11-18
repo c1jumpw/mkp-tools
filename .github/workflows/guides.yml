@@ -1,0 +1,94 @@
+# =============================================================================
+# guides.yml — keeps the in-app guides and getting-started tours current
+# =============================================================================
+# PURPOSE
+#   Every time DayForge or Dispatch It changes on `main`, this opens each app
+#   with example data, retakes every screenshot, rebuilds the illustrated
+#   guide, the getting-started tour and guide/version.json (What's new), and
+#   commits the results back. Vercel (DayForge) and GitHub Pages (Dispatch
+#   It) then publish them like any other change. See guides/README.md.
+#
+# WHEN IT FAILS
+#   guides/run.py stops if a numbered marker can't find its button or label,
+#   which means a screen changed. GitHub emails the repo owner about the
+#   failed run; its log names the picture and marker to fix. Nothing is
+#   committed in that case, so the live guide keeps its previous pictures.
+#
+# REQUIRED SETUP
+#   None beyond this file. It uses GitHub's built-in token (contents: write
+#   below) to push the refreshed files. Commits made with that token don't
+#   start another run, so there's no loop.
+#
+# VERSION HISTORY
+#   v1  2026-11-18  Initial workflow.
+# =============================================================================
+
+name: Refresh guides and tours
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dayforge/src/**'
+      - 'dayforge/index.html'
+      - 'dayforge/package.json'
+      - 'dayforge/CHANGELOG.md'
+      - 'mkp-dispatch/js/**'
+      - 'mkp-dispatch/css/**'
+      - 'mkp-dispatch/index.html'
+      - 'mkp-dispatch/CHANGELOG.md'
+      - 'guides/**'
+      - '.github/workflows/guides.yml'
+  # Run it by hand from the Actions tab (e.g. to refresh the dates shown).
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One refresh at a time; a newer push supersedes a run still in progress.
+concurrency:
+  group: refresh-guides
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: dayforge/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install app and screenshot tools
+        run: |
+          (cd dayforge && npm ci --no-audit --no-fund)
+          pip install -r guides/requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Retake screenshots and rebuild guides + tours
+        run: python guides/run.py
+
+      - name: Commit refreshed guides
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dayforge/public/guide mkp-dispatch/guide
+          if git diff --cached --quiet; then
+            echo "Guides already up to date."
+            exit 0
+          fi
+          git commit -m "Refresh guides and tours (automatic)"
+          # main may have moved while this ran: rebase onto it, then push.
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          echo "Could not push the refreshed guides." && exit 1
