@@ -2883,6 +2883,10 @@ const App = (() => {
       layer.remove();
     };
     window.addEventListener('message', onMessage);
+    // Focus the tour once loaded so Escape / arrow keys work straight away.
+    layer.querySelector('iframe').addEventListener('load', (e) => {
+      try { e.target.contentWindow.focus(); } catch (err) { /* ignore */ }
+    });
     document.body.appendChild(layer);
   }
 

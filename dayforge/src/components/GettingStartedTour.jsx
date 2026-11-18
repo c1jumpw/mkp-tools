@@ -110,6 +110,9 @@ export default function GettingStartedTour({ mode, version, onClose }) {
         src={TOUR_URL + (mode === 'whats-new' ? '#whats-new' : '')}
         title="Getting started tour"
         className="w-full h-full border-0 block"
+        // Focus the tour once loaded so its keyboard shortcuts (Escape to
+        // close, arrow keys to step) work without clicking into it first.
+        onLoad={(e) => { try { e.currentTarget.contentWindow.focus() } catch { /* same origin; ignore */ } }}
       />
     </div>
   )

@@ -28,7 +28,8 @@ INPUTS (all under guides/<tool>/)
 
 ASSUMPTIONS / EDGE CASES
   - A slide or figure naming a screenshot that wasn't captured raises an
-    error (the build fails rather than publishing a broken picture).
+    error (the build fails rather than publishing a broken picture), and so
+    does a guide figure whose numbered list doesn't have one entry per marker.
   - What's new only changes when a NEW changelog entry is added, so routine
     pushes (which retake screenshots) don't pop it up again.
 =============================================================================
@@ -114,6 +115,14 @@ def build_guide(src, shots, out_img, cache, updated, entry, tool):
         return open_tag.replace('class="shot"', f'class="shot shot--{kind}"', 1) + frame
 
     page = re.sub(r'<figure class="shot" data-src="([a-z0-9-]+)"[^>]*>', figure, src)
+    # Each numbered list must have exactly one entry per marker on its picture.
+    for m in re.finditer(r'<figure class="shot[^"]*" data-src="([^"]+)"(.*?)</figure>', page, re.S):
+        legend = re.search(r'<ol class="legend">(.*?)</ol>', m.group(2), re.S)
+        if not legend:
+            continue
+        pins, items = m.group(2).count('<span class="pin"'), legend.group(1).count('<li>')
+        if pins != items:
+            raise ValueError(f'guide figure "{m.group(1)}": {pins} markers but {items} list entries')
     page = page.replace('{{UPDATED}}', updated).replace('{{WHATS_NEW}}', whats_new_html(entry, tool))
     return page
 
