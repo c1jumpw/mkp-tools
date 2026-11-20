@@ -1,7 +1,7 @@
 """
 =============================================================================
 FILE: guides/run.py
-VERSION: v1 (2026-11-18)
+VERSION: v2 (2026-11-20)
 =============================================================================
 PURPOSE
   One command that refreshes the help for both tools:
@@ -23,6 +23,12 @@ USAGE
 ENVIRONMENT
   CHROMIUM_PATH  use an already-installed Chromium instead of Playwright's.
   Ports 5180 (DayForge) and 5190 (Dispatch It) must be free.
+
+REVISION HISTORY
+  v1  2026-11-18  Initial runner.
+  v2  2026-11-20  TOOLS[*]['history_paths']: folders whose git history fills
+                  the "Every change" list in changelog.json. Needs a full
+                  clone (the workflow checks out with fetch-depth 0).
 =============================================================================
 """
 import os
@@ -43,6 +49,7 @@ TOOLS = {
         'id': 'dayforge', 'name': 'DayForge',
         'app_guide_dir': 'dayforge/public/guide',      # served at /guide/ by Vercel
         'changelog': 'dayforge/CHANGELOG.md',
+        'history_paths': ['dayforge'],  # git log paths for the Every change list
         'back_href': '/',                               # where Close goes when the tour isn't in the app's overlay
         'theme_key': 'dayforge-theme',                  # tour + guide follow the app's light/dark choice
         'display_case': 'uppercase',
@@ -52,6 +59,7 @@ TOOLS = {
         'id': 'dispatch', 'name': 'Dispatch It',
         'app_guide_dir': 'mkp-dispatch/guide',          # served at <app>/guide/ by GitHub Pages
         'changelog': 'mkp-dispatch/CHANGELOG.md',
+        'history_paths': ['mkp-dispatch'],
         'back_href': '../',
         'force_theme': 'dark',                          # the app itself is dark-only
         'display_case': 'none',

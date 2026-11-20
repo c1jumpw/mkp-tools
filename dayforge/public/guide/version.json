@@ -1,15 +1,12 @@
 {
- "version": "d26c5839f8",
- "updated": "Nov 18, 2026",
+ "version": "cdec7dbe09",
+ "updated": "Nov 20, 2026",
  "whatsNew": {
-  "date": "2026-11-18",
-  "title": "Getting-started tour and note labels",
+  "version": "cdec7dbe09",
+  "date": "2026-11-20",
+  "title": "Change log, admin roles and What's new",
   "items": [
-   "New getting-started tour with real screenshots. Pick Everyday use or Owner / admin and step through the screens. Replay it from \u22ee \u203a Getting started tour.",
-   "Notes can have labels, like Work or Travel. Tap a label at the top of Notes to see only those notes.",
-   "The guide under \u22ee \u203a Help & guide now refreshes its screenshots automatically whenever the app changes.",
-   "Sign out now signs out only the phone or computer you are using. Your other devices stay signed in."
-  ],
-  "version": "d26c5839f8"
+   "After an update, a What's new card shows what changed, once per account on any device. You only see the changes that apply to you."
+  ]
  }
 }

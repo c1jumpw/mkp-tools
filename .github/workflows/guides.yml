@@ -21,6 +21,10 @@
 #
 # VERSION HISTORY
 #   v1  2026-11-18  Initial workflow.
+#   v2  2026-11-20  Change log: full git history (fetch-depth 0) for the
+#                    "Every change" list in guide/changelog.json, and a
+#                    non-blocking warning when an app changed without a new
+#                    CHANGELOG.md entry.
 # =============================================================================
 
 name: Refresh guides and tours
@@ -32,10 +36,12 @@ on:
       - 'dayforge/src/**'
       - 'dayforge/index.html'
       - 'dayforge/package.json'
+      - 'dayforge/supabase/**'
       - 'dayforge/CHANGELOG.md'
       - 'mkp-dispatch/js/**'
       - 'mkp-dispatch/css/**'
       - 'mkp-dispatch/index.html'
+      - 'mkp-dispatch/worker/**'
       - 'mkp-dispatch/CHANGELOG.md'
       - 'guides/**'
       - '.github/workflows/guides.yml'
@@ -56,6 +62,26 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history: guide/changelog.json lists every commit
+
+      # Reminder only (never fails the run): app code changed in this push but
+      # its CHANGELOG.md didn't, so What's new and the change log won't mention
+      # it. The "Every change" list still records the commit.
+      - name: Check change log entries
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          changed=$(git diff --name-only "$BEFORE" "$AFTER" || true)
+          check() {  # $1 app folder, $2 code paths regex
+            if echo "$changed" | grep -Eq "$2" && ! echo "$changed" | grep -qx "$1/CHANGELOG.md"; then
+              echo "::warning title=$1 change log::$1 changed without a new entry in $1/CHANGELOG.md. Add one so What's new and the admin change log describe it."
+            fi
+          }
+          check dayforge '^dayforge/(src/|index\.html|package\.json|supabase/)'
+          check mkp-dispatch '^mkp-dispatch/(js/|css/|index\.html|worker/)'
 
       - uses: actions/setup-node@v4
         with:

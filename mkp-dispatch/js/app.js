@@ -325,6 +325,25 @@
  *                    inside the tour posts an href, so the layer closes
  *                    and this window opens the guide (same-origin only)
  *                    instead of loading it inside the overlay.
+ *   v18 2026-11-20  Roles, change log and What's new:
+ *                    - role ('admin' | 'user') from the Worker's GET
+ *                      /whoami (Worker v9), cached per device. A Worker
+ *                      without /whoami (404) means every device is admin,
+ *                      as before. Refreshed on unlock and page load.
+ *                    - Settings: ClickUp, Smart routing and the new Admin
+ *                      section (Change log, admin-code status) only for
+ *                      admins. Everyday devices get "Use admin code on
+ *                      this device", which checks the code with /whoami
+ *                      before saving it.
+ *                    - #/changelog (admins): Release notes (timeline by
+ *                      month, newest/oldest, audience + kind filters,
+ *                      search, CSV/JSON download) and Every change (each
+ *                      commit, from guide/changelog.json).
+ *                    - maybeGreet() replaces maybeAutoOpenTour(): first
+ *                      use on a device -> tour; after an update -> a What's
+ *                      new card with the unseen releases filtered to this
+ *                      device's role. Only an auto-opened tour or the card
+ *                      updates the seen marker; replaying the tour doesn't.
  * =========================================================================
  */
 
@@ -363,6 +382,16 @@ const App = (() => {
   // page load.
   const TOUR_SEEN_KEY = 'dispatch:tourSeen';
   let tourChecked = false;
+  // Roles (v18). role: 'admin' | 'user' | null (not known yet, treated as
+  // 'user'). Cached per device so admin screens appear straight away, and
+  // re-checked with the Worker (GET /whoami) on unlock and page load.
+  // legacyWorker: the Worker predates roles, so every device keeps full
+  // access exactly as before v18.
+  const ROLE_KEY = 'dispatch:role';
+  let role = readRole();
+  let adminCodeSet = false;
+  let legacyWorker = false;
+  let roleCheck = null; // this page load's refreshRole() promise
 
   // ---------------------------------------------------------------
   // Routing
@@ -414,6 +443,7 @@ const App = (() => {
     if (screen === 'smart') return renderSmart();
     if (screen === 'activity') return renderActivity();
     if (screen === 'settings') return renderSettings();
+    if (screen === 'changelog') return renderChangelog();
     renderHome();
   }
 
@@ -483,7 +513,7 @@ const App = (() => {
     if (manualBtn) manualBtn.onclick = () => go('/entity');
     root.querySelector('#refresh-btn').onclick = checkForUpdates;
     root.querySelector('#help-btn').onclick = openHelpSheet;
-    maybeAutoOpenTour();
+    maybeGreet();
     const retryBtn = root.querySelector('#retry-queue');
     if (retryBtn) retryBtn.onclick = () => processQueue(true);
 
@@ -2077,7 +2107,24 @@ const App = (() => {
    * OAuth redirect are still shown when present.
    */
   function renderSettings() {
+    drawSettings();
+    // Re-check the role; redraw only if what Settings shows changed.
+    const access = () => `${role}|${adminCodeSet}|${legacyWorker}`;
+    const before = access();
+    refreshRole(true).then(() => {
+      if (access() !== before && currentRoute()[0] === 'settings') drawSettings();
+    });
+  }
+
+  /**
+   * drawSettings
+   * Draws Settings for the current role (v18): admins get ClickUp, Smart
+   * routing and Admin; everyday devices get This device + Help, plus a
+   * way to switch this device to the admin code.
+   */
+  function drawSettings() {
     const settings = Storage.getSettings();
+    const admin = isAdmin();
     const params = getQueryParams();
     const justConnected = params.get('connected') === '1';
     const connectError = params.get('connect_error');
@@ -2089,7 +2136,7 @@ const App = (() => {
         <span class="icon-btn-spacer"></span>
       </header>
       <main class="form settings">
-        <section class="settings-section">
+        ${admin ? `<section class="settings-section">
           <h2 class="section-title">ClickUp</h2>
           <div class="connect-status" id="connect-status">
             ${justConnected ? '<p class="hint hint--good">Just connected to ClickUp ✓</p>' : ''}
@@ -2108,6 +2155,15 @@ const App = (() => {
           <div id="routing-body"><p class="hint">Loading…</p></div>
         </section>
 
+        <section class="settings-section" id="admin-section">
+          <h2 class="section-title">${icon('key')} Admin</h2>
+          <div class="btn-row">
+            <button class="pill-btn pill-btn--accent" id="changelog-btn">${icon('history')} Change log</button>
+          </div>
+          <p class="hint">Every update to Dispatch It since launch, with filters and CSV / JSON download.</p>
+          <p class="hint${legacyWorker || !adminCodeSet ? ' hint--warn' : ''}" id="admin-code-status">${adminCodeStatus()}</p>
+        </section>` : ''}
+
         <section class="settings-section">
           <h2 class="section-title">This device</h2>
           <label class="field" for="proxy-url">Proxy Worker URL <span class="field-optional">(advanced)</span>
@@ -2117,6 +2173,14 @@ const App = (() => {
             <button class="pill-btn" id="save-settings">Save URL</button>
             <button class="pill-btn pill-btn--danger" id="forget-passcode">${icon('lock')} Forget passcode on this device</button>
           </div>
+          ${admin ? '' : `
+          <label class="field" for="admin-code">Admin code <span class="field-optional">(admins only)</span>
+            <input type="password" id="admin-code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Admin code">
+          </label>
+          <div class="btn-row">
+            <button class="pill-btn" id="admin-code-btn">${icon('key')} Use admin code on this device</button>
+          </div>
+          <p class="hint" id="admin-code-msg" aria-live="polite">Admins: switch this device to the admin code to manage ClickUp, smart routing and the change log.</p>`}
         </section>
 
         <section class="settings-section">
@@ -2132,17 +2196,23 @@ const App = (() => {
     bindBack();
 
     root.querySelector('#tour-btn').onclick = () => openTour('start');
-    root.querySelector('#connect-btn').onclick = () => {
-      // Full-page navigation — ClickUp shows its own UI; the Worker's
-      // redirect brings the browser back here afterwards.
-      window.location.href = buildClickUpAuthorizeUrl();
-    };
+    if (admin) {
+      root.querySelector('#connect-btn').onclick = () => {
+        // Full-page navigation — ClickUp shows its own UI; the Worker's
+        // redirect brings the browser back here afterwards.
+        window.location.href = buildClickUpAuthorizeUrl();
+      };
+      root.querySelector('#test-connection').onclick = () => refreshConnectionStatus();
+      root.querySelector('#changelog-btn').onclick = () => go('/changelog');
+    } else {
+      root.querySelector('#admin-code-btn').onclick = useAdminCode;
+      root.querySelector('#admin-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') useAdminCode(); });
+    }
     root.querySelector('#save-settings').onclick = () => {
       Storage.saveSettings({ proxyUrl: root.querySelector('#proxy-url').value.trim() });
       UI.toast('Saved.', { kind: 'good' });
-      refreshConnectionStatus();
+      if (admin) refreshConnectionStatus();
     };
-    root.querySelector('#test-connection').onclick = () => refreshConnectionStatus();
     root.querySelector('#forget-passcode').onclick = async () => {
       const ok = await UI.sheet({
         title: 'Forget the passcode on this device?',
@@ -2151,11 +2221,56 @@ const App = (() => {
       });
       if (!ok) return;
       Storage.clearDeviceKey();
+      forgetRole();
       renderLock();
     };
 
-    refreshConnectionStatus();
-    renderRoutingSettings();
+    if (admin) {
+      refreshConnectionStatus();
+      renderRoutingSettings();
+    }
+  }
+
+  /** adminCodeStatus — one line explaining who has admin access (v18). */
+  function adminCodeStatus() {
+    if (legacyWorker) return 'Admin code not available yet: the Worker needs updating (README › Admin code). Until then every device has full access.';
+    if (!adminCodeSet) return 'No admin code set, so every device with the passcode has admin access. Set ADMIN_PASSCODE on the Worker to limit it (README › Admin code).';
+    return 'This device uses the admin code. Devices on the everyday passcode can capture, see Activity and undo, but can’t change ClickUp, smart routing or see the change log.';
+  }
+
+  /**
+   * useAdminCode (v18)
+   * Checks a typed admin code with the Worker (/whoami) before replacing
+   * this device's passcode with it, so a typo can't lock the device out.
+   */
+  async function useAdminCode() {
+    const input = root.querySelector('#admin-code');
+    const btn = root.querySelector('#admin-code-btn');
+    const msg = root.querySelector('#admin-code-msg');
+    const code = input.value.trim();
+    if (!code) { input.focus(); return; }
+    btn.disabled = true;
+    msg.className = 'hint';
+    msg.textContent = 'Checking…';
+    try {
+      const info = await ClickUp.whoami(code);
+      if (info && info.role === 'admin') {
+        Storage.saveDeviceKey(code);
+        adminCodeSet = Boolean(info.adminCodeSet);
+        legacyWorker = false;
+        saveRole('admin');
+        roleCheck = Promise.resolve('admin');
+        UI.toast('Admin access on this device.', { kind: 'good' });
+        drawSettings();
+        return;
+      }
+      msg.textContent = 'That’s the everyday passcode, not the admin code.';
+      msg.className = 'hint hint--bad';
+    } catch (err) {
+      msg.textContent = err.status === 403 ? 'That isn’t the admin code.' : UI.describeError(err).message;
+      msg.className = 'hint hint--bad';
+    }
+    btn.disabled = false;
   }
 
   /**
@@ -2870,7 +2985,8 @@ const App = (() => {
    * openTour
    * Shows guide/tour.html in a full-screen layer over the app.
    * @param {'start'|'whats-new'} mode - which screen the tour opens on
-   * @param {string|null} version - What's-new version to remember as seen
+   * @param {string} [version] - release id to remember as seen when it
+   *   closes (auto-open only; omitted for replays)
    */
   function openTour(mode, version) {
     if (document.getElementById('tour-overlay')) return;
@@ -2882,7 +2998,9 @@ const App = (() => {
     layer.innerHTML = `<iframe src="guide/tour.html${mode === 'whats-new' ? '#whats-new' : ''}" title="Getting started tour"></iframe>`;
     const onMessage = (e) => {
       if (e.origin !== window.location.origin || !e.data || e.data.type !== 'tour:close') return;
-      try { localStorage.setItem(TOUR_SEEN_KEY, e.data.version || version || 'none'); } catch (err) { /* convenience only */ }
+      // Only a tour opened by maybeGreet (with a version) updates the seen
+      // marker; replaying it from Help or Settings doesn't (v18).
+      if (version) markSeen(version);
       window.removeEventListener('message', onMessage);
       layer.remove();
       // "Open the full guide" inside the tour: open it in this window
@@ -2903,27 +3021,293 @@ const App = (() => {
   }
 
   /**
-   * maybeAutoOpenTour
-   * Once per page load: opens the tour the first time Dispatch It is used
-   * on this device, or What's new once after an update that added a
-   * CHANGELOG.md entry. Silent when offline or version.json is missing.
+   * markSeen — remembers a release id as seen on this device (v18).
+   * @param {string} id
    */
-  async function maybeAutoOpenTour() {
+  function markSeen(id) {
+    try { localStorage.setItem(TOUR_SEEN_KEY, id); } catch (err) { /* convenience only */ }
+  }
+
+  /**
+   * maybeGreet (v18; replaces maybeAutoOpenTour)
+   * Once per page load, from Home:
+   *   - first use on this device -> the getting-started tour;
+   *   - after an update -> the What's new card with every release this
+   *     device hasn't seen, filtered to its role. A device whose role
+   *     can't see any of them is marked seen silently.
+   * Silent when offline or guide/changelog.json is missing. A seen marker
+   * that isn't in the log any more (release renamed) is reset silently
+   * instead of replaying the whole history.
+   */
+  async function maybeGreet() {
     if (tourChecked) return;
     tourChecked = true;
     let seen;
     try { seen = localStorage.getItem(TOUR_SEEN_KEY); } catch (err) { return; }
     if (seen === 'capture') return;
+    const log = await Changelog.load();
+    if (!log || !log.releases.length) return;
+    const newest = log.releases[0].id;
+    if (!seen) { openTour('start', newest); return; }
+    if (seen === newest) return;
+    await refreshRole();
+    // Role unknown (offline, never checked): wait for a visit where it's
+    // known, so an admin device never has admin notes marked seen unshown.
+    if (role === null) { tourChecked = false; return; }
+    const visible = Changelog.forRole(Changelog.unseen(log.releases, seen), isAdmin() ? 'admin' : 'user');
+    if (visible.length && (currentRoute()[0] || 'home') === 'home') showWhatsNew(visible, newest);
+    else if (!visible.length) markSeen(newest);
+  }
+
+  /**
+   * showWhatsNew (v18)
+   * The card shown once after an update: unseen releases (newest first,
+   * at most 4, the rest counted), kind pills, and for admins the
+   * "Admins" tag and a Full change log button. Any way of closing it marks
+   * everything up to `newestId` as seen.
+   * @param {object[]} releases - role-filtered, newest first
+   * @param {string} newestId
+   */
+  function showWhatsNew(releases, newestId) {
+    if (document.getElementById('whatsnew')) return;
+    const admin = isAdmin();
+    const shown = releases.slice(0, 4);
+    const hidden = releases.length - shown.length;
+    const layer = document.createElement('div');
+    layer.id = 'whatsnew';
+    layer.className = 'wn-backdrop';
+    layer.innerHTML = `
+      <div class="wn-card" role="dialog" aria-modal="true" aria-labelledby="wn-title">
+        <div class="wn-head">
+          <div class="wn-mark">${icon('spark')}</div>
+          <div class="wn-heading">
+            <p class="wn-eyebrow">${releases.length === 1 ? `Updated ${escapeHtml(Changelog.formatDate(releases[0].date))}` : `${releases.length} updates since you last looked`}</p>
+            <h2 id="wn-title">What’s new</h2>
+          </div>
+          <button class="icon-btn wn-close" aria-label="Close">${icon('close')}</button>
+        </div>
+        <div class="wn-body">
+          ${shown.map(r => Changelog.releaseHtml(r, admin)).join('')}
+          ${hidden > 0 ? `<p class="hint">+ ${hidden} earlier update${hidden === 1 ? '' : 's'}${admin ? ' in the full change log.' : '.'}</p>` : ''}
+        </div>
+        <div class="wn-foot">
+          ${admin ? '<button class="sheet-btn sheet-btn--secondary" id="wn-log">Full change log</button>' : ''}
+          <button class="sheet-btn sheet-btn--primary" id="wn-ok">Got it</button>
+        </div>
+      </div>`;
+    const close = (then) => {
+      document.removeEventListener('keydown', onKey);
+      markSeen(newestId);
+      layer.remove();
+      if (then) then();
+    };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    layer.addEventListener('click', (e) => { if (e.target === layer) close(); });
+    layer.querySelector('.wn-close').onclick = () => close();
+    layer.querySelector('#wn-ok').onclick = () => close();
+    const logBtn = layer.querySelector('#wn-log');
+    if (logBtn) logBtn.onclick = () => close(() => go('/changelog'));
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(layer);
+    layer.querySelector('#wn-ok').focus();
+  }
+
+  // ---------------------------------------------------------------
+  // Roles (v18)
+  // ---------------------------------------------------------------
+  /** readRole — the role cached on this device, or null. */
+  function readRole() {
     try {
-      const res = await fetch('guide/version.json', { cache: 'no-store' });
-      if (!res.ok) return;
-      const info = await res.json();
-      if (!seen) openTour('start', info.version);
-      else if (info.version && info.whatsNew && seen !== info.version) openTour('whats-new', info.version);
-    } catch (err) { /* offline: try again next time */ }
+      const r = localStorage.getItem(ROLE_KEY);
+      return r === 'admin' || r === 'user' ? r : null;
+    } catch (err) { return null; }
+  }
+
+  /** saveRole — sets and caches the role (null clears it). */
+  function saveRole(r) {
+    role = r;
+    try { if (r) localStorage.setItem(ROLE_KEY, r); else localStorage.removeItem(ROLE_KEY); } catch (err) { /* cache only */ }
+  }
+
+  /** forgetRole — after the passcode is forgotten or replaced. */
+  function forgetRole() {
+    saveRole(null);
+    roleCheck = null;
+    adminCodeSet = false;
+    legacyWorker = false;
+  }
+
+  /** isAdmin — whether this device shows admin screens. */
+  function isAdmin() {
+    return role === 'admin';
+  }
+
+  /**
+   * refreshRole
+   * Asks the Worker which role this device's passcode unlocks. Once per
+   * page load unless `force`. Offline or other errors keep the cached
+   * role; a 404 means the Worker predates roles (everyone is admin).
+   * @param {boolean} [force]
+   * @returns {Promise<string|null>} the role afterwards
+   */
+  function refreshRole(force) {
+    if (roleCheck && !force) return roleCheck;
+    if (!Storage.getDeviceKey()) return Promise.resolve(role);
+    roleCheck = ClickUp.whoami()
+      .then((info) => {
+        legacyWorker = false;
+        adminCodeSet = Boolean(info && info.adminCodeSet);
+        saveRole(info && info.role === 'admin' ? 'admin' : 'user');
+      })
+      .catch((err) => {
+        if (err && err.status === 404) {
+          legacyWorker = true;
+          adminCodeSet = false;
+          saveRole('admin');
+        }
+      })
+      .then(() => role);
+    return roleCheck;
+  }
+
+  // ---------------------------------------------------------------
+  // Screen: Change log (v18, admins)
+  // ---------------------------------------------------------------
+  /**
+   * renderChangelog
+   * Two tabs over guide/changelog.json:
+   *   Release notes  the written change log as a timeline grouped by month;
+   *                  newest/oldest first, audience + kind filters, search,
+   *                  download everything as CSV or JSON.
+   *   Every change   each code change from the project history (automatic),
+   *                  searchable, CSV download.
+   * Controls are drawn once per tab; typing or tapping a filter redraws
+   * only the results, so the search box keeps focus.
+   */
+  async function renderChangelog() {
+    if (!isAdmin()) {
+      await refreshRole();
+      if (!isAdmin()) { go('/settings'); return; }
+    }
+    root.innerHTML = `
+      <header class="topbar">
+        <button class="icon-btn" data-nav="back" aria-label="Back">${icon('back')}</button>
+        <span class="brand">Change log</span>
+        <span class="icon-btn-spacer"></span>
+      </header>
+      <main class="picker changelog">
+        <div class="segmented cl-tabs" role="tablist">
+          <button type="button" class="segmented-btn active" role="tab" aria-selected="true" data-tab="log">Release notes</button>
+          <button type="button" class="segmented-btn" role="tab" aria-selected="false" data-tab="commits">Every change</button>
+        </div>
+        <div id="cl-controls"><p class="hint">Loading…</p></div>
+        <div id="cl-results"></div>
+      </main>`;
+    bindBack();
+    const log = await Changelog.load(true);
+    const controls = root.querySelector('#cl-controls');
+    const results = root.querySelector('#cl-results');
+    if (!controls) return; // navigated away while loading
+    if (!log) {
+      controls.innerHTML = '<p class="hint hint--bad">The change log isn’t available right now. Check your connection and try again.</p>';
+      return;
+    }
+    const st = { tab: 'log', order: 'newest', aud: 'all', kind: 'all', q: '' };
+    const stamp = log.generated || 'export';
+
+    const chip = (attr, value, label, active) =>
+      `<button type="button" class="hint-chip cl-chip${active ? ' active' : ''}" data-${attr}="${value}" aria-pressed="${active}">${label}</button>`;
+
+    const groupByMonth = (rows) => {
+      const groups = [];
+      rows.forEach((row) => {
+        const key = row.date.slice(0, 7);
+        if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, label: Changelog.formatMonth(row.date), rows: [] });
+        groups[groups.length - 1].rows.push(row);
+      });
+      return groups;
+    };
+
+    function drawResults() {
+      const q = st.q.trim().toLowerCase();
+      if (st.tab === 'log') {
+        let rows = [];
+        log.releases.forEach((r) => {
+          const titleHit = q && r.title.toLowerCase().includes(q);
+          const items = r.items.filter(it => (st.aud === 'all' || it.audience === st.aud) && (st.kind === 'all' || it.kind === st.kind) && (!q || titleHit || it.text.toLowerCase().includes(q)));
+          if (items.length) rows.push(Object.assign({}, r, { items }));
+        });
+        if (st.order === 'oldest') rows = rows.reverse();
+        results.innerHTML = rows.length
+          ? groupByMonth(rows).map(g => `<h3 class="cl-month">${escapeHtml(g.label)}</h3><div class="cl-timeline">${g.rows.map(r => Changelog.releaseHtml(r, true)).join('')}</div>`).join('')
+          : '<p class="hint cl-empty">Nothing matches those filters.</p>';
+      } else {
+        let rows = log.commits.filter(c => !q || c.subject.toLowerCase().includes(q) || c.sha.startsWith(q));
+        if (st.order === 'oldest') rows = rows.slice().reverse();
+        results.innerHTML = rows.length
+          ? groupByMonth(rows).map(g => `<h3 class="cl-month">${escapeHtml(g.label)}</h3><ul class="cl-commits">${g.rows.map(c => `
+              <li><span class="cl-date">${escapeHtml(Changelog.formatDate(c.date))}</span><span class="cl-commit-text">${escapeHtml(c.subject)}</span><code class="cl-sha">${escapeHtml(c.sha)}</code></li>`).join('')}</ul>`).join('')
+          : '<p class="hint cl-empty">Nothing matches.</p>';
+      }
+    }
+
+    function drawControls() {
+      const orderBtn = `<button type="button" class="pill-btn" id="cl-order">${st.order === 'newest' ? 'Newest first ↓' : 'Oldest first ↑'}</button>`;
+      if (st.tab === 'log') {
+        const changes = log.releases.reduce((n, r) => n + r.items.length, 0);
+        const adminOnly = log.releases.reduce((n, r) => n + r.items.filter(it => it.audience === 'admins').length, 0);
+        const first = log.releases.length ? log.releases[log.releases.length - 1].date : null;
+        controls.innerHTML = `
+          <div class="card stat-card">
+            <div><span class="stat-num">${log.releases.length}</span><span class="stat-label">updates</span></div>
+            <div><span class="stat-num">${changes}</span><span class="stat-label">changes · ${adminOnly} admin</span></div>
+            <div><span class="stat-num cl-stat-date">${first ? escapeHtml(Changelog.formatDate(first)) : '—'}</span><span class="stat-label">first release</span></div>
+          </div>
+          <div class="cl-search-row"><input type="search" id="cl-q" placeholder="Search the change log" aria-label="Search the change log" value="${escapeHtml(st.q)}">${orderBtn}</div>
+          <div class="hint-row" role="group" aria-label="Who it’s for">
+            ${chip('aud', 'all', 'Everything', st.aud === 'all')}${chip('aud', 'everyone', 'For everyone', st.aud === 'everyone')}${chip('aud', 'admins', 'Admins only', st.aud === 'admins')}
+          </div>
+          <div class="hint-row" role="group" aria-label="Kind of change">
+            ${chip('kind', 'all', 'All kinds', st.kind === 'all')}${Object.keys(Changelog.KINDS).map(k => chip('kind', k, Changelog.KINDS[k], st.kind === k)).join('')}
+          </div>
+          <div class="hint-row cl-downloads"><span class="hint-label">Download all</span>
+            <button type="button" class="pill-btn pill-btn--small" id="cl-csv">CSV</button>
+            <button type="button" class="pill-btn pill-btn--small" id="cl-json">JSON</button>
+          </div>`;
+        controls.querySelector('#cl-csv').onclick = () => Changelog.download(`dispatch-it-change-log-${stamp}.csv`, Changelog.releasesCSV(log.releases), 'text/csv');
+        controls.querySelector('#cl-json').onclick = () => Changelog.download(`dispatch-it-change-log-${stamp}.json`, JSON.stringify({ app: 'Dispatch It', generated: log.generated, releases: log.releases, commits: log.commits }, null, 2), 'application/json');
+        controls.querySelectorAll('[data-aud]').forEach(b => { b.onclick = () => { st.aud = b.dataset.aud; drawControls(); drawResults(); }; });
+        controls.querySelectorAll('[data-kind]').forEach(b => { b.onclick = () => { st.kind = b.dataset.kind; drawControls(); drawResults(); }; });
+      } else {
+        controls.innerHTML = `
+          <p class="hint">Every code change to Dispatch It, recorded automatically from the project history (${log.commits.length} so far). Release notes are the plain-language summary of these.</p>
+          ${log.commitsComplete ? '' : '<p class="hint hint--warn">This list may be incomplete: the last build only had part of the history.</p>'}
+          <div class="cl-search-row"><input type="search" id="cl-q" placeholder="Search changes" aria-label="Search changes" value="${escapeHtml(st.q)}">${orderBtn}</div>
+          <div class="hint-row cl-downloads"><span class="hint-label">Download all</span>
+            <button type="button" class="pill-btn pill-btn--small" id="cl-csv">CSV</button>
+          </div>`;
+        controls.querySelector('#cl-csv').onclick = () => Changelog.download(`dispatch-it-every-change-${stamp}.csv`, Changelog.commitsCSV(log.commits), 'text/csv');
+      }
+      controls.querySelector('#cl-q').addEventListener('input', (e) => { st.q = e.target.value; drawResults(); });
+      controls.querySelector('#cl-order').onclick = () => { st.order = st.order === 'newest' ? 'oldest' : 'newest'; drawControls(); drawResults(); };
+    }
+
+    root.querySelectorAll('[data-tab]').forEach((b) => {
+      b.onclick = () => {
+        st.tab = b.dataset.tab;
+        st.q = '';
+        root.querySelectorAll('[data-tab]').forEach(x => { const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-selected', String(on)); });
+        drawControls();
+        drawResults();
+      };
+    });
+    drawControls();
+    drawResults();
   }
 
   const ICONS = {
+    // ✕ — closes the What's new card (v18).
+    close: '<path d="M18 6L6 18"/><path d="M6 6l12 12"/>',
     // Question mark in a circle — the "Help & guide" link (v15).
     help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
     gear: '<path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09A1.65 1.65 0 0015 4.6a1.65 1.65 0 001.82.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
@@ -2968,6 +3352,7 @@ const App = (() => {
       renderLock();
     } else {
       render();
+      refreshRole(); // v18: confirm the cached role in the background
     }
     window.addEventListener('online', () => processQueue(false));
   }
@@ -2985,6 +3370,7 @@ const App = (() => {
         <div class="lock-mark">${icon('lock')}</div>
         <h1 class="lock-title">${escapeHtml(APP_NAME)}</h1>
         <p class="lock-sub">Enter the passcode to continue.</p>
+        ${/[?&]moved=1/.test(window.location.search) ? '<p class="hint lock-moved">Dispatch It has a new address, so this device needs the passcode once more. On a phone, add this page to your home screen again and remove the old icon.</p>' : ''}
         <input type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" id="lock-input" class="lock-input" placeholder="Passcode" aria-label="Passcode">
         ${errorMsg ? `<p class="lock-error" role="alert">${escapeHtml(errorMsg)}</p>` : ''}
         <button class="send-btn" id="lock-submit">Unlock</button>
@@ -3012,14 +3398,20 @@ const App = (() => {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Checking…';
     Storage.saveDeviceKey(candidate);
+    forgetRole();
+    // Drop the one-time ?moved=1 note (index.html v3) from the address.
+    if (/[?&]moved=1/.test(window.location.search)) history.replaceState(null, '', window.location.pathname + window.location.hash);
     try {
       await ClickUp.testConnection();
+      await refreshRole(true);
       render();
     } catch (err) {
       if (err.status === 403) {
         Storage.clearDeviceKey();
         renderLock('Wrong passcode — try again.');
       } else {
+        // 401 (not connected yet) or offline: the passcode may be fine.
+        await refreshRole(true);
         render();
       }
     }

@@ -30,10 +30,12 @@
  *                    ui.js / routing.js to the shell. Navigation requests
  *                    fall back to the cached index.html offline. Cache
  *                    name bumped to v3 so old caches are cleaned out.
+ *   v4  2026-11-20  Added js/changelog.js (change log + What's new) to
+ *                    the shell; cache name bumped to v4.
  * =========================================================================
  */
 
-const CACHE = 'dispatch-shell-v3';
+const CACHE = 'dispatch-shell-v4';
 // Waiting longer than this for the network makes the app feel broken on
 // a weak signal; after it, the cached copy is served immediately (the
 // network request still finishes in the background and refreshes the cache).
@@ -47,6 +49,7 @@ const SHELL = [
   './js/clickup.js',
   './js/ui.js',
   './js/routing.js',
+  './js/changelog.js',
   './js/app.js',
   './manifest.webmanifest',
   './icons/icon-192.png',

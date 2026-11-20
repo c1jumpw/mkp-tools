@@ -31,6 +31,16 @@
 #                    - [[vectorize]] binding TASK_VECTORS → index
 #                      "dispatch-tasks" (create it first, see below).
 #                    - [triggers] cron: one sync step every 15 minutes.
+#   v7  2026-11-20  Roles + new address (clickup-proxy.js v9):
+#                    - ADMIN_PASSCODE: new OPTIONAL secret, the admin code
+#                      (`npx wrangler secret put ADMIN_PASSCODE`). Until it's
+#                      set, the everyday passcode keeps full access.
+#                    - ALLOWED_ORIGIN now lists the old GitHub Pages origin
+#                      AND https://dispatch.mkcworkspace.com, so both work
+#                      during the move.
+#                    - APP_URL: switch to https://dispatch.mkcworkspace.com/
+#                      once that address opens (README › Move to
+#                      mkcworkspace.com), then deploy again.
 # =============================================================================
 
 name = "dispatch-clickup-proxy"
@@ -38,13 +48,17 @@ main = "clickup-proxy.js"
 compatibility_date = "2024-11-01"
 
 [vars]
-# The one origin allowed to call this Worker directly via fetch() from
-# a browser (CORS). Must match the deployed app's origin exactly —
-# protocol + domain, no path, no trailing slash.
-ALLOWED_ORIGIN = "https://c1jumpw.github.io"
+# Origin(s) allowed to call this Worker directly via fetch() from a
+# browser (CORS), comma-separated. Each must match the app's origin
+# exactly — protocol + domain, no path, no trailing slash. Both the old
+# and the new address are listed during the move; remove the old one once
+# every device uses dispatch.mkcworkspace.com.
+ALLOWED_ORIGIN = "https://dispatch.mkcworkspace.com,https://c1jumpw.github.io"
 
 # Full URL (including path) of the deployed app. Used only as the
 # redirect target after a successful/failed OAuth handshake.
+# TODO (move step 5): change to "https://dispatch.mkcworkspace.com/" once
+# that address opens, then `npx wrangler deploy` again.
 APP_URL = "https://c1jumpw.github.io/mkp-tools/mkp-dispatch/"
 
 # ClickUp OAuth app's Client ID. Public by design (identifies the app,

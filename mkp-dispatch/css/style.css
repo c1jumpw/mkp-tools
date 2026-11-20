@@ -59,6 +59,10 @@
  *                    "Help & guide" links (app.js v15).
  *   v9  2026-11-18  #tour-overlay: full-screen layer holding the
  *                    getting-started tour (app.js v16).
+ *   v10 2026-11-20  Change log + What's new (app.js v18, changelog.js):
+ *                    .wn-* (the What's new card), .cl-* (change-log
+ *                    releases, kind pills, timeline, commit list) and
+ *                    .hint--warn.
  * =========================================================================
  */
 
@@ -354,6 +358,7 @@ a.pill-btn { color: var(--text); }
   margin: 4px 0 0;
 }
 .lock-sub { color: var(--text-dim); font-size: 14px; margin: 0 0 12px; }
+.lock-moved { max-width: 300px; text-align: center; margin: -4px 0 14px; color: var(--amber); } /* v10: after the move */
 .lock-input {
   width: 100%;
   max-width: 260px;
@@ -1032,3 +1037,88 @@ code {
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
 #tour-overlay iframe { display: block; width: 100%; height: 100%; border: 0; }
+
+/* ---- Change log + What's new (v10; app.js v18, changelog.js) ---- */
+.hint--warn { color: var(--amber); }
+
+/* One change line: kind pill + sentence (+ "Admins" tag for admins). */
+.cl-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.cl-item { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.45; }
+.cl-kind {
+  flex-shrink: 0; width: 76px; text-align: center; margin-top: 1px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 0; border-radius: 5px; border: 1px solid transparent;
+}
+.cl-kind--new { background: var(--amber); color: #1A1200; }
+.cl-kind--improved { background: color-mix(in srgb, #7C8AF6 24%, var(--surface)); color: #B4BCFB; }
+.cl-kind--fixed { background: color-mix(in srgb, var(--green) 22%, var(--surface)); color: var(--green); }
+.cl-kind--changed { border-color: var(--amber-dim); color: var(--amber); }
+.cl-kind--removed { border-color: var(--line); color: var(--text-dim); }
+.cl-kind--security { background: color-mix(in srgb, var(--red) 20%, var(--surface)); color: var(--red); }
+.cl-text { min-width: 0; }
+.cl-aud {
+  display: inline-block; vertical-align: 1px; margin-left: 4px; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim);
+}
+.cl-release-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.cl-release-title { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.cl-date { flex-shrink: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+
+/* What's new card: centered, amber glow behind the spark. */
+.wn-backdrop {
+  position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, var(--safe-bottom));
+  background: rgba(8, 9, 12, 0.66); animation: fade-in 0.15s ease-out;
+}
+.wn-card {
+  width: 100%; max-width: 440px; max-height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); animation: sheet-up 0.22s ease-out;
+}
+.wn-head {
+  position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 20px 18px 16px; border-bottom: 1px solid var(--line);
+  background: radial-gradient(circle at 92% -30%, color-mix(in srgb, var(--amber) 30%, transparent) 0, transparent 60%);
+}
+.wn-mark {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--amber); color: #1A1200; box-shadow: 0 0 0 5px color-mix(in srgb, var(--amber) 22%, transparent);
+}
+.wn-mark svg { width: 24px; height: 24px; }
+.wn-heading { flex: 1; min-width: 0; }
+.wn-eyebrow { margin: 2px 0 2px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+.wn-heading h2 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+.wn-close { margin: -6px -6px 0 0; }
+.wn-body { overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 20px; }
+.wn-foot { display: flex; gap: 8px; padding: 12px 18px 14px; border-top: 1px solid var(--line); }
+.wn-foot .sheet-btn { flex: 1; padding: 12px; }
+
+/* Change log page (admins). */
+.changelog { display: flex; flex-direction: column; gap: 14px; }
+.cl-tabs { margin-bottom: 0; }
+#cl-controls { display: flex; flex-direction: column; gap: 10px; }
+.cl-stat-date { font-size: 15px; line-height: 26px; }
+.cl-search-row { display: flex; gap: 8px; }
+.cl-search-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: 16px; /* 16px: iOS doesn't zoom in */ color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+.cl-search-row input:focus { outline: none; border-color: var(--amber-dim); }
+.cl-search-row .pill-btn { flex-shrink: 0; }
+.cl-chip { font-family: inherit; }
+.cl-chip.active { border-color: var(--amber-dim); color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, var(--surface)); }
+.cl-downloads { gap: 8px; }
+.cl-month { margin: 8px 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
+.cl-timeline { position: relative; display: flex; flex-direction: column; gap: 10px; padding-left: 18px; border-left: 1px solid var(--line); margin-left: 5px; }
+.cl-timeline .cl-release { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.cl-timeline .cl-release::before {
+  content: ''; position: absolute; left: -24px; top: 16px; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--amber); border: 2px solid var(--ink);
+}
+.cl-timeline .cl-release--admins::before { background: #7C8AF6; }
+.cl-commits { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.cl-commits li { display: flex; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.cl-commits .cl-date { width: 92px; }
+.cl-commit-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cl-sha { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.cl-empty { text-align: center; padding: 24px 0; }
+@media (max-width: 380px) { .cl-sha { display: none; } }

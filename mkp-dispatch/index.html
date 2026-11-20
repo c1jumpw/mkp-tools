@@ -10,7 +10,8 @@
 
   SCRIPT ORDER MATTERS (plain scripts, no bundler — each file uses the
   globals defined by the ones before it):
-    config.js → storage.js → clickup.js → ui.js → routing.js → app.js
+    config.js → storage.js → clickup.js → ui.js → routing.js →
+    changelog.js → app.js
 
   VERSION HISTORY
     v1  2026-07-23  Initial shell.
@@ -21,6 +22,11 @@
                     (replaces the play triangle, which read as a video
                     icon); SVG favicon + 32px PNG fallback + a proper
                     180px apple-touch-icon (was reusing the 192px file).
+    v3  2026-11-20  Added changelog.js (admin Change log + What's new).
+                    Moving to dispatch.mkcworkspace.com: on the old GitHub
+                    Pages address, the inline script below forwards to the
+                    new one, but only once the new address answers and no
+                    captures are waiting to send on this device.
   ===========================================================================
 -->
 <html lang="en">
@@ -52,8 +58,24 @@
   <script src="js/clickup.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/routing.js"></script>
+  <script src="js/changelog.js"></script>
   <script src="js/app.js"></script>
   <script>
+    // New address (v3). On the old GitHub Pages copy only: when
+    // dispatch.mkcworkspace.com is live, go there, keeping the screen.
+    // Waits while captures are queued here (they live in this address's
+    // storage and would otherwise never send). ?moved=1 tells the lock
+    // screen to explain why the passcode is asked for again.
+    (function () {
+      var NEW_HOME = 'https://dispatch.mkcworkspace.com/';
+      if (location.hostname !== 'c1jumpw.github.io') return;
+      try { if (Storage.getQueue().length) return; } catch (e) { return; }
+      // no-cors: an opaque answer is enough to know the site is up; a
+      // network error (DNS not set up yet) leaves this copy working.
+      fetch(NEW_HOME + 'manifest.webmanifest', { mode: 'no-cors', cache: 'no-store' })
+        .then(function () { location.replace(NEW_HOME + '?moved=1' + location.hash); })
+        .catch(function () {});
+    })();
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     }

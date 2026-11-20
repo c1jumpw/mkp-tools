@@ -1,0 +1,517 @@
+{
+ "app": "Dispatch It",
+ "generated": "2026-11-20",
+ "releases": [
+  {
+   "id": "68761d0894",
+   "date": "2026-11-20",
+   "title": "Change log, admin code and What's new",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "After an update, a What's new card shows what changed, once on each device. You only see the changes that apply to you.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Settings › Admin › Change log lists every update from launch to today. Switch between newest and oldest first, filter by who it's for or what kind of change it is, search, and download the whole history as CSV or JSON.",
+     "audience": "admins",
+     "kind": "new"
+    },
+    {
+     "text": "The Every change tab lists each code change automatically, so nothing is missed even without a written note.",
+     "audience": "admins",
+     "kind": "new"
+    },
+    {
+     "text": "An admin code, separate from the everyday passcode. Devices unlocked with the everyday passcode can capture and undo, but can't change the ClickUp connection or smart-routing settings.",
+     "audience": "admins",
+     "kind": "new"
+    },
+    {
+     "text": "Worker update needed: set the ADMIN_PASSCODE secret and redeploy (README › Admin code). Until then every device keeps full access, as before.",
+     "audience": "admins",
+     "kind": "changed"
+    },
+    {
+     "text": "Ready to move to dispatch.mkcworkspace.com. Follow \"Move to mkcworkspace.com\" in README.md.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "99ac1c38ae",
+   "date": "2026-11-18",
+   "title": "Getting-started tour and guide",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "A getting-started tour with real screenshots. Pick Everyday use or Admin and step through the screens.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Tap the ? on Home for the tour or the full illustrated guide. Both are also under Settings › Help.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "The wrong-passcode message now points to Settings › Forget passcode on this device.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "The guide and tour retake their screenshots automatically whenever Dispatch It changes.",
+     "audience": "admins",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "1e0e6bb93f",
+   "date": "2026-10-11",
+   "title": "Smart routing and the new name",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Dispatch is now Dispatch It.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Smart capture: type or say it once, and Gemini picks the list, tidies the title, and reads dates and priority.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Before sending, Dispatch It checks for a matching open task and offers to update it instead.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Activity shows everything that was filed, with Undo.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Clearer error messages, and nothing is sent twice if the connection drops.",
+     "audience": "everyone",
+     "kind": "improved"
+    },
+    {
+     "text": "Settings › Smart routing: auto-file threshold, duplicate sensitivity, workspace sync, task index and live updates.",
+     "audience": "admins",
+     "kind": "new"
+    },
+    {
+     "text": "The Worker needs GEMINI_API_KEY, the dispatch-tasks Vectorize index and the KV namespace (README › Smart routing).",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "4831208507",
+   "date": "2026-08-12",
+   "title": "Related Account ID",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Direct to List fills in the Related Account ID field correctly.",
+     "audience": "everyone",
+     "kind": "fixed"
+    }
+   ]
+  },
+  {
+   "id": "0ed3e98931",
+   "date": "2026-08-11",
+   "title": "Associated account picker",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Pick the associated client account from a list when adding an MKC Client account.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "The password field shows what you type, so you can check it.",
+     "audience": "everyone",
+     "kind": "changed"
+    },
+    {
+     "text": "Problems saving custom fields are shown instead of failing silently.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "The Tool / Software / Act field is no longer filled in automatically.",
+     "audience": "everyone",
+     "kind": "removed"
+    }
+   ]
+  },
+  {
+   "id": "ecda9aa4ed",
+   "date": "2026-08-08",
+   "title": "Account custom fields",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Direct to List fills in the account's real ClickUp fields.",
+     "audience": "everyone",
+     "kind": "improved"
+    },
+    {
+     "text": "Direct to List is for MKC Client accounts only. The review channel is told either way.",
+     "audience": "everyone",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "c113e186ad",
+   "date": "2026-08-07",
+   "title": "Add to Accounts destination",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Choose Review Channel or Direct to List when adding an account.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "39d345e98b",
+   "date": "2026-07-28",
+   "title": "Capture type tidy-up",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Meeting Note is now New Meeting/Apt/Event.",
+     "audience": "everyone",
+     "kind": "changed"
+    },
+    {
+     "text": "Client Account Note (it duplicated another type).",
+     "audience": "everyone",
+     "kind": "removed"
+    }
+   ]
+  },
+  {
+   "id": "54a6554b6c",
+   "date": "2026-07-26",
+   "title": "Follow-ups and Add to Accounts",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Follow-up / Reminder adds your note as a comment on an existing task.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Add to Accounts sends new account details for review.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Titles are capitalized automatically.",
+     "audience": "everyone",
+     "kind": "improved"
+    }
+   ]
+  },
+  {
+   "id": "79e5268ec0",
+   "date": "2026-07-26",
+   "title": "Refresh button",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "The refresh button on Home checks for a new version of the app.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "The chat log mentions the parent task when you create a subtask.",
+     "audience": "everyone",
+     "kind": "improved"
+    }
+   ]
+  },
+  {
+   "id": "3c43c0cf05",
+   "date": "2026-07-26",
+   "title": "Subtasks",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Make a capture a subtask of an existing task.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "c5be49e9cf",
+   "date": "2026-07-25",
+   "title": "Plan/Product Idea",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Plan/Product Idea capture type.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "JTG's name is spelled correctly.",
+     "audience": "everyone",
+     "kind": "fixed"
+    }
+   ]
+  },
+  {
+   "id": "3c8d186fc2",
+   "date": "2026-07-25",
+   "title": "Assignees, ClickUp links and chat log",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Assign a task to a teammate.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "A View in ClickUp link after each send.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Each capture is posted to the team's ClickUp chat channel.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Captures go to the correct lists.",
+     "audience": "everyone",
+     "kind": "fixed"
+    }
+   ]
+  },
+  {
+   "id": "4913dea8f8",
+   "date": "2026-07-25",
+   "title": "Passcode and connection status",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "A passcode protects Dispatch on each device.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Settings shows whether ClickUp is connected.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "A Start date field, and tap a flag to see what it means.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "The Worker needs the APP_PASSCODE secret.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "16a96a006b",
+   "date": "2026-07-24",
+   "title": "Own ClickUp connection",
+   "audience": "admins",
+   "items": [
+    {
+     "text": "Dispatch has its own ClickUp connection (Settings › Connect to ClickUp) instead of a shared personal key.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "6da8af9300",
+   "date": "2026-07-23",
+   "title": "Dispatch launches",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Capture to-dos, ideas, notes and requests for each business and send them straight to the right ClickUp list.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Dictate, record a voice note or attach files. Captures made offline wait and send when you're back online.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "A Cloudflare Worker sits between the app and ClickUp, so the ClickUp key never reaches a device.",
+     "audience": "admins",
+     "kind": "new"
+    }
+   ]
+  }
+ ],
+ "commits": [
+  {
+   "date": "2026-11-18",
+   "sha": "2a04d04",
+   "subject": "Guides: fix review findings; tour's full-guide link opens the guide in the app"
+  },
+  {
+   "date": "2026-11-18",
+   "sha": "1139797",
+   "subject": "Guides: check list entries match markers; focus tour on open"
+  },
+  {
+   "date": "2026-11-18",
+   "sha": "09881e5",
+   "subject": "Getting-started tours and self-updating guides for DayForge and Dispatch It"
+  },
+  {
+   "date": "2026-10-11",
+   "sha": "65d712b",
+   "subject": "Dispatch It: smart routing (Gemini placement, duplicate detection, audit log/undo), rename from Dispatch"
+  },
+  {
+   "date": "2026-08-12",
+   "sha": "ec9e83a",
+   "subject": "Populate Related Account ID field, gated by field-type safety check"
+  },
+  {
+   "date": "2026-08-11",
+   "sha": "673c499",
+   "subject": "Remove Tool/Software/Act mapping — was a dropdown field, not text"
+  },
+  {
+   "date": "2026-08-11",
+   "sha": "2c97b98",
+   "subject": "Remove risky associated-account custom field write, fix silent-failure handling"
+  },
+  {
+   "date": "2026-08-11",
+   "sha": "1123081",
+   "subject": "Add associated account autocomplete, show password plainly"
+  },
+  {
+   "date": "2026-08-08",
+   "sha": "ea2f0a7",
+   "subject": "Add real custom fields, gate Direct-to-List to MKC Client, notify channel either way"
+  },
+  {
+   "date": "2026-08-07",
+   "sha": "d10628b",
+   "subject": "Add account destination toggle"
+  },
+  {
+   "date": "2026-07-28",
+   "sha": "9656971",
+   "subject": "Rename Meeting Note, remove redundant Client Account Note"
+  },
+  {
+   "date": "2026-07-26",
+   "sha": "34e5531",
+   "subject": "Add Follow-up/Reminder, Add to Accounts, title capitalization"
+  },
+  {
+   "date": "2026-07-26",
+   "sha": "f649111",
+   "subject": "Add refresh button, subtask info in chat log"
+  },
+  {
+   "date": "2026-07-26",
+   "sha": "064c389",
+   "subject": "Add subtask-of-existing-task feature"
+  },
+  {
+   "date": "2026-07-25",
+   "sha": "8463b26",
+   "subject": "Fix JTG name, add Plan/Product Idea capture type"
+  },
+  {
+   "date": "2026-07-25",
+   "sha": "676b54c",
+   "subject": "Fix chat channel ID to verified full slug"
+  },
+  {
+   "date": "2026-07-25",
+   "sha": "94f5c62",
+   "subject": "Corrected list IDs, assignees, view-in-ClickUp links, chat logging"
+  },
+  {
+   "date": "2026-07-25",
+   "sha": "c376a8d",
+   "subject": "Fix nested folder mishap, deploy passcode enforcement for real this time"
+  },
+  {
+   "date": "2026-07-25",
+   "sha": "6962d67",
+   "subject": "Add device passcode, live connection status, tap-to-explain flags, start date field"
+  },
+  {
+   "date": "2026-07-24",
+   "sha": "f356095",
+   "subject": "Re-ignore wrangler cache"
+  },
+  {
+   "date": "2026-07-24",
+   "sha": "f63c317",
+   "subject": "Consolidate project folder, sync OAuth changes"
+  },
+  {
+   "date": "2026-07-24",
+   "sha": "64156d8",
+   "subject": "Switch to dedicated ClickUp OAuth app (dispatch has its own connection now)"
+  },
+  {
+   "date": "2026-07-23",
+   "sha": "28b6d4a",
+   "subject": "Add mkp-dispatch capture app"
+  },
+  {
+   "date": "2026-07-23",
+   "sha": "d52ec27",
+   "subject": "Rename mkp-dispatch.git to blank"
+  },
+  {
+   "date": "2026-07-23",
+   "sha": "b363170",
+   "subject": "Rename index.html to mkp-dispatch.git"
+  },
+  {
+   "date": "2026-07-23",
+   "sha": "4c17a8e",
+   "subject": "Rename empty to index.html"
+  },
+  {
+   "date": "2026-07-23",
+   "sha": "f7df690",
+   "subject": "Create empty"
+  },
+  {
+   "date": "2026-07-23",
+   "sha": "01a8748",
+   "subject": "Delete mkp-dispatch/readme"
+  },
+  {
+   "date": "2026-07-23",
+   "sha": "9fe41ca",
+   "subject": "Create readme"
+  }
+ ],
+ "commitsComplete": true
+}

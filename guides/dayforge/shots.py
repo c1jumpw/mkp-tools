@@ -1,7 +1,7 @@
 """
 =============================================================================
 FILE: guides/dayforge/shots.py
-VERSION: v1 (2026-11-18)
+VERSION: v2 (2026-11-20)
 =============================================================================
 PURPOSE
   Captures every DayForge figure used by the guide and the getting-started
@@ -17,8 +17,19 @@ USAGE (normally via guides/run.py)
 
 EXAMPLE DATA
   Everything below is invented for the screenshots (tasks, notes, labels,
-  routines). Dates are relative to "today" in America/New_York, so the
-  Forecast and timeline always look current.
+  routines, admins). Dates are relative to "today" in America/New_York, so
+  the Forecast and timeline always look current.
+
+CHANGE LOG
+  /guide/changelog.json is answered from dayforge/CHANGELOG.md and the git
+  history at capture time (lib/changelog.py), so the What's new and Admin
+  pictures always show the release being built, not the previous one.
+
+REVISION HISTORY
+  v1  2026-11-18  Initial captures.
+  v2  2026-11-20  Roles: open_page(role=...) answers is_admin / list_admins;
+                  new captures whats-new, admin-log, admin-admins; the menu
+                  shows Admin (6 markers).
 =============================================================================
 """
 import datetime as dt
@@ -32,6 +43,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from playwright.sync_api import sync_playwright  # noqa: E402
 from browser import launch, fonts  # noqa: E402
 from capture import capture  # noqa: E402
+from changelog import parse_changelog, git_history  # noqa: E402
+
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+_releases = parse_changelog(os.path.join(REPO, 'dayforge', 'CHANGELOG.md'))
+_commits, _complete = git_history(REPO, ['dayforge'])
+CHANGELOG_JSON = json.dumps({'app': 'DayForge', 'generated': dt.date.today().isoformat(), 'releases': _releases,
+                             'commits': _commits, 'commitsComplete': _complete})
+ADMINS = [{'user_id': '00000000-0000-0000-0000-000000000001', 'email': 'you@example.com', 'created_at': '2026-08-04T12:00:00Z'},
+          {'user_id': '00000000-0000-0000-0000-000000000002', 'email': 'sam@example.com', 'created_at': '2026-11-20T12:00:00Z'}]
 
 APP = os.environ.get('DAYFORGE_URL', 'http://localhost:5180/')
 REF = 'lmrbqkhefzbsnfxlszbs'  # DayForge's Supabase project ref (public; used in the auth storage key)
@@ -114,10 +134,20 @@ SESSION = {
 }
 
 
-def handle(route):
-    """Answers Supabase REST calls with the example tables; writes echo back."""
+def handle(route, role='admin'):
+    """Answers Supabase REST calls with the example tables; writes echo back.
+    role decides the is_admin() answer ('admin' or 'user')."""
     req = route.request
     url = req.url
+    if '/rest/v1/rpc/' in url:
+        fn = url.split('/rest/v1/rpc/')[1].split('?')[0]
+        if fn == 'is_admin':
+            return route.fulfill(status=200, content_type='application/json', body=json.dumps(role == 'admin'))
+        if fn == 'list_admins':
+            return route.fulfill(status=200, content_type='application/json', body=json.dumps(ADMINS))
+        return route.fulfill(status=204, body='')
+    if '/auth/v1/user' in url:
+        return route.fulfill(status=200, content_type='application/json', body=json.dumps(SESSION['user']))
     if '/rest/v1/' in url:
         table = url.split('/rest/v1/')[1].split('?')[0]
         rows = TABLES.get(table, [])
@@ -133,20 +163,27 @@ def handle(route):
     return route.fulfill(status=200, content_type='application/json', body='{}')
 
 
-def open_page(browser, w, h, scale, signed_in=True, theme='dark', tour_seen=True):
+def open_page(browser, w, h, scale, signed_in=True, theme='dark', tour_seen=True, role='admin', seen_release=None):
     """New context + page on the app. tour_seen=True keeps the getting-started
-    tour from opening over the screens being captured."""
+    tour and What's new from opening over the screens being captured.
+    seen_release: a release id stored on the example account as "seen up to
+    here", so What's new opens with everything newer (implies tour_seen=False)."""
     ctx = browser.new_context(viewport={'width': w, 'height': h}, device_scale_factor=scale, timezone_id=TZ,
                               color_scheme='dark' if theme == 'dark' else 'light')
+    session = json.loads(json.dumps(SESSION))
+    if seen_release:
+        tour_seen = False
+        session['user']['user_metadata'] = {'dayforge_seen_release': {'id': seen_release}}
     init = f"localStorage.setItem('dayforge-theme', {json.dumps(theme)});"
     if tour_seen:
         init += "localStorage.setItem('dayforge-tour-seen', 'capture');"
     if signed_in:
-        init += f"localStorage.setItem('sb-{REF}-auth-token', {json.dumps(json.dumps(SESSION))});"
+        init += f"localStorage.setItem('sb-{REF}-auth-token', {json.dumps(json.dumps(session))});"
     else:
         init += f"localStorage.removeItem('sb-{REF}-auth-token');"
     ctx.add_init_script(init)
-    ctx.route(f'{BASE}/**', handle)
+    ctx.route(f'{BASE}/**', lambda r: handle(r, role))
+    ctx.route('**/guide/changelog.json', lambda r: r.fulfill(status=200, content_type='application/json', body=CHANGELOG_JSON))
     fonts(ctx)
     pg = ctx.new_page()
     pg.goto(APP)
@@ -233,12 +270,14 @@ def run(out):
         ctx, pg = open_page(b, 1280, 900, 1.5)
         pg.get_by_label('Account menu').click()
         menu = pg.get_by_role('button', name='Account settings').locator('xpath=..')
+        pg.get_by_role('button', name=re.compile('^Admin')).wait_for()
         capture(pg, out, 'menu', menu, [
             (1, pg.get_by_role('button', name='Account settings'), 'left'),
-            (2, pg.get_by_role('button', name='↻ Refresh app'), 'left'),
-            (3, pg.get_by_role('button', name='Getting started tour'), 'left'),
-            (4, pg.get_by_role('link', name=re.compile('Help & guide')), 'left'),
-            (5, pg.get_by_role('button', name='Sign out'), 'left'),
+            (2, pg.get_by_role('button', name=re.compile('^Admin')), 'left'),
+            (3, pg.get_by_role('button', name='↻ Refresh app'), 'left'),
+            (4, pg.get_by_role('button', name='Getting started tour'), 'left'),
+            (5, pg.get_by_role('link', name=re.compile('Help & guide')), 'left'),
+            (6, pg.get_by_role('button', name='Sign out'), 'left'),
         ], pad=14)
         pg.get_by_role('button', name='Account settings').click()
         acc = plate_of(pg, 'Account')
@@ -248,6 +287,46 @@ def run(out):
             (3, acc.get_by_role('button', name='Save changes'), 'left'),
         ])
         ctx.close()
+
+        # ---- Admin: change log + admins (desktop, admin account) ----
+        ctx, pg = open_page(b, 1280, 900, 1.5, role='admin')
+        pg.get_by_label('Account menu').click()
+        pg.get_by_role('button', name=re.compile('^Admin')).click()
+        dlg = pg.get_by_role('dialog', name='Admin')
+        dlg.get_by_role('heading', level=4).first.wait_for()
+        capture(pg, out, 'admin-log', dlg, [
+            (1, dlg.get_by_role('tablist'), 'left'),
+            (2, dlg.get_by_text('Updates', exact=True), 'left'),
+            (3, dlg.get_by_placeholder('Search the change log'), 'left'),
+            (4, dlg.get_by_role('button', name=re.compile('newest first', re.I)), 'top'),
+            (5, dlg.get_by_role('group', name="Who it's for"), 'left'),
+            (6, dlg.get_by_role('group', name='Kind of change'), 'left'),
+            (7, dlg.get_by_role('button', name='CSV'), 'left'),
+            (8, dlg.get_by_role('heading', level=4).first, 'left'),
+        ])
+        dlg.get_by_role('tab', name='Admins').click()
+        dlg.get_by_text('sam@example.com').wait_for()
+        capture(pg, out, 'admin-admins', dlg, [
+            (1, dlg.get_by_text('sam@example.com'), 'left'),
+            (2, dlg.get_by_role('button', name='Remove').last, 'top'),
+            (3, dlg.get_by_placeholder('their DayForge sign-in email'), 'left'),
+            (4, dlg.get_by_role('button', name='Add admin'), 'top'),
+        ])
+        ctx.close()
+
+        # ---- What's new (phone, everyday account, two releases unseen) ----
+        # Mark "seen" just below the two newest releases an everyday user can see.
+        user_idx = [i for i, r in enumerate(_releases) if any(it['audience'] == 'everyone' for it in r['items'])]
+        if len(user_idx) >= 2 and user_idx[1] + 1 < len(_releases):
+            ctx, pg = open_page(b, 390, 844, 2, role='user', seen_release=_releases[user_idx[1] + 1]['id'])
+            wn = pg.get_by_role('dialog', name="What's new")
+            wn.wait_for()
+            capture(pg, out, 'whats-new', wn, [
+                (1, wn.get_by_role('heading', name="What's new", exact=True), 'left'),
+                (2, wn.locator('li span').first, 'left'),
+                (3, wn.get_by_role('button', name='Got it'), 'top'),
+            ], pad=10)
+            ctx.close()
 
         # ---- Task editor ----
         ctx, pg = open_page(b, 1280, 900, 1.5)

@@ -1,7 +1,7 @@
 """
 =============================================================================
 FILE: guides/dispatch/shots.py
-VERSION: v1 (2026-11-18)
+VERSION: v2 (2026-11-20)
 =============================================================================
 PURPOSE
   Captures every Dispatch It figure used by the guide and the getting-
@@ -17,6 +17,18 @@ USAGE (normally via guides/run.py)
 
 EXAMPLE DATA
   Captures, tasks, people and companies below are invented.
+
+CHANGE LOG
+  guide/changelog.json is answered from mkp-dispatch/CHANGELOG.md and the
+  git history at capture time (lib/changelog.py), so What's new and the
+  Change log pictures show the release being built.
+
+REVISION HISTORY
+  v1  2026-11-18  Initial captures.
+  v2  2026-11-20  Roles: the fake Worker answers /whoami (Mock.role);
+                  Settings is captured as admin (with the Admin section,
+                  13 markers) and as an everyday device (settings-user);
+                  new captures changelog and whats-new.
 =============================================================================
 """
 import json
@@ -28,6 +40,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'lib'))
 from playwright.sync_api import sync_playwright  # noqa: E402
 from browser import launch, fonts  # noqa: E402
+from changelog import parse_changelog, git_history  # noqa: E402
 from capture import capture  # noqa: E402
 
 APP = os.environ.get('DISPATCH_URL', 'http://localhost:5190/')
@@ -103,11 +116,19 @@ AUDIT = [
 ]
 
 
+_REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+RELEASES = parse_changelog(os.path.join(_REPO, 'mkp-dispatch', 'CHANGELOG.md'))
+_commits, _complete = git_history(_REPO, ['mkp-dispatch'])
+CHANGELOG_JSON = json.dumps({'app': 'Dispatch It', 'generated': time.strftime('%Y-%m-%d'), 'releases': RELEASES,
+                             'commits': _commits, 'commitsComplete': _complete})
+
+
 class Mock:
     """Answers the fake Worker. Flags switch scenarios between figures."""
     def __init__(self):
         self.suggest_auto = False   # smart capture files itself (auto-file toast)
         self.dup_on_manual = False  # manual send finds a likely duplicate
+        self.role = 'admin'         # what /whoami says this device is
 
     def __call__(self, route):
         req = route.request
@@ -118,6 +139,8 @@ class Mock:
             route.fulfill(status=status, content_type='application/json', body=json.dumps(obj))
         if path.startswith('/user'):
             return ok({'user': {'id': 1, 'username': 'Alex', 'email': 'alex@example.com'}})
+        if path.startswith('/whoami'):
+            return ok({'role': self.role, 'adminCodeSet': True})
         if path.startswith('/routing/status'):
             return ok(STATUS)
         if path.startswith('/routing/lists'):
@@ -160,7 +183,7 @@ class Mock:
         return ok({'error': 'Endpoint not allowed by proxy.'}, 404)
 
 
-def open_page(b, mock, w=390, h=844, unlocked=True, extra_storage=None, offline=False, tour_seen=True):
+def open_page(b, mock, w=390, h=844, unlocked=True, extra_storage=None, offline=False, tour_seen=True, seen_release=None):
     """New context + page. Seeds localStorage once per context (the app's
     own refresh would otherwise re-run the seed); tour_seen keeps the
     getting-started tour from opening over the captured screens."""
@@ -178,7 +201,9 @@ def open_page(b, mock, w=390, h=844, unlocked=True, extra_storage=None, offline=
     js = "if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded','1'); localStorage.clear();"
     for k, v in store.items():
         js += f"localStorage.setItem({json.dumps(k)}, {json.dumps(json.dumps(v))});"
-    if tour_seen:
+    if seen_release:  # What's new opens with everything newer than this release
+        js += f"localStorage.setItem('dispatch:tourSeen', {json.dumps(seen_release)});"
+    elif tour_seen:
         js += "localStorage.setItem('dispatch:tourSeen', 'capture');"
     js += "}"
     if offline:
@@ -186,6 +211,7 @@ def open_page(b, mock, w=390, h=844, unlocked=True, extra_storage=None, offline=
     js += "window.webkitSpeechRecognition = window.SpeechRecognition = class { start(){} stop(){} abort(){} };"
     ctx.add_init_script(js)
     ctx.route(MOCK + '/**', mock)
+    ctx.route('**/guide/changelog.json', lambda r: r.fulfill(status=200, content_type='application/json', body=CHANGELOG_JSON))
     fonts(ctx)
     pg = ctx.new_page()
     pg.goto(APP)
@@ -393,9 +419,59 @@ def run(out):
             (7, pg.get_by_role('button', name='Sync workspace'), 'left'),
             (8, pg.get_by_role('button', name=re.compile('task index')), 'left'),
             (9, pg.get_by_role('button', name=re.compile('live updates')), 'left'),
-            (10, pg.get_by_role('button', name='Save URL'), 'left'),
-            (11, pg.get_by_role('button', name=re.compile('Forget passcode')), 'left'),
-            (12, pg.get_by_role('button', name=re.compile('Getting started tour')), 'left'),
+            (10, pg.get_by_role('button', name=re.compile('Change log')), 'left'),
+            (11, pg.get_by_role('button', name='Save URL'), 'left'),
+            (12, pg.get_by_role('button', name=re.compile('Forget passcode')), 'left'),
+            (13, pg.get_by_role('button', name=re.compile('Getting started tour')), 'left'),
+        ])
+        ctx.close()
+
+        # ---- Settings on an everyday device (admin code entry) ----
+        mock.role = 'user'
+        ctx, pg = open_page(b, mock, h=2000)
+        go(pg, '#/settings')
+        pg.wait_for_timeout(1000)
+        fit(pg, extra=30)
+        pg.evaluate("(u => { const i = [...document.querySelectorAll('input')].find(e => e.value.includes('__mock')); if (i) i.value = u; })(%s)"
+                    % json.dumps(REAL_WORKER))
+        capture(pg, out, 'settings-user', 'viewport', [
+            (1, pg.get_by_role('button', name=re.compile('Forget passcode')), 'left'),
+            (2, pg.get_by_placeholder('Admin code'), 'left'),
+            (3, pg.get_by_role('button', name=re.compile('Use admin code')), 'left'),
+            (4, pg.get_by_role('button', name=re.compile('Getting started tour')), 'left'),
+        ])
+        ctx.close()
+
+        # ---- What's new (everyday device, two releases unseen) ----
+        user_idx = [i for i, r in enumerate(RELEASES) if any(it['audience'] == 'everyone' for it in r['items'])]
+        if len(user_idx) >= 2 and user_idx[1] + 1 < len(RELEASES):
+            ctx, pg = open_page(b, mock, tour_seen=False, seen_release=RELEASES[user_idx[1] + 1]['id'])
+            wn = pg.locator('.wn-card')
+            wn.wait_for()
+            pg.wait_for_timeout(300)
+            capture(pg, out, 'whats-new', wn, [
+                (1, wn.get_by_role('heading', name='What’s new', exact=True), 'left'),
+                (2, wn.locator('.cl-kind').first, 'left'),
+                (3, wn.get_by_role('button', name='Got it'), 'top'),
+            ], pad=10)
+            ctx.close()
+        mock.role = 'admin'
+
+        # ---- Change log (admin) ----
+        ctx, pg = open_page(b, mock, h=1400)
+        go(pg, '#/changelog')
+        pg.locator('.cl-release').first.wait_for()
+        pg.set_viewport_size({'width': 390, 'height': 700})  # controls + the newest release; readable in the tour
+        pg.wait_for_timeout(300)
+        capture(pg, out, 'changelog', 'viewport', [
+            (1, pg.get_by_role('tablist'), 'left'),
+            (2, pg.get_by_text('updates', exact=True), 'left'),
+            (3, pg.get_by_placeholder('Search the change log'), 'left'),
+            (4, pg.get_by_role('button', name=re.compile('Newest first')), 'top'),
+            (5, pg.get_by_role('group', name=re.compile('Who it')), 'left'),
+            (6, pg.get_by_role('group', name='Kind of change'), 'left'),
+            (7, pg.get_by_role('button', name='CSV'), 'left'),
+            (8, pg.locator('.cl-release-title').first, 'left'),
         ])
         ctx.close()
         b.close()

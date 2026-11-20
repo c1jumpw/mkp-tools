@@ -310,8 +310,10 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
       </div>
       <div class="role" data-for="admin">
         <h2>Owner / admin <span class="tag tag--admin">Admin</span></h2>
-        <p>DayForge has one sign-in. "Admin" means the owner's upkeep jobs, not a separate login.</p>
+        <p>Admins are accounts marked as admin (the owner first). They get ⋮ › Admin and the admin notes in What's new.</p>
         <ul>
+          <li>The change log: every update, filterable and downloadable</li>
+          <li>Adding and removing admins</li>
           <li>Account email, password and sign-up control</li>
           <li>Publishing an update and refreshing devices</li>
           <li>Running database updates in Supabase</li>
@@ -336,6 +338,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
       <li><a href="#voice"><span>08</span>Voice notes &amp; files</a></li>
       <li><a href="#export"><span>09</span>Export to a calendar</a></li>
       <li><a href="#menu"><span>10</span>Menu &amp; account</a></li>
+      <li><a href="#whats-new"><span>11</span>What's new</a></li>
     </ol>
     <p>Admin</p>
     <ol data-for="admin">
@@ -345,6 +348,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
       <li><a href="#security"><span>A4</span>Accounts &amp; security</a></li>
       <li><a href="#trouble"><span>A5</span>Troubleshooting</a></li>
       <li><a href="#upkeep"><span>A6</span>Keeping help current</a></li>
+      <li><a href="#changelog"><span>A7</span>Change log &amp; admins</a></li>
     </ol>
   </nav>
 
@@ -629,6 +633,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
           <figcaption><b>The ⋮ menu</b> at the end of the top bar.</figcaption>
           <ol class="legend">
             <li><span><b>Account settings</b> change your email or password.</span></li>
+            <li><span><b>Admin</b> (admins only) opens the change log and the admins list (A7).</span></li>
             <li><span><b>Refresh app</b> loads the newest version. Use it after an update, or if the app looks out of date.</span></li>
             <li><span><b>Getting started tour</b> replays the step-by-step tour.</span></li>
             <li><span><b>Help &amp; guide</b> opens this guide.</span></li>
@@ -646,6 +651,24 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
       </div>
     </section>
 
+    <section class="chapter" id="whats-new" data-for="user">
+      <div class="chapter-head"><span class="num">11</span><h2>What's new</h2><span class="tag tag--user">Everyday</span></div>
+      <p>After DayForge is updated, a <b>What's new</b> card greets you once, listing every update since you last looked. It's remembered on your account, so reading it on your phone means it won't show again on your computer. You only see changes that apply to you; admins also see their own setup notes.</p>
+      <div class="pair">
+        <figure class="shot" data-src="whats-new" data-alt="What's new card after an update">
+          <figcaption><b>What's new</b> on a phone, two updates since the last visit.</figcaption>
+          <ol class="legend">
+            <li><span><b>How many updates</b> you missed, or the date of the one update.</span></li>
+            <li><span><b>Kind of change:</b> New, Improved, Fixed, Changed, Removed or Security.</span></li>
+            <li><span><b>Got it</b> closes the card. It won't show again for these updates. Close the app without tapping it and it shows next time.</span></li>
+          </ol>
+        </figure>
+        <div>
+          <div class="note"><strong>First time on an account?</strong>You get the getting-started tour instead, and older updates are skipped. Replay the tour any time from ⋮ › Getting started tour.</div>
+        </div>
+      </div>
+    </section>
+
     <!-- ================= ADMIN ================= -->
     <section class="chapter" id="how-built" data-for="admin">
       <div class="chapter-head"><span class="num">A1</span><h2>How it's put together</h2><span class="tag tag--admin">Admin</span></div>
@@ -653,7 +676,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
       <div class="arch" role="img" aria-label="Devices connect to the DayForge web app on Vercel, which stores data in Supabase">
         <div class="box"><b>Your devices</b><small>Any browser, or the home-screen app. Remembers only light/dark mode.</small></div>
         <div class="link">opens</div>
-        <div class="box"><b>DayForge app</b><small>Hosted on Vercel, built from GitHub</small><ul><li><code>c1jumpw/mkp-tools</code></li><li>folder <code>dayforge</code></li></ul></div>
+        <div class="box"><b>DayForge app</b><small>dayforge.mkcworkspace.com · hosted on Vercel, built from GitHub</small><ul><li><code>c1jumpw/mkp-tools</code></li><li>folder <code>dayforge</code></li></ul></div>
         <div class="link">saves to</div>
         <div class="box"><b>Supabase</b><small>Project <code>lmrbqkhefzbsnfxlszbs</code></small><ul><li>Sign-in (Authentication)</li><li>Tasks, notes, routines, labels (Database)</li><li>Voice notes and files (private Storage)</li></ul></div>
       </div>
@@ -690,6 +713,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
             <tr><td><code>006_note_colors.sql</code></td><td class="wrap-ok">Note colors</td></tr>
             <tr><td><code>007_note_pinning.sql</code></td><td class="wrap-ok">Pinning notes</td></tr>
             <tr><td><code>008_note_labels.sql</code></td><td class="wrap-ok">Note labels and label filters. Safe to run more than once</td></tr>
+            <tr><td><code>009_admin_roles.sql</code></td><td class="wrap-ok">Admin roles: ⋮ › Admin, admin-only What's new notes. Makes the first account the first admin. Safe to run more than once</td></tr>
           </tbody>
         </table>
       </div>
@@ -701,6 +725,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
       <ul>
         <li><b>Private by account.</b> Database rules let each account read and change only its own rows. Voice notes and files sit in private storage.</li>
         <li><b>The key inside the app is meant to be public.</b> Supabase's "anon" key only works within those rules. Never put the <code>service_role</code> key in the app or in chat.</li>
+        <li><b>Admins.</b> Only accounts on the admin list see ⋮ › Admin. Adding or removing admins is checked by the database itself, not just hidden in the app. Manage the list in ⋮ › Admin › Admins (A7).</li>
+        <li><b>Signing out</b> ends the session on that device only.</li>
         <li><b>Change email or password</b> from ⋮ › Account settings.</li>
         <li><b>Forgot the password?</b> In Supabase › Authentication › Users, open the user and send a password recovery email.</li>
         <li><b>Turn off new sign-ups.</b> The sign-in screen has a "Create your account" link. Once your account exists, switch off <b>Allow new users to sign up</b> in Supabase › Authentication › Sign In / Providers. New accounts couldn't see your data anyway, but this keeps the app to you alone.</li>
@@ -719,6 +745,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
             <tr><td class="wrap-ok">Voice note has no transcript</td><td class="wrap-ok">Expected on many iPhones. The audio is saved; download it from the task.</td></tr>
             <tr><td class="wrap-ok">Downloaded audio won't play</td><td class="wrap-ok">Use <b>Download audio (.wav)</b>; it plays everywhere.</td></tr>
             <tr><td class="wrap-ok">Exported events don't match the app</td><td class="wrap-ok">The file is a snapshot. Export again after changes.</td></tr>
+            <tr><td class="wrap-ok">No Admin in the ⋮ menu</td><td class="wrap-ok">Run <code>009_admin_roles.sql</code> (A3), or ask an admin to add your email in ⋮ › Admin › Admins. Then Refresh app.</td></tr>
             <tr><td class="wrap-ok">Can't sign in</td><td class="wrap-ok">Check the email, then reset the password in Supabase (A4).</td></tr>
           </tbody>
         </table>
@@ -730,10 +757,43 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 40px; color: var
       <ol class="steps">
         <li><b>Push an update</b> to the DayForge folder on GitHub as usual.</li>
         <li><b>An automatic job</b> (GitHub › Actions › "Refresh guides and tours") opens the app with example data, retakes every screenshot, rebuilds this guide and the tour, and saves them back to GitHub. It takes a few minutes; then the live app shows the new pictures.</li>
-        <li><b>Say what changed</b> by adding an entry to the top of <code>dayforge/CHANGELOG.md</code>: a <code>## date · title</code> line and a few <code>- </code> lines. Everyone sees it once, as What's new, the next time they open the app.</li>
+        <li><b>Say what changed</b> by adding a release to the top of <code>dayforge/CHANGELOG.md</code>: a <code>## date · title</code> line and a few <code>- </code> lines starting with a kind (<code>New:</code>, <code>Fixed:</code>…). Start a line with <code>[Admins]</code> to show it to admins only. Each person sees it once, as What's new, and it's added to the change log (A7).</li>
       </ol>
       <div class="note note--warn"><strong>If the job fails</strong>GitHub emails you when a numbered marker can't find its button, which means a screen changed. The log lists which picture and marker. Update the screenshot steps in <code>guides/</code> and the matching text, then push again. Until then the guide keeps its previous pictures.</div>
       <p>Everything the job uses lives in the <code>guides/</code> folder: the screenshot steps, the guide text (<code>guide.src.html</code>), the tour slides (<code>tour.json</code>) and a README.</p>
+    </section>
+
+    <section class="chapter" id="changelog" data-for="admin">
+      <div class="chapter-head"><span class="num">A7</span><h2>Change log &amp; admins</h2><span class="tag tag--admin">Admin</span></div>
+      <p>⋮ › <b>Admin</b> holds the full history of DayForge, from launch to today, and the list of admins. Only admins see it.</p>
+      <figure class="shot" data-src="admin-log" data-alt="Admin change log">
+        <figcaption><b>Admin › Change log.</b> Every release as a timeline, grouped by month.</figcaption>
+        <ol class="legend">
+          <li><span><b>Tabs:</b> Change log (written release notes), Every change (each code change, recorded automatically from GitHub) and Admins.</span></li>
+          <li><span><b>Totals:</b> updates, changes (and how many are admin-only) and the first release date.</span></li>
+          <li><span><b>Search</b> titles and lines.</span></li>
+          <li><span><b>Order:</b> newest first or oldest first.</span></li>
+          <li><span><b>Who it's for:</b> everything, items everyone sees, or admin-only items.</span></li>
+          <li><span><b>Kind of change:</b> New, Improved, Fixed, Changed, Removed, Security.</span></li>
+          <li><span><b>Download all</b> as CSV (opens in Excel or Google Sheets) or JSON, to keep a copy outside DayForge.</span></li>
+          <li><span><b>A release:</b> its title, date and lines. Admin-only lines carry an Admins tag; admin-only releases have a blue dot.</span></li>
+        </ol>
+      </figure>
+      <div class="pair">
+        <figure class="shot" data-src="admin-admins" data-alt="Admin list">
+          <figcaption><b>Admin › Admins.</b></figcaption>
+          <ol class="legend">
+            <li><span><b>An admin</b> and when they became one.</span></li>
+            <li><span><b>Remove</b> asks first. The last admin can't be removed.</span></li>
+            <li><span><b>Email</b> of the account to make an admin. They need a DayForge account first.</span></li>
+            <li><span><b>Add admin.</b> It takes effect the next time they open DayForge.</span></li>
+          </ol>
+        </figure>
+        <div>
+          <div class="note"><strong>Kept up to date automatically</strong>Every push rebuilds the change log from <code>dayforge/CHANGELOG.md</code> and the GitHub history (A6). The Every change tab fills itself in, so the record is complete even if a release note is missed.</div>
+          <div class="note"><strong>Not secret</strong>The change log text is also in the public GitHub repo. What's locked is the Admin area and adding or removing admins.</div>
+        </div>
+      </div>
     </section>
   </main>
 </div>

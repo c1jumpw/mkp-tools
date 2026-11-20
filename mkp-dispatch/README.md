@@ -3,6 +3,8 @@
   VERSION HISTORY
     v1  2026-07-25  First write-up (setup sections 1–3).
     v2  2026-08-07  Added auto-deploy section (4).
+    v4  2026-11-20  Added "Admin code", "Change log and What's new" and
+                    "5. Move to mkcworkspace.com"; diagram shows Vercel.
     v3  2026-10-10  Renamed to "Dispatch It". Added Smart routing
                     (setup, how it works, privacy, limits). Marked the
                     auto-deploy workflow as optional/inactive (manual
@@ -37,8 +39,8 @@ every device, and can be undone from there.
 ```
 ┌──────────────────┐      ┌───────────────────────────┐      ┌──────────────┐
 │ Dispatch It (PWA) │ ───▶ │ Cloudflare Worker          │ ───▶ │ ClickUp API  │
-│ GitHub Pages      │      │ • ClickUp OAuth token (KV) │      └──────────────┘
-│ no secrets        │ ◀─── │ • passcode check           │ ───▶ ┌──────────────┐
+│ dispatch.mkc-     │      │ • ClickUp OAuth token (KV) │      └──────────────┘
+│ workspace.com     │ ◀─── │ • passcode + admin code    │ ───▶ ┌──────────────┐
 └──────────────────┘      │ • smart routing (./lib)    │      │ Gemini API   │
                            │ • workspace index (KV)     │      └──────────────┘
          ClickUp webhook ─▶│ • task vectors (Vectorize) │
@@ -46,8 +48,10 @@ every device, and can be undone from there.
                            └───────────────────────────┘
 ```
 
-- **Frontend** — plain HTML/CSS/JS, no build step. Deploys straight to
-  GitHub Pages from `mkp-tools/mkp-dispatch/`.
+- **Frontend** — plain HTML/CSS/JS, no build step. Served by Vercel at
+  `https://dispatch.mkcworkspace.com` from `mkp-tools/mkp-dispatch/`
+  (`vercel.json`, `.vercelignore`). The old GitHub Pages copy forwards
+  there once the new address is live (see section 5).
 - **Worker** (`worker/`) — the only thing that holds credentials. It
   proxies ClickUp (adding CORS + the OAuth token), enforces the device
   passcode, and runs smart routing. Code is split into
@@ -127,8 +131,11 @@ Always enter secrets with `Read-Host` (see below) — on this machine
 
 ## 4. Deploying changes
 
-Frontend changes go live when pushed (GitHub Pages). Worker changes need
-`wrangler deploy` from `worker/`.
+Frontend changes go live when pushed (Vercel; GitHub Pages for the old
+address). Worker changes need `wrangler deploy` from `worker/`.
+
+Add a release to the top of `CHANGELOG.md` for every change (format at the
+top of that file). It feeds Settings › Change log and the What's new card.
 
 The app's service worker is **network-first** (since `sw.js` v3): an
 installed app picks up a new deploy the next time it opens online. The
@@ -140,6 +147,75 @@ refresh icon on Home forces it immediately.
 > deliberately not set up. Manual deploys are the chosen workflow.
 
 ---
+
+## Admin code
+
+Two codes, both Worker secrets:
+
+| Code | Secret | Can do |
+|---|---|---|
+| Everyday passcode | `APP_PASSCODE` | Capture, Activity, Undo |
+| Admin code | `ADMIN_PASSCODE` | All of that, plus Settings › ClickUp, Smart routing and Change log |
+
+```
+cd mkp-dispatch/worker
+npx wrangler secret put ADMIN_PASSCODE    # pick something different from APP_PASSCODE
+npx wrangler deploy                       # needed once, for clickup-proxy.js v9
+```
+
+Then on your own devices: Settings › **Admin code** › *Use admin code on
+this device* (the app checks it with the Worker before saving it).
+
+- Until `ADMIN_PASSCODE` is set, the everyday passcode keeps full access,
+  exactly as before. Remove it (`npx wrangler secret delete
+  ADMIN_PASSCODE`) to go back to one code.
+- The Worker enforces it: an everyday device gets *"Only an admin device
+  can do this"* for the ClickUp chat lookup and every smart-routing
+  setting, sync, task-index and live-update call.
+- Connect to ClickUp is shown to admins only. The OAuth callback itself
+  can't check a passcode (it's a browser redirect from ClickUp); it only
+  accepts a connection that can see this workspace.
+
+## Change log and What's new
+
+- **Settings › Change log** (admin devices): every release since launch
+  as a timeline, newest or oldest first, filter by audience and kind,
+  search, CSV / JSON download. **Every change** lists each commit,
+  filled in automatically from the git history.
+- **What's new** appears once per device after an update, with only the
+  items for that device's role.
+- Source: `CHANGELOG.md` → `guide/changelog.json`, rebuilt by
+  `guides/run.py` on every push (GitHub Actions).
+
+## 5. Move to mkcworkspace.com
+
+The new address is **https://dispatch.mkcworkspace.com**, served by
+Vercel. The domain's DNS is at GoDaddy and the domain is already in the
+Vercel team **C3's projects**.
+
+1. **Create the Vercel project.** Vercel (team C3's projects) → Add New →
+   Project → import `c1jumpw/mkp-tools`. If that repo isn't listed, use
+   *Adjust GitHub App Permissions* / *Add GitHub account* to give Vercel
+   access to the `c1jumpw` account. Set **Root Directory** to
+   `mkp-dispatch`, Framework Preset **Other**, leave Build Command and
+   Output Directory empty. Deploy.
+2. **Add the address.** Project → Settings → Domains → Add →
+   `dispatch.mkcworkspace.com`. Vercel shows a CNAME record.
+3. **DNS.** GoDaddy → mkcworkspace.com → DNS → Add: Type `CNAME`, Name
+   `dispatch`, Value = what Vercel showed (usually `cname.vercel-dns.com`).
+   Wait for **Valid Configuration**.
+4. **Worker.** `ALLOWED_ORIGIN` in `worker/wrangler.toml` already lists
+   both addresses. Change `APP_URL` to `"https://dispatch.mkcworkspace.com/"`,
+   then `npx wrangler deploy` (set `ADMIN_PASSCODE` first if you want the
+   admin code — see above). The ClickUp OAuth app needs no change: its
+   redirect goes to the Worker, whose address stays the same.
+5. **Devices.** The old GitHub Pages address now forwards to the new one
+   by itself (it waits while captures are still queued on that device).
+   On each device: enter the passcode once more (it's stored per
+   address), add the new page to the home screen and delete the old icon.
+6. **Later**, once every device uses the new address: remove
+   `https://c1jumpw.github.io` from `ALLOWED_ORIGIN` and deploy again.
+   GitHub Pages keeps serving the other mkp-tools apps; nothing to turn off.
 
 ## How smart routing works
 

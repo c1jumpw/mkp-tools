@@ -46,8 +46,11 @@
  *   Environment bindings (never hardcoded in this file):
  *     env.CLICKUP_CLIENT_ID      - public app identifier      (var)
  *     env.CLICKUP_CLIENT_SECRET  - private, used only here     (secret)
- *     env.ALLOWED_ORIGIN         - the one origin allowed to call this
- *                                   Worker via fetch() (CORS)   (var)
+ *     env.ALLOWED_ORIGIN         - origin(s) allowed to call this Worker
+ *                                   via fetch() (CORS). One origin, or
+ *                                   several separated by commas (v9:
+ *                                   lets the old and new app addresses
+ *                                   both work during a move)    (var)
  *     env.APP_URL                - full URL of the deployed app, used
  *                                   as the redirect target after OAuth
  *                                   approval (var)
@@ -55,6 +58,13 @@
  *                                   proxied request must include a
  *                                   matching X-Dispatch-Key header
  *                                   (secret)
+ *     env.ADMIN_PASSCODE         - (secret, v9, optional) the admin code.
+ *                                   When set, APP_PASSCODE devices are
+ *                                   'user' and can't call ADMIN_ROUTES;
+ *                                   ADMIN_PASSCODE devices are 'admin'.
+ *                                   When NOT set, APP_PASSCODE devices are
+ *                                   'admin' (one passcode = full access,
+ *                                   exactly as before v9).
  *     env.WORKSPACE_ID           - ClickUp Workspace ID (var, public)
  *     env.CHAT_CHANNEL_ID        - default Chat channel for handleChatLog()
  *     env.TOKEN_STORE            - KV namespace: OAuth token + all smart-
@@ -140,6 +150,23 @@
  *                        access WORKSPACE_ID (pre-existing gap: anyone
  *                        could authorize the public client id and replace
  *                        the connection).
+ *   v9  2026-11-20  Roles and the move to mkcworkspace.com:
+ *                    (1) ADMIN_PASSCODE secret (optional): roleFor() maps
+ *                        the device key to 'admin' or 'user'. ADMIN_ROUTES
+ *                        (ClickUp chat-channel lookup and the smart-routing
+ *                        writes: settings, sync, live updates, task index)
+ *                        answer 403 {code:'ADMIN_ONLY'} to 'user' devices.
+ *                        Capturing, Activity and Undo stay open to both.
+ *                    (2) GET /whoami -> {role, adminCodeSet}: lets the app
+ *                        show or hide admin screens and check a typed admin
+ *                        code before saving it. Works before ClickUp is
+ *                        connected.
+ *                    (3) ALLOWED_ORIGIN may list several origins, comma-
+ *                        separated (old GitHub Pages + new address).
+ *                    NOT gated by role: /oauth/callback (a browser
+ *                    navigation; it can't carry the header). It still only
+ *                    accepts a ClickUp connection that can see WORKSPACE_ID,
+ *                    and the app shows Connect to admins only.
  * =========================================================================
  */
 
@@ -195,6 +222,30 @@ const ROUTING_ROUTES = new Set([
 ]);
 const AUDIT_ITEM_RE = /^\/audit\/(\d{16}-[a-z0-9]{6})(\/undo)?$/;
 
+// v9: routes only an 'admin' device may call (see roleFor). Everything a
+// day-to-day capture needs (create, comment, attach, suggest, commit,
+// Activity, Undo) is deliberately NOT here.
+const ADMIN_ROUTES = new Set([
+  'GET /chat/channels',
+  'POST /routing/settings',
+  'POST /routing/sync',
+  'POST /routing/webhook',
+  'POST /routing/index-tasks'
+]);
+
+/**
+ * allowedOrigin — the CORS Allow-Origin value for this request.
+ * ALLOWED_ORIGIN may be '*', one origin, or a comma-separated list.
+ * @param {string} origin - the request's Origin header ('' if none)
+ * @param {string|undefined} setting - env.ALLOWED_ORIGIN
+ * @returns {string} '*', the matching origin, or 'null' (browser blocks)
+ */
+function allowedOrigin(origin, setting) {
+  const list = String(setting || '*').split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean);
+  if (list.includes('*')) return '*';
+  return list.includes(origin) ? origin : 'null';
+}
+
 export default {
   /**
    * fetch — Worker entry point, called once per incoming HTTP request.
@@ -212,9 +263,8 @@ export default {
     // to the browser (the OAuth callback below is a top-level browser
     // *navigation*, not a fetch(), so CORS doesn't apply there).
     const origin = request.headers.get('Origin') || '';
-    const allowed = env.ALLOWED_ORIGIN || '*';
     const corsHeaders = {
-      'Access-Control-Allow-Origin': allowed === '*' ? '*' : (origin === allowed ? origin : 'null'),
+      'Access-Control-Allow-Origin': allowedOrigin(origin, env.ALLOWED_ORIGIN),
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-Dispatch-Key',
       'Vary': 'Origin'
@@ -244,15 +294,24 @@ export default {
     const isRouting = ROUTING_ROUTES.has(routeKey) || Boolean(auditItem);
     const isChatChannelsLookup = url.pathname === '/chat/channels' && request.method === 'GET';
     const isChatLog = url.pathname === '/log/chat' && request.method === 'POST';
+    const isWhoami = routeKey === 'GET /whoami';
 
     const isPassthrough = isAllowedPassthrough(request.method, url.pathname);
-    if (!isPassthrough && !isChatChannelsLookup && !isChatLog && !isRouting) {
+    if (!isPassthrough && !isChatChannelsLookup && !isChatLog && !isRouting && !isWhoami) {
       return json({ error: 'Endpoint not allowed by proxy.' }, 404, corsHeaders);
     }
 
     // Access control: the real security boundary (see v3 history).
-    if (!checkPasscode(request, env)) {
+    const role = roleFor(request, env);
+    if (!role) {
       return json({ error: 'Invalid or missing passcode.' }, 403, corsHeaders);
+    }
+    // v9: which screens the app shows. Needs no ClickUp connection.
+    if (isWhoami) {
+      return json({ role, adminCodeSet: Boolean(env.ADMIN_PASSCODE) }, 200, corsHeaders);
+    }
+    if (role !== 'admin' && ADMIN_ROUTES.has(routeKey)) {
+      return json({ error: 'Only an admin device can do this. Enter the admin code in Settings.', code: 'ADMIN_ONLY' }, 403, corsHeaders);
     }
 
     const accessToken = await env.TOKEN_STORE.get(KEYS.token);
@@ -628,18 +687,25 @@ async function handleChatLog(request, accessToken, env, corsHeaders) {
 }
 
 /**
- * checkPasscode
- * Verifies the request's X-Dispatch-Key header matches APP_PASSCODE.
+ * roleFor (v9)
+ * Which role the request's X-Dispatch-Key unlocks. Both secrets are
+ * compared in constant time, and both comparisons always run, so timing
+ * doesn't reveal which one matched.
  * @param {Request} request
- * @param {object} env - needs env.APP_PASSCODE
- * @returns {boolean} true if authorized
- * Edge case: if APP_PASSCODE was never set, fails CLOSED — open access
- * is the wrong default to fall into. Comparison is constant-time (v8).
+ * @param {object} env - APP_PASSCODE (required), ADMIN_PASSCODE (optional)
+ * @returns {'admin'|'user'|null} null = no valid passcode
+ * Edge case: if APP_PASSCODE was never set (and no ADMIN_PASSCODE), every
+ * request fails CLOSED — open access is the wrong default to fall into.
+ * (Replaces v3-v8's checkPasscode, which answered only yes/no.)
  */
-function checkPasscode(request, env) {
-  const expected = env.APP_PASSCODE;
-  if (!expected) return false;
-  return safeEqual(request.headers.get('X-Dispatch-Key') || '', expected);
+function roleFor(request, env) {
+  const key = request.headers.get('X-Dispatch-Key') || '';
+  if (!key) return null;
+  const isAdmin = env.ADMIN_PASSCODE ? safeEqual(key, env.ADMIN_PASSCODE) : false;
+  const isUser = env.APP_PASSCODE ? safeEqual(key, env.APP_PASSCODE) : false;
+  if (isAdmin) return 'admin';
+  if (isUser) return env.ADMIN_PASSCODE ? 'user' : 'admin';
+  return null;
 }
 
 /**

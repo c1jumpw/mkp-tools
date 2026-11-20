@@ -1,0 +1,4 @@
+# Not part of the website: the Cloudflare Worker source and old config
+# snapshots. Keeps them off dispatch.mkcworkspace.com (they stay in GitHub).
+worker
+versions

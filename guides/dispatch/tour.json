@@ -10,63 +10,363 @@
       "label": "Everyday use",
       "blurb": "Capturing to ClickUp, confirming, follow-ups and Undo.",
       "slides": [
-        {"title": "Unlock once per device", "shot": "lock",
-         "text": "The first time you open Dispatch It on a phone or computer, enter the passcode. The device remembers it.",
-         "points": [[1, "Passcode: ask your admin for it."], [2, "Unlock."]]},
-        {"title": "Home", "shot": "home",
-         "text": "One big button for new captures, and the last things you sent from this device.",
-         "points": [[6, "New Capture: smart routing picks the list."], [7, "Or choose the destination yourself."], [8, "Recent: tap the link icon to open one in ClickUp."], [3, "Activity: everything sent from every device, with Undo."]]},
-        {"title": "Say it once", "shot": "smart",
-         "text": "Write it the way you'd say it. Smart routing picks the list, tidies the title, reads dates like “Friday” and priority like “urgent”, and checks for duplicates.",
-         "points": [[1, "What's on your mind?"], [2, "Hint: optionally pick the business."], [3, "Dictate, record a voice note, or attach files."], [4, "Route & Send."]]},
-        {"title": "When it asks first", "shot": "review",
-         "text": "If smart routing isn't sure, or finds a task that looks the same, you decide on the Confirm screen.",
-         "points": [[1, "It found a matching task."], [2, "Add as update: comment on that task instead of making a copy."], [4, "★ The top pick, with other likely lists below."], [8, "Send, or Create new in the chosen list."]]},
-        {"title": "Filed on its own", "shot": "autofile",
-         "text": "When smart routing is sure and finds no duplicate, the capture files itself and you land back on Home.",
-         "points": [[1, "Where it went, and how sure it was."], [2, "Undo stays for 8 seconds; after that, use Activity."]]},
-        {"title": "Pick the list yourself", "shot": "types",
-         "text": "From Home, tap “Choose the destination yourself”, pick a business, then a capture type.",
-         "points": [[1, "Each capture type goes to a specific ClickUp list."], [2, "Follow-up / Reminder comments on an existing task."], [3, "More lists in this space: other ClickUp lists, added automatically."]]},
-        {"title": "Fill in the form", "shot": "form",
-         "text": "Only the title is required. A check mark confirms it reached ClickUp.",
-         "points": [[1, "Title."], [4, "Make this a subtask of another task."], [5, "Assignee: anyone on that list."], [7, "Send to ClickUp."]]},
-        {"title": "Follow-ups", "shot": "followup",
-         "text": "A follow-up doesn't create a task: it adds your note as a comment on one that already exists.",
-         "points": [[1, "Search for the task, then tap it."], [2, "Write the follow-up note."]]},
-        {"title": "Activity and Undo", "shot": "activity",
-         "text": "Every send from every device. Undo deletes a task it created or removes a comment it added.",
-         "points": [[1, "How often suggestions were kept."], [3, "Undo takes two taps: Undo, then Confirm?"], [4, "Open it in ClickUp."]]},
-        {"title": "Help is one tap away", "shot": "help-sheet",
-         "text": "Tap the ? on Home any time.",
-         "points": [[1, "Replay this tour."], [2, "Open the full guide: every screen and setting."]]}
+        {
+          "title": "Unlock once per device",
+          "shot": "lock",
+          "text": "The first time you open Dispatch It on a phone or computer, enter the passcode. The device remembers it.",
+          "points": [
+            [
+              1,
+              "Passcode: ask your admin for it."
+            ],
+            [
+              2,
+              "Unlock."
+            ]
+          ]
+        },
+        {
+          "title": "Home",
+          "shot": "home",
+          "text": "One big button for new captures, and the last things you sent from this device.",
+          "points": [
+            [
+              6,
+              "New Capture: smart routing picks the list."
+            ],
+            [
+              7,
+              "Or choose the destination yourself."
+            ],
+            [
+              8,
+              "Recent: tap the link icon to open one in ClickUp."
+            ],
+            [
+              3,
+              "Activity: everything sent from every device, with Undo."
+            ]
+          ]
+        },
+        {
+          "title": "Say it once",
+          "shot": "smart",
+          "text": "Write it the way you'd say it. Smart routing picks the list, tidies the title, reads dates like “Friday” and priority like “urgent”, and checks for duplicates.",
+          "points": [
+            [
+              1,
+              "What's on your mind?"
+            ],
+            [
+              2,
+              "Hint: optionally pick the business."
+            ],
+            [
+              3,
+              "Dictate, record a voice note, or attach files."
+            ],
+            [
+              4,
+              "Route & Send."
+            ]
+          ]
+        },
+        {
+          "title": "When it asks first",
+          "shot": "review",
+          "text": "If smart routing isn't sure, or finds a task that looks the same, you decide on the Confirm screen.",
+          "points": [
+            [
+              1,
+              "It found a matching task."
+            ],
+            [
+              2,
+              "Add as update: comment on that task instead of making a copy."
+            ],
+            [
+              4,
+              "★ The top pick, with other likely lists below."
+            ],
+            [
+              8,
+              "Send, or Create new in the chosen list."
+            ]
+          ]
+        },
+        {
+          "title": "Filed on its own",
+          "shot": "autofile",
+          "text": "When smart routing is sure and finds no duplicate, the capture files itself and you land back on Home.",
+          "points": [
+            [
+              1,
+              "Where it went, and how sure it was."
+            ],
+            [
+              2,
+              "Undo stays for 8 seconds; after that, use Activity."
+            ]
+          ]
+        },
+        {
+          "title": "Pick the list yourself",
+          "shot": "types",
+          "text": "From Home, tap “Choose the destination yourself”, pick a business, then a capture type.",
+          "points": [
+            [
+              1,
+              "Each capture type goes to a specific ClickUp list."
+            ],
+            [
+              2,
+              "Follow-up / Reminder comments on an existing task."
+            ],
+            [
+              3,
+              "More lists in this space: other ClickUp lists, added automatically."
+            ]
+          ]
+        },
+        {
+          "title": "Fill in the form",
+          "shot": "form",
+          "text": "Only the title is required. A check mark confirms it reached ClickUp.",
+          "points": [
+            [
+              1,
+              "Title."
+            ],
+            [
+              4,
+              "Make this a subtask of another task."
+            ],
+            [
+              5,
+              "Assignee: anyone on that list."
+            ],
+            [
+              7,
+              "Send to ClickUp."
+            ]
+          ]
+        },
+        {
+          "title": "Follow-ups",
+          "shot": "followup",
+          "text": "A follow-up doesn't create a task: it adds your note as a comment on one that already exists.",
+          "points": [
+            [
+              1,
+              "Search for the task, then tap it."
+            ],
+            [
+              2,
+              "Write the follow-up note."
+            ]
+          ]
+        },
+        {
+          "title": "Activity and Undo",
+          "shot": "activity",
+          "text": "Every send from every device. Undo deletes a task it created or removes a comment it added.",
+          "points": [
+            [
+              1,
+              "How often suggestions were kept."
+            ],
+            [
+              3,
+              "Undo takes two taps: Undo, then Confirm?"
+            ],
+            [
+              4,
+              "Open it in ClickUp."
+            ]
+          ]
+        },
+        {
+          "title": "What's new",
+          "shot": "whats-new",
+          "text": "After an update, this card shows what changed since this device last looked, once. You only see the changes that apply to you.",
+          "points": [
+            [
+              1,
+              "How many updates you missed."
+            ],
+            [
+              2,
+              "What kind of change each line is."
+            ],
+            [
+              3,
+              "Got it: it won't show again on this device."
+            ]
+          ]
+        },
+        {
+          "title": "Help is one tap away",
+          "shot": "help-sheet",
+          "text": "Tap the ? on Home any time.",
+          "points": [
+            [
+              1,
+              "Replay this tour."
+            ],
+            [
+              2,
+              "Open the full guide: every screen and setting."
+            ]
+          ]
+        }
       ]
     },
     "admin": {
       "label": "Admin",
-      "blurb": "ClickUp connection, auto-filing, sync, destinations and the passcode.",
+      "blurb": "The admin code, ClickUp connection, auto-filing, sync, destinations, passcodes and the change log.",
       "slides": [
-        {"title": "Settings aren't locked",
-         "diagram": [["One passcode", "Shared by everyone who uses the app"], ["Anyone unlocked", "Can open Settings"], ["Every device", "Gets smart-routing changes"]],
-         "text": "There's no separate admin login. Share the passcode only with people you trust, and agree that Settings is for admins."},
-        {"title": "Connect ClickUp", "shot": "settings",
-         "text": "Connect once; the connection is stored on the server, so every device works.",
-         "points": [[1, "Connect to ClickUp opens ClickUp's approval screen."], [2, "Re-check confirms it."], [3, "Status lines name any problem."]]},
-        {"title": "Auto-filing", "shot": "settings",
-         "text": "A capture files itself only when it scores at or above the threshold and no likely duplicate is found. Otherwise people see the Confirm screen.",
-         "points": [[4, "Auto-file when confident: on or off."], [5, "Cautious 92%, Balanced 85% (default), Bold 75%."], [6, "How strict the duplicate check is on manual sends."]]},
-        {"title": "Keep ClickUp in sync", "shot": "settings",
-         "text": "With live updates on, new ClickUp lists and task changes arrive within seconds; a sync also runs every 15 minutes.",
-         "points": [[7, "Sync workspace reads every space and list now."], [8, "Build task index turns on duplicate detection."], [9, "Live updates on or off."]]},
-        {"title": "Destinations", "shot": "types",
-         "text": "New ClickUp lists show up on their own. To add or rename a capture type, edit mkp-dispatch/js/config.js and publish the change.",
-         "points": [[3, "Lists found by syncing ClickUp appear here."]]},
-        {"title": "Passcode and secrets", "shot": "settings",
-         "text": "Change the passcode with “wrangler secret put APP_PASSCODE”. Each device then taps Forget passcode and enters the new one. Never paste secrets in chat or email.",
-         "points": [[11, "Forget passcode on this device."], [12, "Replay this tour from Settings › Help."]]},
-        {"title": "This guide keeps itself current",
-         "diagram": [["Push an update", "Any change to the app"], ["Screenshots retaken", "An automatic GitHub job rebuilds the guide and this tour"], ["What's new", "Add an entry to mkp-dispatch/CHANGELOG.md; everyone sees it once"]],
-         "text": "If a button the guide points at is renamed or removed, the job stops and GitHub emails you, so the guide never quietly goes out of date."}
+        {
+          "title": "Two codes",
+          "diagram": [
+            [
+              "Everyday passcode",
+              "Capture, Activity and Undo"
+            ],
+            [
+              "Admin code",
+              "Also ClickUp, Smart routing and the change log"
+            ],
+            [
+              "Not set yet?",
+              "Until ADMIN_PASSCODE is on the Worker, the everyday passcode has full access"
+            ]
+          ],
+          "text": "Turn a device into an admin device in Settings › Admin code. Changes to auto-filing and duplicate checks still apply to every device."
+        },
+        {
+          "title": "Connect ClickUp",
+          "shot": "settings",
+          "text": "Connect once; the connection is stored on the server, so every device works.",
+          "points": [
+            [
+              1,
+              "Connect to ClickUp opens ClickUp's approval screen."
+            ],
+            [
+              2,
+              "Re-check confirms it."
+            ],
+            [
+              3,
+              "Status lines name any problem."
+            ]
+          ]
+        },
+        {
+          "title": "Auto-filing",
+          "shot": "settings",
+          "text": "A capture files itself only when it scores at or above the threshold and no likely duplicate is found. Otherwise people see the Confirm screen.",
+          "points": [
+            [
+              4,
+              "Auto-file when confident: on or off."
+            ],
+            [
+              5,
+              "Cautious 92%, Balanced 85% (default), Bold 75%."
+            ],
+            [
+              6,
+              "How strict the duplicate check is on manual sends."
+            ]
+          ]
+        },
+        {
+          "title": "Keep ClickUp in sync",
+          "shot": "settings",
+          "text": "With live updates on, new ClickUp lists and task changes arrive within seconds; a sync also runs every 15 minutes.",
+          "points": [
+            [
+              7,
+              "Sync workspace reads every space and list now."
+            ],
+            [
+              8,
+              "Build task index turns on duplicate detection."
+            ],
+            [
+              9,
+              "Live updates on or off."
+            ]
+          ]
+        },
+        {
+          "title": "Destinations",
+          "shot": "types",
+          "text": "New ClickUp lists show up on their own. To add or rename a capture type, edit mkp-dispatch/js/config.js and publish the change.",
+          "points": [
+            [
+              3,
+              "Lists found by syncing ClickUp appear here."
+            ]
+          ]
+        },
+        {
+          "title": "Passcode and secrets",
+          "shot": "settings",
+          "text": "Set the admin code with “npx wrangler secret put ADMIN_PASSCODE”; change the everyday one with “… APP_PASSCODE”. Never paste secrets in chat or email.",
+          "points": [
+            [
+              12,
+              "Forget passcode on this device."
+            ],
+            [
+              13,
+              "Replay this tour from Settings › Help."
+            ]
+          ]
+        },
+        {
+          "title": "The change log",
+          "shot": "changelog",
+          "text": "Settings › Change log has every update since launch. Every change lists each code change automatically, so nothing is missed.",
+          "points": [
+            [
+              1,
+              "Release notes or Every change."
+            ],
+            [
+              4,
+              "Newest or oldest first."
+            ],
+            [
+              5,
+              "Everything, for everyone, or admin-only."
+            ],
+            [
+              7,
+              "Download the whole history as CSV or JSON."
+            ]
+          ]
+        },
+        {
+          "title": "This guide keeps itself current",
+          "diagram": [
+            [
+              "Push an update",
+              "Any change to the app"
+            ],
+            [
+              "Screenshots retaken",
+              "An automatic GitHub job rebuilds the guide and this tour"
+            ],
+            [
+              "Change log",
+              "Add a release to mkp-dispatch/CHANGELOG.md. [Admins] lines reach admin devices only"
+            ]
+          ],
+          "text": "Each device sees new releases once, as What's new. If a button the guide points at is renamed or removed, the job stops and GitHub emails you, so the guide never quietly goes out of date."
+        }
       ]
     }
   }

@@ -1,0 +1,717 @@
+{
+ "app": "DayForge",
+ "generated": "2026-11-20",
+ "releases": [
+  {
+   "id": "cdec7dbe09",
+   "date": "2026-11-20",
+   "title": "Change log, admin roles and What's new",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "After an update, a What's new card shows what changed, once per account on any device. You only see the changes that apply to you.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "⋮ › Admin › Change log lists every update from launch to today. Switch between newest and oldest first, filter by who it's for or what kind of change it is, search, and download the whole history as CSV or JSON.",
+     "audience": "admins",
+     "kind": "new"
+    },
+    {
+     "text": "The Every change tab lists each code change automatically, so nothing is missed even without a written note.",
+     "audience": "admins",
+     "kind": "new"
+    },
+    {
+     "text": "The Admins tab lets you add or remove admins by email. The first account ever created becomes the first admin.",
+     "audience": "admins",
+     "kind": "new"
+    },
+    {
+     "text": "Run supabase/migrations/009_admin_roles.sql in the Supabase SQL Editor to turn on admin roles.",
+     "audience": "admins",
+     "kind": "changed"
+    },
+    {
+     "text": "Ready to move to dayforge.mkcworkspace.com. Follow \"Move to mkcworkspace.com\" in README.md.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "443a2f5200",
+   "date": "2026-11-18",
+   "title": "Getting-started tour and help guide",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "A getting-started tour with real screenshots. Pick Everyday use or Owner / admin and step through the screens. Replay it from ⋮ › Getting started tour.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "⋮ › Help & guide: an illustrated guide to every screen and setting.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Sign out now signs out only the phone or computer you are using. Your other devices stay signed in.",
+     "audience": "everyone",
+     "kind": "changed"
+    },
+    {
+     "text": "The guide and tour retake their screenshots automatically whenever DayForge changes.",
+     "audience": "admins",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "089d58adc8",
+   "date": "2026-11-18",
+   "title": "Note labels",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Give notes labels like Work or Travel, then tap a label at the top of Notes to see only those notes.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "New notes get the label you're filtering by.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Run supabase/migrations/008_note_labels.sql in the Supabase SQL Editor.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "72d41f9d71",
+   "date": "2026-09-24",
+   "title": "New note typing shortcuts",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Enter continues the list at the same level. Press Enter twice on an empty line to start a new topic (--)).",
+     "audience": "everyone",
+     "kind": "changed"
+    },
+    {
+     "text": "Type two spaces on an empty - or * line to switch it between a main point and a detail.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "ef1d650ae5",
+   "date": "2026-09-21",
+   "title": "File delete and note shortcut fixes",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "You can now delete a file attached to a task or note.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "The cursor stays on the date line so you can type a title right after it.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "Enter after a note's first line always starts the list, whatever the line ends with.",
+     "audience": "everyone",
+     "kind": "improved"
+    }
+   ]
+  },
+  {
+   "id": "655ec689da",
+   "date": "2026-09-20",
+   "title": "Note icons and title shortcut",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "The Pin and Edit icons on notes are bigger on phones and light up when active.",
+     "audience": "everyone",
+     "kind": "improved"
+    },
+    {
+     "text": "Press Enter after a line ending in a colon to start a list.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "a909ef48cc",
+   "date": "2026-09-20",
+   "title": "Pinned notes",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Pin a note to keep it at the top of the list.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Run supabase/migrations/007_note_pinning.sql.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "3b5d2b393e",
+   "date": "2026-09-19",
+   "title": "Clickable links",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Web links in notes and pinned reminders open with a tap.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "b0e3d67310",
+   "date": "2026-09-18",
+   "title": "Note color tint",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "A colored note is lightly tinted across the whole card, so colors are easy to spot.",
+     "audience": "everyone",
+     "kind": "improved"
+    }
+   ]
+  },
+  {
+   "id": "5fbf467acb",
+   "date": "2026-09-17",
+   "title": "Note colors and search",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Color-code notes.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Search your notes.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Run supabase/migrations/006_note_colors.sql.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "ff3b7c7d27",
+   "date": "2026-09-16",
+   "title": "Note list shortcut",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Press Enter after a - or * line and the next line continues the list.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "1ebda3fae1",
+   "date": "2026-09-14",
+   "title": "Full-screen note editor",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Note cards show a short preview. Editing opens a full-screen editor that saves as you type.",
+     "audience": "everyone",
+     "kind": "improved"
+    },
+    {
+     "text": "Window titles and close buttons no longer hide under the phone's notch.",
+     "audience": "everyone",
+     "kind": "fixed"
+    }
+   ]
+  },
+  {
+   "id": "286b89e467",
+   "date": "2026-09-08",
+   "title": "Any file, autosave and Refresh app",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Attach any type of file to tasks and notes, not just photos.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Changes to a task save as you type.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "⋮ › Refresh app loads the newest version.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "The note box starts with today's date.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Pop-up windows fill the screen on phones.",
+     "audience": "everyone",
+     "kind": "improved"
+    },
+    {
+     "text": "Run supabase/migrations/005_generic_attachments.sql.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "fd57bf2d4a",
+   "date": "2026-08-12",
+   "title": "Photo attachments",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Attach labeled photos to tasks and notes. They're resized before upload to save space.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Run supabase/migrations/004_entry_images.sql (adds a private storage bucket).",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "2b2f95e98d",
+   "date": "2026-08-11",
+   "title": "Note timestamps",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Notes show when they were created and last edited.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "554a56ba45",
+   "date": "2026-08-11",
+   "title": "Clearer note errors",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Notes show a message if something goes wrong instead of doing nothing.",
+     "audience": "everyone",
+     "kind": "improved"
+    },
+    {
+     "text": "The help text shows the --) topic separator the way you type it.",
+     "audience": "everyone",
+     "kind": "fixed"
+    }
+   ]
+  },
+  {
+   "id": "97e1ff6c35",
+   "date": "2026-08-11",
+   "title": "Notes",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Notes: jot things down freely, split topics with --), and turn any note into a task.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Run supabase/migrations/003_notes.sql.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "9216234f08",
+   "date": "2026-08-11",
+   "title": "WAV downloads and tappable pinned items",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Downloaded voice notes save as WAV audio, so they no longer open as video.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "A message appears when transcription quietly gets nothing.",
+     "audience": "everyone",
+     "kind": "improved"
+    },
+    {
+     "text": "Tap a pinned reminder to open it in full.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "9d81760b9d",
+   "date": "2026-08-08",
+   "title": "Voice note copy and download",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Copy transcript and Download audio are always available.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Transcription problems are shown instead of failing silently. Saved transcripts stay folded until you open them.",
+     "audience": "everyone",
+     "kind": "improved"
+    }
+   ]
+  },
+  {
+   "id": "0b856874b3",
+   "date": "2026-08-07",
+   "title": "Voice notes",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Record a voice note on a task, with live transcription where the browser supports it. Edit the transcript before saving.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Run supabase/migrations/002_voice_notes.sql (adds the voice-notes storage bucket).",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
+  {
+   "id": "5f84ee9026",
+   "date": "2026-08-04",
+   "title": "Export filters",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Choose which categories (Personal, Work) and types (To-do, Reminder, Event) to export.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Header buttons are easier to tap on small phones.",
+     "audience": "everyone",
+     "kind": "fixed"
+    }
+   ]
+  },
+  {
+   "id": "8cdf2051ef",
+   "date": "2026-08-04",
+   "title": "Calendar export and home-screen icon",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Export a day or a week as a calendar file (.ics) for Google, Outlook or Apple Calendar.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Add DayForge to your home screen. It gets its own icon and opens full screen.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "be09624c4a",
+   "date": "2026-08-04",
+   "title": "Phone dragging, Send to tray and Clear all",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Scrolling on a phone no longer grabs tasks. Drag with the grip handle instead.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "Undo appears for a few seconds after you move a task.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Send to tray moves a scheduled task back to the tray.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Clear all for pinned reminders and Clear tray (both ask first).",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "The remove button on pinned reminders works on touch screens.",
+     "audience": "everyone",
+     "kind": "fixed"
+    }
+   ]
+  },
+  {
+   "id": "d0a029fc3c",
+   "date": "2026-08-04",
+   "title": "Durations and end times",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Set a duration in hours and minutes, or an end time. The other one updates by itself.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Timeline blocks are sized by how long they take, and overlapping tasks sit side by side.",
+     "audience": "everyone",
+     "kind": "improved"
+    }
+   ]
+  },
+  {
+   "id": "a600d96e3f",
+   "date": "2026-08-04",
+   "title": "Editing, themes and account settings",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Tapping a task reliably opens it instead of starting a drag.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "✕ buttons to delete items on the timeline and in the tray.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Light and dark themes (sun / moon in the header).",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Change your email or password from ⋮ › Account settings.",
+     "audience": "everyone",
+     "kind": "new"
+    }
+   ]
+  },
+  {
+   "id": "c810ab538c",
+   "date": "2026-08-04",
+   "title": "DayForge launches",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "Plan your day on an hour-by-hour timeline, with a tray for tasks that don't have a time yet.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Pinned reminders, a 7-day forecast and reusable routines.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Sign in with your email and password. Everything syncs across your phone, tablet and computer.",
+     "audience": "everyone",
+     "kind": "new"
+    },
+    {
+     "text": "Runs on Supabase (database and sign-in) and Vercel. Setup steps are in README.md.",
+     "audience": "admins",
+     "kind": "new"
+    }
+   ]
+  }
+ ],
+ "commits": [
+  {
+   "date": "2026-11-18",
+   "sha": "2a04d04",
+   "subject": "Guides: fix review findings; tour's full-guide link opens the guide in the app"
+  },
+  {
+   "date": "2026-11-18",
+   "sha": "1139797",
+   "subject": "Guides: check list entries match markers; focus tour on open"
+  },
+  {
+   "date": "2026-11-18",
+   "sha": "09881e5",
+   "subject": "Getting-started tours and self-updating guides for DayForge and Dispatch It"
+  },
+  {
+   "date": "2026-11-18",
+   "sha": "96539ad",
+   "subject": "DayForge: note labels (categories) with filter chips"
+  },
+  {
+   "date": "2026-09-24",
+   "sha": "734cbd6",
+   "subject": "DayForge v26: split outline shortcut into Enter (continue/topic-break) and Space (level-flip)"
+  },
+  {
+   "date": "2026-09-24",
+   "sha": "01f10e0",
+   "subject": "DayForge v25: full rewrite of outline typing shortcut to stateful multi-skip model"
+  },
+  {
+   "date": "2026-09-21",
+   "sha": "86c7a0b",
+   "subject": "DayForge v24: loosen title-line auto-dash rule to work regardless of trailing text"
+  },
+  {
+   "date": "2026-09-21",
+   "sha": "25a65cd",
+   "subject": "DayForge v23: file delete button, centered pin icon, colon cursor fix"
+  },
+  {
+   "date": "2026-09-20",
+   "sha": "6ef3fe8",
+   "subject": "DayForge v22: inline dim/active icons, colon-title auto-dash shortcut"
+  },
+  {
+   "date": "2026-09-20",
+   "sha": "8fac996",
+   "subject": "DayForge v21: separate Pin and Edit icon positions, bigger icons on mobile"
+  },
+  {
+   "date": "2026-09-20",
+   "sha": "f5bca5c",
+   "subject": "DayForge v20: note pinning + relocated Edit icon"
+  },
+  {
+   "date": "2026-09-19",
+   "sha": "7801f76",
+   "subject": "DayForge v19: clickable hyperlinks in note/reminder text"
+  },
+  {
+   "date": "2026-09-18",
+   "sha": "f3fb527",
+   "subject": "DayForge v18: transparent background wash for note colors"
+  },
+  {
+   "date": "2026-09-17",
+   "sha": "2ec70e9",
+   "subject": "DayForge v17: note colors + search"
+  },
+  {
+   "date": "2026-09-16",
+   "sha": "87d5285",
+   "subject": "DayForge v16: typing shortcut for dash/star note structure"
+  },
+  {
+   "date": "2026-09-14",
+   "sha": "74356f2",
+   "subject": "DayForge v15: compact note previews + full-screen note editor, safe-area fix on all modals"
+  },
+  {
+   "date": "2026-09-08",
+   "sha": "f9f89fe",
+   "subject": "DayForge v14: any file type attachments, autosave, bigger mobile modals, hard refresh, note date auto-fill"
+  },
+  {
+   "date": "2026-08-12",
+   "sha": "5f67412",
+   "subject": "DayForge v13: labeled image attachments for tasks and notes"
+  },
+  {
+   "date": "2026-08-11",
+   "sha": "2d59560",
+   "subject": "DayForge v12: show created/edited timestamps on notes"
+  },
+  {
+   "date": "2026-08-11",
+   "sha": "18c2fbd",
+   "subject": "DayForge v11: surface Notes action errors, correct separator marker text"
+  },
+  {
+   "date": "2026-08-11",
+   "sha": "470fd02",
+   "subject": "DayForge v10: Notes (notepad) feature - raw capture, topic splitting, convert to task"
+  },
+  {
+   "date": "2026-08-11",
+   "sha": "b262597",
+   "subject": "DayForge v9: WAV download format, silent-transcription-failure message, pinned items clickable"
+  },
+  {
+   "date": "2026-08-08",
+   "sha": "06369a5",
+   "subject": "DayForge v8: voice note UX - copy/download always available, lean saved view"
+  },
+  {
+   "date": "2026-08-07",
+   "sha": "2deae46",
+   "subject": "DayForge v7: voice notes (record, live transcription, playback, storage)"
+  },
+  {
+   "date": "2026-08-04",
+   "sha": "13a0707",
+   "subject": "DayForge v6: export filters (category x type), mobile header spacing fix"
+  },
+  {
+   "date": "2026-08-04",
+   "sha": "7584f65",
+   "subject": "DayForge v5: calendar export (.ics), white-background icon, apple/android home-screen icons, updated title"
+  },
+  {
+   "date": "2026-08-04",
+   "sha": "1404728",
+   "subject": "DayForge v4: mobile drag/scroll fix, send-to-tray, clear-all actions"
+  },
+  {
+   "date": "2026-08-04",
+   "sha": "344bea3",
+   "subject": "DayForge v3: duration/end-time sync + duration-proportional timeline blocks"
+  },
+  {
+   "date": "2026-08-04",
+   "sha": "5675675",
+   "subject": "DayForge v2: tap-to-edit fix, delete buttons, light/dark theme, account settings"
+  },
+  {
+   "date": "2026-08-04",
+   "sha": "db40d9f",
+   "subject": "Add DayForge: time-blocking and forecasting app"
+  },
+  {
+   "date": "2026-08-04",
+   "sha": "39b325b",
+   "subject": "Create index.html"
+  }
+ ],
+ "commitsComplete": true
+}

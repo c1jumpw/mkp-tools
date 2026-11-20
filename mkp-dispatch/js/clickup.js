@@ -149,6 +149,10 @@
  *                    (8) Removed duplicated/misplaced doc comments
  *                        (logCapture's was in twice; buildTaskPayload's
  *                        sat above capitalizeWords).
+ *   v11 2026-11-20  whoami(key?) -> {role, adminCodeSet} for roles (Worker
+ *                    v9). request() takes an optional `key` that replaces
+ *                    the saved passcode for one call, so Settings can check
+ *                    a typed admin code before saving it.
  * =========================================================================
  */
 
@@ -201,13 +205,15 @@ const ClickUp = (() => {
    * @param {string} [opts.method='GET']
    * @param {*} [opts.json] - body to send as JSON
    * @param {FormData} [opts.form] - multipart body (attachments)
+   * @param {string} [opts.key] - passcode to send instead of the saved one
    * @param {number} [opts.timeoutMs=20000] - 0 disables the timeout
    *   (attachment uploads: a 90MB file on a slow link is legitimately slow)
    * @returns {Promise<object|null>} parsed JSON, or null for empty bodies
    * @throws Error — see the file header for the three kinds
    */
-  async function request(path, { method = 'GET', json, form, timeoutMs = 20000 } = {}) {
+  async function request(path, { method = 'GET', json, form, timeoutMs = 20000, key } = {}) {
     const headers = { ...authHeaders() };
+    if (key !== undefined) headers['X-Dispatch-Key'] = key; // one-off check of a typed code (whoami)
     let body;
     if (json !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -402,6 +408,16 @@ const ClickUp = (() => {
   }
 
   /**
+   * whoami — which role this device's passcode (or `key`) unlocks.
+   * @param {string} [key] - check this code instead of the saved one
+   * @returns {Promise<{role: 'admin'|'user', adminCodeSet: boolean}>}
+   * @throws 403 wrong code; 404 when the Worker predates roles (v9)
+   */
+  function whoami(key) {
+    return request('/whoami', { timeoutMs: 10000, key });
+  }
+
+  /**
    * getListMembers — people who can be assigned in a List.
    * @param {string} listId
    * @returns {Promise<Array<{id:number, username:string}>>}
@@ -545,7 +561,7 @@ const ClickUp = (() => {
 
   return {
     request, buildTaskPayload, localDateToMs,
-    createTask, uploadAttachment, testConnection, getListMembers, logCapture,
+    createTask, uploadAttachment, testConnection, whoami, getListMembers, logCapture,
     getListTasks, getTaskById, addComment, postToChannel, getListFields,
     getTeamTasksPage, findRecentTaskByName
   };

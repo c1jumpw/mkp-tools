@@ -220,3 +220,139 @@ create policy "own entry image objects insert" on storage.objects for insert
 
 create policy "own entry image objects delete" on storage.objects for delete
   using (bucket_id = 'entry-images' and (storage.foldername(name))[1] = auth.uid()::text);
+
+
+-- =============================================================================
+-- Admin roles (added in migrations/009_admin_roles.sql for existing installs;
+-- included here so a fresh install gets them in one pass). Admins see
+-- ⋮ › Admin (change log, every change, admins list) and admin-only items in
+-- What's new. On a fresh install the first account to sign up becomes the
+-- admin (trigger below). See the migration's header for the security model.
+-- =============================================================================
+create table if not exists public.app_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  added_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.app_admins enable row level security;
+-- Intentionally no policies: direct table access is denied to the app.
+
+-- ---- is_admin(): is the signed-in account an admin? ------------------------
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.app_admins where user_id = auth.uid());
+$$;
+
+-- ---- list_admins(): admins only ---------------------------------------------
+create or replace function public.list_admins()
+returns table (user_id uuid, email text, created_at timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Admins only' using errcode = '42501';
+  end if;
+  return query
+    select a.user_id, u.email::text, a.created_at
+    from public.app_admins a
+    join auth.users u on u.id = a.user_id
+    order by a.created_at;
+end;
+$$;
+
+-- ---- add_admin(email): admins only ------------------------------------------
+create or replace function public.add_admin(p_email text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  if not public.is_admin() then
+    raise exception 'Admins only' using errcode = '42501';
+  end if;
+  select id into v_id from auth.users where lower(email) = lower(btrim(p_email)) limit 1;
+  if v_id is null then
+    raise exception 'No DayForge account uses that email yet. Ask them to sign up first.' using errcode = 'P0002';
+  end if;
+  insert into public.app_admins (user_id, added_by) values (v_id, auth.uid())
+  on conflict (user_id) do nothing;
+end;
+$$;
+
+-- ---- remove_admin(user_id): admins only, never the last one -----------------
+create or replace function public.remove_admin(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Admins only' using errcode = '42501';
+  end if;
+  if (select count(*) from public.app_admins) <= 1
+     and exists (select 1 from public.app_admins where user_id = p_user_id) then
+    raise exception 'Keep at least one admin.' using errcode = 'P0001';
+  end if;
+  delete from public.app_admins where user_id = p_user_id;
+end;
+$$;
+
+-- Only signed-in accounts may call these (each one checks admin itself).
+revoke all on function public.is_admin() from public, anon;
+revoke all on function public.list_admins() from public, anon;
+revoke all on function public.add_admin(text) from public, anon;
+revoke all on function public.remove_admin(uuid) from public, anon;
+grant execute on function public.is_admin() to authenticated;
+grant execute on function public.list_admins() to authenticated;
+grant execute on function public.add_admin(text) to authenticated;
+grant execute on function public.remove_admin(uuid) to authenticated;
+
+-- ---- First admin: the first account ever created ---------------------------
+-- Only when there are no admins yet, so re-running never adds anyone.
+insert into public.app_admins (user_id)
+select id from auth.users
+where not exists (select 1 from public.app_admins)
+order by created_at
+limit 1
+on conflict (user_id) do nothing;
+
+-- On a brand-new install (no accounts yet), the first account to sign up
+-- becomes the admin instead. Only the very first account: if every admin is
+-- later removed, a new sign-up does NOT become admin (add one back from the
+-- SQL Editor: insert into public.app_admins (user_id) values ('<id>');).
+create or replace function public.claim_first_admin()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.app_admins)
+     and (select count(*) from auth.users) = 1 then
+    insert into public.app_admins (user_id) values (new.id) on conflict (user_id) do nothing;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.claim_first_admin() from public, anon, authenticated;
+
+drop trigger if exists dayforge_claim_first_admin on auth.users;
+create trigger dayforge_claim_first_admin
+  after insert on auth.users
+  for each row execute function public.claim_first_admin();
+
+-- Make the new functions visible to the app immediately.
+notify pgrst, 'reload schema';

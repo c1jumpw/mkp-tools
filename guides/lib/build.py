@@ -1,15 +1,20 @@
 """
 =============================================================================
 FILE: guides/lib/build.py
-VERSION: v2 (2026-11-18)
+VERSION: v3 (2026-11-20)
 =============================================================================
 PURPOSE
   Builds, for one tool, everything users see for help:
     <app guide dir>/index.html    the illustrated guide (in-app copy)
     <app guide dir>/tour.html     the getting-started tour (slides)
-    <app guide dir>/version.json  {version, updated, whatsNew} — the app reads
-                                  this to open the tour on first use and to
-                                  show "What's new" once after an update
+    <app guide dir>/version.json  {version, updated, whatsNew} — the newest
+                                  everyone-release (kept for the tour and
+                                  for older app builds)
+    <app guide dir>/changelog.json  the full change log: every release with
+                                  its audience-tagged items, plus every
+                                  commit to the app (see lib/changelog.py).
+                                  The apps read it for the admin Change log
+                                  page and the role-aware What's new card.
     <app guide dir>/img/*.webp    the screenshots
   plus a shareable copy of the guide + tour in guides/.out/<tool>/ for
   publishing outside the app.
@@ -23,8 +28,10 @@ INPUTS (all under guides/<tool>/)
                   diagram?: [[title, text]...]}. Points pick which of the
                   screenshot's pins to show; they're renumbered 1..n.
   <shots dir>     <NAME>.png + <NAME>.json from shots.py.
-  CHANGELOG.md    in the app folder. The top "## date · title" entry and
-                  its "- " bullets become What's new.
+  CHANGELOG.md    in the app folder. Parsed by lib/changelog.py (audience
+                  tags [Admins], kinds New:/Fixed:/...). The guide and tour
+                  show the newest release's everyone-items only, since
+                  they're public pages.
 
 ASSUMPTIONS / EDGE CASES
   - A slide or figure naming a screenshot that wasn't captured raises an
@@ -40,9 +47,11 @@ REVISION HISTORY
   v1  2026-11-18  Initial build: guide, tour, version.json, share copies.
   v2  2026-11-18  Legend/marker count check; "Open the full guide" closes the
                   in-app tour layer and opens the guide in the app window.
+  v3  2026-11-20  Change log: parse CHANGELOG.md with lib/changelog.py and
+                  write changelog.json (releases + git history). What's new
+                  in the guide/tour uses everyone-items only.
 =============================================================================
 """
-import hashlib
 import html
 import json
 import os
@@ -50,30 +59,16 @@ import re
 import datetime as dt
 from PIL import Image
 
+from changelog import parse_changelog, public_entry, git_history
+
 MAX_W = 1600  # px; wide shots are downscaled to this (2x a ~800px display width)
 
 
 # ---------------------------------------------------------------- helpers
 def read_changelog(path):
-    """Top entry of CHANGELOG.md -> {version, date, title, items} or None."""
-    if not os.path.exists(path):
-        return None
-    lines = open(path, encoding='utf-8').read().splitlines()
-    entry, items = None, []
-    for ln in lines:
-        m = re.match(r'^##\s+(\d{4}-\d{2}-\d{2})\s*[·\-–—:]\s*(.+?)\s*$', ln)
-        if m:
-            if entry:
-                break
-            entry = {'date': m.group(1), 'title': m.group(2)}
-            continue
-        if entry and ln.strip().startswith('- '):
-            items.append(ln.strip()[2:].strip())
-    if not entry:
-        return None
-    entry['items'] = items
-    entry['version'] = hashlib.sha1((entry['date'] + entry['title']).encode()).hexdigest()[:10]
-    return entry
+    """Newest everyone-release of CHANGELOG.md -> {version, date, title, items}
+    or None (see lib/changelog.py public_entry)."""
+    return public_entry(parse_changelog(path))
 
 
 def convert(shots, name, out_img, cache):
@@ -373,7 +368,8 @@ def build_tool(cfg, shots, guides_dir, repo):
     gdir = os.path.join(guides_dir, cfg['id'])
     src = open(os.path.join(gdir, 'guide.src.html'), encoding='utf-8').read()
     tour = json.load(open(os.path.join(gdir, 'tour.json'), encoding='utf-8'))
-    entry = read_changelog(os.path.join(repo, cfg['changelog']))
+    releases = parse_changelog(os.path.join(repo, cfg['changelog']))
+    entry = public_entry(releases)
     updated = dt.date.today().strftime('%b %d, %Y').replace(' 0', ' ')
 
     style = re.search(r'<style>\n(.*?)</style>', src, re.S).group(1)
@@ -404,6 +400,13 @@ def build_tool(cfg, shots, guides_dir, repo):
         build_tour(ctx='app', back_href=cfg['back_href'], guide_href='index.html', **tour_kw))
     json.dump({'version': entry['version'] if entry else None, 'updated': updated,
                'whatsNew': entry}, open(os.path.join(app_dir, 'version.json'), 'w'), indent=1)
+    # Full change log for the admin page and role-aware What's new. Not a
+    # secret: the same text is in the (public) repo; what's locked is the
+    # admin page and its actions.
+    commits, complete = git_history(repo, cfg['history_paths'])
+    with open(os.path.join(app_dir, 'changelog.json'), 'w', encoding='utf-8') as f:
+        json.dump({'app': cfg['name'], 'generated': dt.date.today().isoformat(), 'releases': releases,
+                   'commits': commits, 'commitsComplete': complete}, f, ensure_ascii=False, indent=1)
 
     # Shareable copies: the guide as a page fragment (the host adds <head>),
     # the tour as its own page linking back to the guide.
@@ -413,4 +416,5 @@ def build_tool(cfg, shots, guides_dir, repo):
     open(os.path.join(share_dir, 'guide.html'), 'w', encoding='utf-8').write(guide)
     open(os.path.join(share_dir, 'tour.html'), 'w', encoding='utf-8').write(
         build_tour(ctx='share', back_href='./', guide_href='./', **tour_kw))
-    print(f"{cfg['id']}: {len(cache)} screenshots; what's new: {entry['title'] if entry else 'none'}")
+    print(f"{cfg['id']}: {len(cache)} screenshots; {len(releases)} releases, {len(commits)} commits"
+          f"{'' if complete else ' (shallow clone: partial history)'}; what's new: {entry['title'] if entry else 'none'}")

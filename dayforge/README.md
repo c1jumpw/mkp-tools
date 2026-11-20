@@ -87,6 +87,24 @@ From then on, every `git push` to `main` automatically redeploys the live site.
 
 (Netlify or Cloudflare Pages work the same way if you prefer one of those instead.)
 
+## 5. Move to mkcworkspace.com
+
+DayForge's address becomes **https://dayforge.mkcworkspace.com**. The domain's DNS is at GoDaddy, and the domain itself is already added to the Vercel team **C3's projects**.
+
+1. **Put DayForge in the same Vercel team as the domain (recommended).** In the Vercel account that hosts DayForge today: Project → Settings → *Transfer Project* (near the bottom of the General page) → **C3's projects**. Settings, environment variables and deployments move with it. (If you keep it where it is, step 2 still works, but Vercel will first ask you to prove you own the domain with a TXT record — add it at GoDaddy exactly as shown.)
+2. **Add the address.** Project → Settings → **Domains** → Add → `dayforge.mkcworkspace.com`. Vercel shows a CNAME record.
+3. **Point DNS at it.** GoDaddy → mkcworkspace.com → **DNS** → Add record: Type `CNAME`, Name `dayforge`, Value = what Vercel showed (usually `cname.vercel-dns.com`), TTL 1 hour. Wait for Vercel to say **Valid Configuration** (minutes, occasionally up to an hour).
+4. **Tell Supabase.** Supabase → Authentication → **URL Configuration**: Site URL `https://dayforge.mkcworkspace.com`; under Redirect URLs add `https://dayforge.mkcworkspace.com/**`. Keep the old `vercel.app` address in the list until everyone has moved. This is what the email-change and password-reset links use.
+5. **Send the old address to the new one (optional).** Vercel → Domains → the old `*.vercel.app` entry → Edit → *Redirect to* `dayforge.mkcworkspace.com` (308).
+6. **On each device:** open the new address, sign in once (sign-ins are kept per address), and on a phone add it to the home screen again and remove the old icon. Notes, tasks and the What's new history live on the account, so nothing else changes.
+
+## Admin roles and the change log
+
+- Run `supabase/migrations/009_admin_roles.sql` once (Supabase → SQL Editor). The **first account ever created** becomes the first admin.
+- Admins get **⋮ › Admin**: the change log (every release since launch, filters, CSV / JSON download), **Every change** (each code change, from the git history) and **Admins** (add or remove admins by email; the last admin can't be removed).
+- After an update, each person sees **What's new** once per account, with only the items meant for them (`[Admins]` lines go to admins only).
+- Every change to DayForge gets an entry at the top of `CHANGELOG.md` — the format is at the top of that file. `guides/run.py` (run automatically by GitHub Actions on every push) turns it into `public/guide/changelog.json`, which the app reads.
+
 ## Notes on the design
 
 Time is stored precisely (exact start time + duration) even though the timeline UI snaps drag-and-drop to the hour — open a task's edit screen to fine-tune it to the exact minute. Recurring tasks are stored once and expanded on the fly, with completion tracked per-date so checking off "Monday's gym session" doesn't affect other weeks.

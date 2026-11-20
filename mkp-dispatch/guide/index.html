@@ -324,9 +324,9 @@ main li code, main p code { overflow-wrap: anywhere; }
     <p class="eyebrow">Help &amp; guide</p>
     <h1>Say it once. <em>It lands in the right list.</em></h1>
     <p class="lede">Dispatch It sends quick captures into ClickUp. Type or dictate a thought and smart routing picks the list, tidies the title, reads dates and checks for duplicates. If you prefer, you can pick the business and list yourself. This guide shows every screen and setting with real screenshots. The numbers on each picture match the list beside it.</p>
-    <p class="meta">Updated Nov 18, 2026 · Screenshots are retaken automatically with each update, using example data</p>
+    <p class="meta">Updated Nov 20, 2026 · Screenshots are retaken automatically with each update, using example data</p>
     <p class="hero-ctas"><a class="btn-tour" href="tour.html">Take the getting-started tour →</a></p>
-    <div class="note whats-new"><strong>What's new · 2026-11-18</strong><b>Getting-started tour and guide</b><ul><li>New getting-started tour with real screenshots. Pick Everyday use or Admin and step through the screens.</li><li>Tap the ? on Home for the tour or the full guide. Admins also find both under Settings › Help.</li><li>The guide and tour now refresh their screenshots automatically whenever the app changes.</li></ul></div>
+    <div class="note whats-new"><strong>What's new · 2026-11-20</strong><b>Change log, admin code and What&#x27;s new</b><ul><li>After an update, a What&#x27;s new card shows what changed, once on each device. You only see the changes that apply to you.</li></ul></div>
     <div class="roles">
       <div class="role" data-for="user">
         <h2>Everyday use <span class="tag tag--user">Everyone</span></h2>
@@ -340,16 +340,17 @@ main li code, main p code { overflow-wrap: anywhere; }
       </div>
       <div class="role" data-for="admin">
         <h2>Admin <span class="tag tag--admin">Admin</span></h2>
-        <p>Whoever runs the setup: ClickUp connection, smart routing, destinations and the passcode.</p>
+        <p>Devices unlocked with the admin code: ClickUp connection, smart routing, the change log, destinations and passcodes.</p>
         <ul>
           <li>Settings: auto-filing, duplicate checks, sync</li>
+          <li>The change log: every update, filterable and downloadable</li>
           <li>Destinations and new ClickUp lists</li>
           <li>Passcode, secrets and the Worker</li>
           <li>Limits and troubleshooting</li>
         </ul>
       </div>
     </div>
-    <div class="note note--warn" data-for="admin"><strong>Settings aren't locked</strong>Dispatch It has one shared passcode and no separate admin login. Anyone who unlocks the app can open Settings. Changes to auto-filing and duplicate checks apply to every device. Share the passcode only with people you trust, and agree that Settings is for admins.</div>
+    <div class="note" data-for="admin"><strong>Two codes</strong>The everyday passcode lets a device capture, see Activity and undo. The admin code also opens ClickUp, Smart routing and the change log in Settings. Until the admin code is set on the Worker (A6), the everyday passcode keeps full access, as before.</div>
   </div>
 </div>
 
@@ -367,6 +368,7 @@ main li code, main p code { overflow-wrap: anywhere; }
       <li><a href="#accounts"><span>08</span>Add to Accounts</a></li>
       <li><a href="#activity"><span>09</span>Activity &amp; Undo</a></li>
       <li><a href="#offline"><span>10</span>Offline &amp; drafts</a></li>
+      <li><a href="#whats-new"><span>11</span>What's new</a></li>
     </ol>
     <p>Admin</p>
     <ol data-for="admin">
@@ -379,6 +381,7 @@ main li code, main p code { overflow-wrap: anywhere; }
       <li><a href="#limits"><span>A7</span>Limits &amp; Undo rules</a></li>
       <li><a href="#trouble"><span>A8</span>Troubleshooting</a></li>
       <li><a href="#upkeep"><span>A9</span>Keeping help current</a></li>
+      <li><a href="#changelog"><span>A10</span>Change log</a></li>
     </ol>
   </nav>
 
@@ -623,10 +626,28 @@ main li code, main p code { overflow-wrap: anywhere; }
     </section>
 
     <!-- ================= ADMIN ================= -->
+    <section class="chapter" id="whats-new" data-for="user">
+      <div class="chapter-head"><span class="num">11</span><h2>What's new</h2><span class="tag tag--user">Everyday</span></div>
+      <p>After Dispatch It is updated, a <b>What's new</b> card appears once on each device, listing every update since that device last looked. Everyday devices see only the changes meant for them; admin devices also see admin notes.</p>
+      <div class="pair">
+        <figure class="shot shot--phone" data-src="whats-new" data-alt="What's new card after an update"><div class="frame" style="--w:378px"><button type="button" class="zoom" aria-label="Enlarge screenshot: What's new card after an update"><img src="img/whats-new.webp" width="756" height="1194" alt="What's new card after an update" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:21.96%;--y:13.22%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:7.14%;--y:31.35%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="top" style="--x:9.26%;--y:88.95%" aria-hidden="true">3</span></div>
+          <figcaption><b>What's new</b>, two updates since the last visit.</figcaption>
+          <ol class="legend">
+            <li><span><b>How many updates</b> this device missed, or the date of the one update.</span></li>
+            <li><span><b>Kind of change:</b> New, Improved, Fixed, Changed, Removed or Security.</span></li>
+            <li><span><b>Got it</b> closes it for good on this device.</span></li>
+          </ol>
+        </figure>
+        <div>
+          <div class="note"><strong>First time on a device?</strong>You get the getting-started tour instead, and older updates are skipped. Replay the tour from the ? on Home.</div>
+        </div>
+      </div>
+    </section>
+
     <section class="chapter" id="how-built" data-for="admin">
       <div class="chapter-head"><span class="num">A1</span><h2>How it's put together</h2><span class="tag tag--admin">Admin</span></div>
       <div class="arch" role="img" aria-label="Devices talk to a Cloudflare Worker, which talks to ClickUp and Gemini">
-        <div class="box"><b>Devices</b><small>Dispatch It app on GitHub Pages (<code>mkp-tools/mkp-dispatch</code>). Holds no secrets; stores the passcode, Recent and drafts.</small></div>
+        <div class="box"><b>Devices</b><small>Dispatch It app at dispatch.mkcworkspace.com (Vercel, built from <code>mkp-tools/mkp-dispatch</code>; the old GitHub Pages address forwards there). Holds no secrets; stores the passcode, Recent and drafts.</small></div>
         <div class="link">passcode</div>
         <div class="box"><b>Cloudflare Worker</b><small><code>dispatch-clickup-proxy</code></small><ul><li>Checks the passcode</li><li>Holds the ClickUp connection</li><li>Smart routing, duplicate index</li><li>Activity log and Undo</li></ul></div>
         <div class="link">API</div>
@@ -636,8 +657,8 @@ main li code, main p code { overflow-wrap: anywhere; }
 
     <section class="chapter" id="settings" data-for="admin">
       <div class="chapter-head"><span class="num">A2</span><h2>Settings reference</h2><span class="tag tag--admin">Admin</span></div>
-      <figure class="shot shot--phone" data-src="settings" data-alt="Settings screen"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Settings screen"><img src="img/settings.webp" width="780" height="2420" alt="Settings screen" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:12.31%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="top" style="--x:51.66%;--y:10.95%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:26.98%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="left" style="--x:82.56%;--y:37.13%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:4.62%;--y:39.98%" aria-hidden="true">5</span><span class="pin" data-n="6" data-a="left" style="--x:4.62%;--y:51.59%" aria-hidden="true">6</span><span class="pin" data-n="7" data-a="left" style="--x:4.62%;--y:61.79%" aria-hidden="true">7</span><span class="pin" data-n="8" data-a="left" style="--x:44.91%;--y:61.79%" aria-hidden="true">8</span><span class="pin" data-n="9" data-a="left" style="--x:4.62%;--y:65.51%" aria-hidden="true">9</span><span class="pin" data-n="10" data-a="left" style="--x:4.62%;--y:82.21%" aria-hidden="true">10</span><span class="pin" data-n="11" data-a="left" style="--x:29.37%;--y:82.21%" aria-hidden="true">11</span><span class="pin" data-n="12" data-a="left" style="--x:4.62%;--y:96.01%" aria-hidden="true">12</span></div>
-        <figcaption><b>Settings</b> (gear icon on Home). Items 4–9 affect every device.</figcaption>
+      <figure class="shot shot--phone" data-src="settings" data-alt="Settings screen"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Settings screen"><img src="img/settings.webp" width="780" height="2942" alt="Settings screen" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:10.13%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="top" style="--x:51.66%;--y:9.01%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:22.19%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="left" style="--x:82.56%;--y:30.54%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:4.62%;--y:32.88%" aria-hidden="true">5</span><span class="pin" data-n="6" data-a="left" style="--x:4.62%;--y:42.43%" aria-hidden="true">6</span><span class="pin" data-n="7" data-a="left" style="--x:4.62%;--y:50.83%" aria-hidden="true">7</span><span class="pin" data-n="8" data-a="left" style="--x:44.91%;--y:50.83%" aria-hidden="true">8</span><span class="pin" data-n="9" data-a="left" style="--x:4.62%;--y:53.89%" aria-hidden="true">9</span><span class="pin" data-n="10" data-a="left" style="--x:4.62%;--y:60.82%" aria-hidden="true">10</span><span class="pin" data-n="11" data-a="left" style="--x:4.62%;--y:85.4%" aria-hidden="true">11</span><span class="pin" data-n="12" data-a="left" style="--x:29.37%;--y:85.4%" aria-hidden="true">12</span><span class="pin" data-n="13" data-a="left" style="--x:4.62%;--y:96.75%" aria-hidden="true">13</span></div>
+        <figcaption><b>Settings on an admin device</b> (gear icon on Home). Items 4–9 affect every device.</figcaption>
         <ol class="legend">
           <li><span><b>Connect to ClickUp</b> opens ClickUp's approval screen. Do it once; the connection is stored on the server.</span></li>
           <li><span><b>Re-check</b> confirms the connection ("Connected as …").</span></li>
@@ -648,9 +669,19 @@ main li code, main p code { overflow-wrap: anywhere; }
           <li><span><b>Sync workspace</b> reads every ClickUp space, list and field now.</span></li>
           <li><span><b>Build / Rebuild task index</b> turns on duplicate detection. Keep the screen open while it runs.</span></li>
           <li><span><b>Live updates</b> on, off or re-enable. With them on, ClickUp changes arrive within seconds.</span></li>
+          <li><span><b>Change log</b> every update since launch (A10). Below it, a line says whether the admin code is set.</span></li>
           <li><span><b>Proxy Worker URL</b> advanced; only change it if the Worker moves. Save URL.</span></li>
           <li><span><b>Forget passcode on this device</b> locks this device only.</span></li>
           <li><span><b>Help:</b> replay the getting-started tour or open this guide.</span></li>
+        </ol>
+      </figure>
+      <figure class="shot shot--phone" data-src="settings-user" data-alt="Settings on an everyday device"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Settings on an everyday device"><img src="img/settings-user.webp" width="780" height="1314" alt="Settings on an everyday device" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:29.37%;--y:32.95%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:4.62%;--y:47.34%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:55.48%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="left" style="--x:4.62%;--y:92.62%" aria-hidden="true">4</span></div>
+        <figcaption><b>Settings on an everyday device.</b> Only This device and Help.</figcaption>
+        <ol class="legend">
+          <li><span><b>Forget passcode on this device</b> locks this device only.</span></li>
+          <li><span><b>Admin code</b> type it here to turn this device into an admin device.</span></li>
+          <li><span><b>Use admin code on this device</b> checks the code with the server first, so a typo can't lock the device out.</span></li>
+          <li><span><b>Help:</b> replay the tour or open this guide.</span></li>
         </ol>
       </figure>
     </section>
@@ -714,13 +745,21 @@ main li code, main p code { overflow-wrap: anywhere; }
         <li>Run <code>wrangler secret put APP_PASSCODE</code> from <code>worker/</code> and enter the new one.</li>
         <li>Every device then sees "passcode was rejected". On each: Settings › <b>Forget passcode on this device</b>, then enter the new one.</li>
       </ol>
+      <h3>Set the admin code</h3>
+      <ol class="steps">
+        <li>From <code>worker/</code>, run <code>npx wrangler secret put ADMIN_PASSCODE</code> and enter a code different from the everyday passcode.</li>
+        <li>Run <code>npx wrangler deploy</code> if the Worker hasn't been updated since Nov 20, 2026.</li>
+        <li>Every device is now an everyday device. On yours: Settings › <b>Admin code</b> › <b>Use admin code on this device</b>.</li>
+      </ol>
+      <p>To go back to one code for everyone, run <code>npx wrangler secret delete ADMIN_PASSCODE</code>.</p>
       <h3>Where secrets live</h3>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Secret</th><th>Kept in</th><th>Set by</th></tr></thead>
           <tbody>
             <tr><td><code>CLICKUP_CLIENT_SECRET</code></td><td>Worker secret</td><td><code>wrangler secret put</code></td></tr>
-            <tr><td><code>APP_PASSCODE</code></td><td>Worker secret, and each unlocked device</td><td><code>wrangler secret put</code></td></tr>
+            <tr><td><code>APP_PASSCODE</code></td><td>Worker secret, and each everyday device</td><td><code>wrangler secret put</code></td></tr>
+            <tr><td><code>ADMIN_PASSCODE</code></td><td>Worker secret, and each admin device</td><td><code>wrangler secret put</code></td></tr>
             <tr><td><code>GEMINI_API_KEY</code></td><td>Worker secret</td><td><code>wrangler secret put</code></td></tr>
             <tr><td>ClickUp connection</td><td>Worker storage</td><td>Connect to ClickUp</td></tr>
           </tbody>
@@ -751,7 +790,9 @@ main li code, main p code { overflow-wrap: anywhere; }
             <tr><td class="wrap-ok">"Duplicate detection off"</td><td class="wrap-ok">Create the Vectorize index, deploy, then Build task index.</td></tr>
             <tr><td class="wrap-ok">Live updates "suspended"</td><td class="wrap-ok">ClickUp paused it after failed deliveries: tap Re-enable live updates.</td></tr>
             <tr><td class="wrap-ok">"The ClickUp connection expired"</td><td class="wrap-ok">Settings › Connect to ClickUp.</td></tr>
-            <tr><td class="wrap-ok">"Passcode was rejected"</td><td class="wrap-ok">The passcode changed: Settings › Forget passcode, then enter the new one.</td></tr>
+            <tr><td class="wrap-ok">"Only an admin device can do this"</td><td class="wrap-ok">This device uses the everyday passcode. Settings › Use admin code on this device.</td></tr>
+            <tr><td class="wrap-ok">No ClickUp or Smart routing in Settings</td><td class="wrap-ok">Same: it's an everyday device. Enter the admin code.</td></tr>
+            <tr><td class="wrap-ok">"Passcode was rejected"<td class="wrap-ok">The passcode changed: Settings › Forget passcode, then enter the new one.</td></tr>
             <tr><td class="wrap-ok">"ClickUp answered too slowly"</td><td class="wrap-ok">Check Activity before sending again; it may already be there.</td></tr>
           </tbody>
         </table>
@@ -763,16 +804,40 @@ main li code, main p code { overflow-wrap: anywhere; }
       <ol class="steps">
         <li><b>Push an update</b> to the Dispatch It folder on GitHub as usual.</li>
         <li><b>An automatic job</b> (GitHub › Actions › "Refresh guides and tours") opens the app with example data, retakes every screenshot, rebuilds this guide and the tour, and saves them back to GitHub. It takes a few minutes; then the live app shows the new pictures.</li>
-        <li><b>Say what changed</b> by adding an entry to the top of <code>mkp-dispatch/CHANGELOG.md</code>: a <code>## date · title</code> line and a few <code>- </code> lines. Everyone sees it once, as What's new, the next time they open the app.</li>
+        <li><b>Say what changed</b> by adding a release to the top of <code>mkp-dispatch/CHANGELOG.md</code>: a <code>## date · title</code> line and a few <code>- </code> lines starting with a kind (<code>New:</code>, <code>Fixed:</code>…). Start a line with <code>[Admins]</code> to show it to admin devices only. Each device sees it once, as What's new, and it's added to the change log (A10).</li>
       </ol>
       <div class="note note--warn"><strong>If the job fails</strong>GitHub emails you when a numbered marker can't find its button, which means a screen changed. The log lists which picture and marker. Update the screenshot steps in <code>guides/</code> and the matching text, then push again. Until then the guide keeps its previous pictures.</div>
       <p>Everything the job uses lives in the <code>guides/</code> folder: the screenshot steps, the guide text (<code>guide.src.html</code>), the tour slides (<code>tour.json</code>) and a README.</p>
+    </section>
+
+    <section class="chapter" id="changelog" data-for="admin">
+      <div class="chapter-head"><span class="num">A10</span><h2>Change log</h2><span class="tag tag--admin">Admin</span></div>
+      <p>Settings › <b>Change log</b> holds the full history of Dispatch It, from launch to today. Only admin devices see it.</p>
+      <div class="pair">
+        <figure class="shot shot--phone" data-src="changelog" data-alt="Change log screen"><div class="frame" style="--w:390px"><button type="button" class="zoom" aria-label="Enlarge screenshot: Change log screen"><img src="img/changelog.webp" width="780" height="1400" alt="Change log screen" loading="lazy" decoding="async"></button><span class="pin" data-n="1" data-a="left" style="--x:4.62%;--y:13.21%" aria-hidden="true">1</span><span class="pin" data-n="2" data-a="left" style="--x:9.26%;--y:25.71%" aria-hidden="true">2</span><span class="pin" data-n="3" data-a="left" style="--x:4.62%;--y:33.29%" aria-hidden="true">3</span><span class="pin" data-n="4" data-a="top" style="--x:66.19%;--y:30.57%" aria-hidden="true">4</span><span class="pin" data-n="5" data-a="left" style="--x:4.62%;--y:39.79%" aria-hidden="true">5</span><span class="pin" data-n="6" data-a="left" style="--x:4.62%;--y:47.86%" aria-hidden="true">6</span><span class="pin" data-n="7" data-a="left" style="--x:30.2%;--y:55.93%" aria-hidden="true">7</span><span class="pin" data-n="8" data-a="left" style="--x:14.62%;--y:68.93%" aria-hidden="true">8</span></div>
+          <figcaption><b>Change log.</b> Every release as a timeline, grouped by month.</figcaption>
+          <ol class="legend">
+            <li><span><b>Release notes</b> (written) or <b>Every change</b> (each code change, recorded automatically from GitHub).</span></li>
+            <li><span><b>Totals:</b> updates, changes (and how many are admin-only), first release.</span></li>
+            <li><span><b>Search</b> titles and lines.</span></li>
+            <li><span><b>Order:</b> newest first or oldest first.</span></li>
+            <li><span><b>Who it's for:</b> everything, for everyone, or admin-only.</span></li>
+            <li><span><b>Kind of change:</b> New, Improved, Fixed, Changed, Removed, Security.</span></li>
+            <li><span><b>Download all</b> as CSV (Excel, Google Sheets) or JSON, to keep a copy outside Dispatch It.</span></li>
+            <li><span><b>A release:</b> title, date and lines. Admin-only lines carry an Admins tag; admin-only releases have a blue dot.</span></li>
+          </ol>
+        </figure>
+        <div>
+          <div class="note"><strong>Kept up to date automatically</strong>Every push rebuilds the change log from <code>mkp-dispatch/CHANGELOG.md</code> and the GitHub history (A9). Every change fills itself in, so the record is complete even if a release note is missed.</div>
+          <div class="note"><strong>Not secret</strong>The change log text is also in the public GitHub repo. What's locked is the admin part of Settings and the admin actions on the Worker.</div>
+        </div>
+      </div>
     </section>
   </main>
 </div>
 
 <footer>
-  <div class="wrap">Dispatch It Guide · updated Nov 18, 2026. Screenshots show example data and refresh automatically with each update.</div>
+  <div class="wrap">Dispatch It Guide · updated Nov 20, 2026. Screenshots show example data and refresh automatically with each update.</div>
 </footer>
 
 <script>

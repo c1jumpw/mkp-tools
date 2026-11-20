@@ -1,70 +1,379 @@
 {
-  "_about": "DayForge getting-started tour. Each slide: title, text, optional shot (a screenshot name from shots.py) with points [[pin number on that screenshot, what it does], ...], or a diagram [[title, detail], ...]. Built by guides/lib/build.py; keep wording plain and match the app's labels exactly.",
-  "intro": "A quick walk through the screens with real screenshots. Pick the path that fits you; you can take the other one after.",
-  "done": {
-    "user": "That's the whole day-to-day loop. Replay this tour any time from ⋮ › Getting started tour, or open the full guide for every detail.",
-    "admin": "Those are the owner's jobs. The full guide's Admin section has the step-by-step details and a troubleshooting table."
-  },
-  "paths": {
-    "user": {
-      "label": "Everyday use",
-      "blurb": "Planning your day, notes, routines and calendar export.",
-      "slides": [
-        {"title": "Your day on one screen", "shot": "dashboard",
-         "text": "Everything happens on the dashboard: pick a day, see it hour by hour, and keep tasks without a time to one side.",
-         "points": [[3, "Forecast: the next 7 days. Tap a day to plan it."], [5, "Timeline: the selected day, 5 AM to 11 PM."], [6, "Tray: tasks that don't have a time yet."]]},
-        {"title": "Capture in seconds", "shot": "quickadd",
-         "text": "Type or paste several tasks at once. Each line becomes its own task in the tray.",
-         "points": [[1, "One task per line."], [2, "Personal or Work, for every line."], [4, "Add to tray."]]},
-        {"title": "Give tasks a time", "shot": "tray",
-         "text": "Schedule from the tray. If you move something by mistake, an Undo button appears for a few seconds.",
-         "points": [[1, "Tap a task, tick “Give this a date and time block”, then pick the date and time. Easiest on a phone."], [2, "Or drag the handle onto the hour you want."]]},
-        {"title": "Work through the day", "shot": "timeline",
-         "text": "Blocks are as tall as the task is long, and overlapping tasks sit side by side.",
-         "points": [[1, "Tick it done."], [2, "Tap the name to open its details."], [5, "Drag to another hour, or onto the tray to unschedule it."]]},
-        {"title": "Everything about a task", "shot": "task",
-         "text": "Open any task for its details. Changes to an existing task save on their own.",
-         "points": [[2, "Record a voice note."], [3, "Attach any file, with a label."], [7, "Duration and end time keep each other in sync."], [9, "Repeat daily, or weekly on the days you pick."]]},
-        {"title": "Keep things in view", "shot": "pinned",
-         "text": "Pinned holds reminders that don't belong at a particular time, like a deadline next month.",
-         "points": [[1, "Type a reminder, then tap Pin."], [3, "Tap it to open it; tick it when it's done."]]},
-        {"title": "Routines", "shot": "routines",
-         "text": "Save a set of tasks, like a morning routine, and drop it onto any day already timed.",
-         "points": [[1, "Name a routine and tap Create."], [3, "Apply to day adds its items to the selected date."], [5, "Add items with a time and length."]]},
-        {"title": "Notes for everything else", "shot": "notes",
-         "text": "Jot down what isn't a task yet. Tap the box and today's date starts the note; dashes and stars build an outline as you type.",
-         "points": [[1, "The capture box."], [3, "Labels: create and manage categories."], [4, "Tap a label to see only those notes."], [5, "Pin a note to the top."]]},
-        {"title": "Turn notes into tasks", "shot": "note-card",
-         "text": "When a note is ready, convert it. The title becomes the task and the bullets become its notes.",
-         "points": [[1, "Convert to task sends it to the tray."], [3, "Color tints the card."], [4, "Labels: tick on or off, or type a new one."]]},
-        {"title": "Send it to your calendar", "shot": "export",
-         "text": "Export a day or a week as a file that Google Calendar, Outlook or Apple Calendar can import.",
-         "points": [[1, "This day, or this week."], [2, "Personal, Work, or both."], [4, "Download .ics."]]},
-        {"title": "The menu", "shot": "menu",
-         "text": "The ⋮ button at the end of the top bar.",
-         "points": [[2, "Refresh app loads the newest version after an update."], [3, "Replay this tour any time."], [4, "The full guide: every screen and setting."]]}
+ "_about": "DayForge getting-started tour. Each slide: title, text, optional shot (a screenshot name from shots.py) with points [[pin number on that screenshot, what it does], ...], or a diagram [[title, detail], ...]. Built by guides/lib/build.py; keep wording plain and match the app's labels exactly.",
+ "intro": "A quick walk through the screens with real screenshots. Pick the path that fits you; you can take the other one after.",
+ "done": {
+  "user": "That's the whole day-to-day loop. Replay this tour any time from ⋮ › Getting started tour, or open the full guide for every detail.",
+  "admin": "Those are the owner's jobs. The full guide's Admin section has the step-by-step details and a troubleshooting table."
+ },
+ "paths": {
+  "user": {
+   "label": "Everyday use",
+   "blurb": "Planning your day, notes, routines and calendar export.",
+   "slides": [
+    {
+     "title": "Your day on one screen",
+     "shot": "dashboard",
+     "text": "Everything happens on the dashboard: pick a day, see it hour by hour, and keep tasks without a time to one side.",
+     "points": [
+      [
+       3,
+       "Forecast: the next 7 days. Tap a day to plan it."
+      ],
+      [
+       5,
+       "Timeline: the selected day, 5 AM to 11 PM."
+      ],
+      [
+       6,
+       "Tray: tasks that don't have a time yet."
       ]
+     ]
     },
-    "admin": {
-      "label": "Owner / admin",
-      "blurb": "Accounts, publishing updates, database updates and keeping this guide current.",
-      "slides": [
-        {"title": "What the owner looks after",
-         "diagram": [["Your devices", "Any browser, or the home-screen app"], ["DayForge app", "Hosted on Vercel, built from GitHub: mkp-tools › dayforge"], ["Supabase", "Sign-in, your data, private file storage"]],
-         "text": "DayForge has one sign-in. “Admin” here means the owner's upkeep jobs, not a separate login."},
-        {"title": "Account and sign-in", "shot": "account",
-         "text": "Change the email or password from ⋮ › Account settings. Once your account exists, switch off “Allow new users to sign up” in Supabase › Authentication › Sign In / Providers.",
-         "points": [[1, "New email: a confirmation link finishes the change."], [2, "New password: leave blank to keep the current one."]]},
-        {"title": "Publishing an update",
-         "diagram": [["Commit to GitHub", "main branch, dayforge folder"], ["Vercel publishes", "Usually within a minute or two"], ["Refresh devices", "⋮ › Refresh app"]],
-         "text": "If a release goes wrong, Vercel › Deployments › Instant Rollback puts the last good version back. Your data in Supabase isn't affected."},
-        {"title": "Database updates",
-         "diagram": [["SQL Editor", "Supabase › the DayForge project"], ["New query", "Paste the whole .sql file"], ["Run", "“Success. No rows returned”"]],
-         "text": "Some features need a one-time database change, shipped as numbered files in dayforge/supabase/migrations. Run each one once, in order. Note labels need 008_note_labels.sql."},
-        {"title": "This guide keeps itself current",
-         "diagram": [["Push an update", "Any change to the app"], ["Screenshots retaken", "An automatic GitHub job rebuilds the guide and this tour"], ["What's new", "Add an entry to dayforge/CHANGELOG.md; everyone sees it once"]],
-         "text": "If a button the guide points at is renamed or removed, the job stops and GitHub emails you, so the guide never quietly goes out of date."}
+    {
+     "title": "Capture in seconds",
+     "shot": "quickadd",
+     "text": "Type or paste several tasks at once. Each line becomes its own task in the tray.",
+     "points": [
+      [
+       1,
+       "One task per line."
+      ],
+      [
+       2,
+       "Personal or Work, for every line."
+      ],
+      [
+       4,
+       "Add to tray."
       ]
+     ]
+    },
+    {
+     "title": "Give tasks a time",
+     "shot": "tray",
+     "text": "Schedule from the tray. If you move something by mistake, an Undo button appears for a few seconds.",
+     "points": [
+      [
+       1,
+       "Tap a task, tick “Give this a date and time block”, then pick the date and time. Easiest on a phone."
+      ],
+      [
+       2,
+       "Or drag the handle onto the hour you want."
+      ]
+     ]
+    },
+    {
+     "title": "Work through the day",
+     "shot": "timeline",
+     "text": "Blocks are as tall as the task is long, and overlapping tasks sit side by side.",
+     "points": [
+      [
+       1,
+       "Tick it done."
+      ],
+      [
+       2,
+       "Tap the name to open its details."
+      ],
+      [
+       5,
+       "Drag to another hour, or onto the tray to unschedule it."
+      ]
+     ]
+    },
+    {
+     "title": "Everything about a task",
+     "shot": "task",
+     "text": "Open any task for its details. Changes to an existing task save on their own.",
+     "points": [
+      [
+       2,
+       "Record a voice note."
+      ],
+      [
+       3,
+       "Attach any file, with a label."
+      ],
+      [
+       7,
+       "Duration and end time keep each other in sync."
+      ],
+      [
+       9,
+       "Repeat daily, or weekly on the days you pick."
+      ]
+     ]
+    },
+    {
+     "title": "Keep things in view",
+     "shot": "pinned",
+     "text": "Pinned holds reminders that don't belong at a particular time, like a deadline next month.",
+     "points": [
+      [
+       1,
+       "Type a reminder, then tap Pin."
+      ],
+      [
+       3,
+       "Tap it to open it; tick it when it's done."
+      ]
+     ]
+    },
+    {
+     "title": "Routines",
+     "shot": "routines",
+     "text": "Save a set of tasks, like a morning routine, and drop it onto any day already timed.",
+     "points": [
+      [
+       1,
+       "Name a routine and tap Create."
+      ],
+      [
+       3,
+       "Apply to day adds its items to the selected date."
+      ],
+      [
+       5,
+       "Add items with a time and length."
+      ]
+     ]
+    },
+    {
+     "title": "Notes for everything else",
+     "shot": "notes",
+     "text": "Jot down what isn't a task yet. Tap the box and today's date starts the note; dashes and stars build an outline as you type.",
+     "points": [
+      [
+       1,
+       "The capture box."
+      ],
+      [
+       3,
+       "Labels: create and manage categories."
+      ],
+      [
+       4,
+       "Tap a label to see only those notes."
+      ],
+      [
+       5,
+       "Pin a note to the top."
+      ]
+     ]
+    },
+    {
+     "title": "Turn notes into tasks",
+     "shot": "note-card",
+     "text": "When a note is ready, convert it. The title becomes the task and the bullets become its notes.",
+     "points": [
+      [
+       1,
+       "Convert to task sends it to the tray."
+      ],
+      [
+       3,
+       "Color tints the card."
+      ],
+      [
+       4,
+       "Labels: tick on or off, or type a new one."
+      ]
+     ]
+    },
+    {
+     "title": "Send it to your calendar",
+     "shot": "export",
+     "text": "Export a day or a week as a file that Google Calendar, Outlook or Apple Calendar can import.",
+     "points": [
+      [
+       1,
+       "This day, or this week."
+      ],
+      [
+       2,
+       "Personal, Work, or both."
+      ],
+      [
+       4,
+       "Download .ics."
+      ]
+     ]
+    },
+    {
+     "title": "The menu",
+     "shot": "menu",
+     "text": "The ⋮ button at the end of the top bar.",
+     "points": [
+      [
+       3,
+       "Refresh app loads the newest version after an update."
+      ],
+      [
+       4,
+       "Replay this tour any time."
+      ],
+      [
+       5,
+       "The full guide: every screen and setting."
+      ]
+     ]
+    },
+    {
+     "title": "What's new",
+     "shot": "whats-new",
+     "text": "After an update, this card shows what changed since you last looked, once per account. You only see the changes that apply to you.",
+     "points": [
+      [
+       1,
+       "How many updates you missed."
+      ],
+      [
+       2,
+       "What kind of change each line is."
+      ],
+      [
+       3,
+       "Got it: it won't show again, on any of your devices."
+      ]
+     ]
     }
+   ]
+  },
+  "admin": {
+   "label": "Owner / admin",
+   "blurb": "The change log, admins, publishing updates, database updates and keeping this guide current.",
+   "slides": [
+    {
+     "title": "What the owner looks after",
+     "diagram": [
+      [
+       "Your devices",
+       "Any browser, or the home-screen app"
+      ],
+      [
+       "DayForge app",
+       "dayforge.mkcworkspace.com on Vercel, built from GitHub: mkp-tools › dayforge"
+      ],
+      [
+       "Supabase",
+       "Sign-in, your data, private file storage"
+      ]
+     ],
+     "text": "Admins are the accounts on the admin list. The first account ever created is the first admin. Admins get ⋮ › Admin and the admin notes in What's new."
+    },
+    {
+     "title": "The change log",
+     "shot": "admin-log",
+     "text": "⋮ › Admin › Change log has every update from launch to today. Every change lists each code change automatically, so nothing is missed.",
+     "points": [
+      [
+       1,
+       "Change log, Every change, Admins."
+      ],
+      [
+       4,
+       "Newest or oldest first."
+      ],
+      [
+       5,
+       "Everything, for everyone, or admin-only."
+      ],
+      [
+       7,
+       "Download the whole history as CSV or JSON."
+      ]
+     ]
+    },
+    {
+     "title": "Admins",
+     "shot": "admin-admins",
+     "text": "Add or remove admins by email. They need a DayForge account first, and the last admin can't be removed.",
+     "points": [
+      [
+       1,
+       "An admin and when they became one."
+      ],
+      [
+       3,
+       "Their DayForge sign-in email."
+      ],
+      [
+       4,
+       "Add admin."
+      ]
+     ]
+    },
+    {
+     "title": "Account and sign-in",
+     "shot": "account",
+     "text": "Change the email or password from ⋮ › Account settings. Once your account exists, switch off “Allow new users to sign up” in Supabase › Authentication › Sign In / Providers.",
+     "points": [
+      [
+       1,
+       "New email: a confirmation link finishes the change."
+      ],
+      [
+       2,
+       "New password: leave blank to keep the current one."
+      ]
+     ]
+    },
+    {
+     "title": "Publishing an update",
+     "diagram": [
+      [
+       "Commit to GitHub",
+       "main branch, dayforge folder"
+      ],
+      [
+       "Vercel publishes",
+       "Usually within a minute or two"
+      ],
+      [
+       "Refresh devices",
+       "⋮ › Refresh app"
+      ]
+     ],
+     "text": "If a release goes wrong, Vercel › Deployments › Instant Rollback puts the last good version back. Your data in Supabase isn't affected."
+    },
+    {
+     "title": "Database updates",
+     "diagram": [
+      [
+       "SQL Editor",
+       "Supabase › the DayForge project"
+      ],
+      [
+       "New query",
+       "Paste the whole .sql file"
+      ],
+      [
+       "Run",
+       "“Success. No rows returned”"
+      ]
+     ],
+     "text": "Some features need a one-time database change, shipped as numbered files in dayforge/supabase/migrations. Run each one once, in order. Note labels need 008_note_labels.sql; admin roles need 009_admin_roles.sql."
+    },
+    {
+     "title": "This guide keeps itself current",
+     "diagram": [
+      [
+       "Push an update",
+       "Any change to the app"
+      ],
+      [
+       "Screenshots retaken",
+       "An automatic GitHub job rebuilds the guide and this tour"
+      ],
+      [
+       "Change log",
+       "Add a release to dayforge/CHANGELOG.md. [Admins] lines reach admins only"
+      ]
+     ],
+     "text": "Each person sees new releases once, as What's new. If a button the guide points at is renamed or removed, the job stops and GitHub emails you, so the guide never quietly goes out of date."
+    }
+   ]
   }
+ }
 }
