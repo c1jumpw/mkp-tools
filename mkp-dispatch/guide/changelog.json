@@ -1,6 +1,6 @@
 {
  "app": "Dispatch It",
- "generated": "2026-11-20",
+ "generated": "2026-11-21",
  "releases": [
   {
    "id": "68761d0894",
@@ -367,6 +367,11 @@
   }
  ],
  "commits": [
+  {
+   "date": "2026-11-20",
+   "sha": "23dfb38",
+   "subject": "Change log, admin roles and What's new for both apps; prepare mkcworkspace.com"
+  },
   {
    "date": "2026-11-18",
    "sha": "2a04d04",
