@@ -1,7 +1,25 @@
 {
  "app": "Dispatch It",
- "generated": "2026-11-21",
+ "generated": "2026-11-23",
  "releases": [
+  {
+   "id": "d34b18b6a2",
+   "date": "2026-11-22",
+   "title": "Old address fix",
+   "audience": "everyone",
+   "items": [
+    {
+     "text": "On the old c1jumpw.github.io address, What's new and Settings › Change log work again.",
+     "audience": "everyone",
+     "kind": "fixed"
+    },
+    {
+     "text": "Dispatch It now lives at dispatchit.mkcworkspace.com, from the c3jumpw/mkp-tools repo. This copy only stays up so captures waiting on a phone can still send.",
+     "audience": "admins",
+     "kind": "changed"
+    }
+   ]
+  },
   {
    "id": "68761d0894",
    "date": "2026-11-20",
@@ -367,6 +385,21 @@
   }
  ],
  "commits": [
+  {
+   "date": "2026-11-22",
+   "sha": "44c2407",
+   "subject": "Dispatch It change log: old address fix"
+  },
+  {
+   "date": "2026-11-22",
+   "sha": "7b9494f",
+   "subject": "Dispatch It old copy: restore changelog.js script dropped in index.html v3"
+  },
+  {
+   "date": "2026-11-22",
+   "sha": "faa1c7e",
+   "subject": "Dispatch It old address: add \"moved\" bar (index.html v3)"
+  },
   {
    "date": "2026-11-20",
    "sha": "23dfb38",

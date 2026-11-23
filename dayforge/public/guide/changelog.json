@@ -1,6 +1,6 @@
 {
  "app": "DayForge",
- "generated": "2026-11-21",
+ "generated": "2026-11-23",
  "releases": [
   {
    "id": "cdec7dbe09",
@@ -557,6 +557,11 @@
   }
  ],
  "commits": [
+  {
+   "date": "2026-11-22",
+   "sha": "93f0292",
+   "subject": "DayForge: schema v2 in its own dayforge schema for the shared mkp-tools Supabase project"
+  },
   {
    "date": "2026-11-20",
    "sha": "23dfb38",

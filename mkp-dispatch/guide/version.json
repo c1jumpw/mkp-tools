@@ -1,12 +1,12 @@
 {
- "version": "68761d0894",
- "updated": "Nov 21, 2026",
+ "version": "d34b18b6a2",
+ "updated": "Nov 23, 2026",
  "whatsNew": {
-  "version": "68761d0894",
-  "date": "2026-11-20",
-  "title": "Change log, admin code and What's new",
+  "version": "d34b18b6a2",
+  "date": "2026-11-22",
+  "title": "Old address fix",
   "items": [
-   "After an update, a What's new card shows what changed, once on each device. You only see the changes that apply to you."
+   "On the old c1jumpw.github.io address, What's new and Settings \u203a Change log work again."
   ]
  }
 }
