@@ -10,7 +10,8 @@
 
   SCRIPT ORDER MATTERS (plain scripts, no bundler — each file uses the
   globals defined by the ones before it):
-    config.js → storage.js → clickup.js → ui.js → routing.js → app.js
+    config.js → storage.js → clickup.js → ui.js → routing.js →
+    changelog.js → app.js
 
   VERSION HISTORY
     v1  2026-07-23  Initial shell.
@@ -28,6 +29,9 @@
                     usable, so captures waiting on a phone can still send
                     (the server keeps accepting this address for now).
                     Edited in GitHub's web editor; nothing else changed.
+    v4  2026-11-22  Put back <script src="js/changelog.js">, dropped in v3:
+                    app.js v18 uses it for What's new and Settings ›
+                    Change log, which otherwise failed on this copy.
   ===========================================================================
 -->
 <html lang="en">
@@ -75,6 +79,7 @@
   <script src="js/clickup.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/routing.js"></script>
+  <script src="js/changelog.js"></script>
   <script src="js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
