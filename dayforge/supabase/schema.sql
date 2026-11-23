@@ -1,7 +1,31 @@
+-- =============================================================================
 -- DayForge database schema
--- Run this once in your Supabase project's SQL Editor (Supabase Dashboard -> SQL Editor -> New query)
+-- VERSION: v2 (2026-11-22)
+-- =============================================================================
+-- Everything DayForge stores lives in its own Postgres schema, `dayforge`, so
+-- it can share a Supabase project with other tools (since v2 it lives in the
+-- shared "mkp-tools" project next to PingPath, Circuit Book and My PD) without
+-- name clashes. The app reaches it with createClient(..., { db: { schema:
+-- 'dayforge' } }) (src/lib/supabaseClient.js), and the schema must be listed
+-- under Project Settings -> Data API -> Exposed schemas.
+--
+-- Run this once in the project's SQL Editor (Dashboard -> SQL Editor -> New
+-- query). Safe to re-run: every statement is guarded.
+--
+-- REVISION HISTORY
+--   v1  initial      Tables in `public`; later features added by migrations
+--                    002-009 (kept in migrations/ for the old standalone
+--                    project, lmrbqkhefzbsnfxlszbs).
+--   v2  2026-11-22  Moved to the `dayforge` schema for the shared mkp-tools
+--                    project; storage policies renamed "DayForge: ..."; the
+--                    admin is added by hand, no sign-up trigger (see the
+--                    admin section);
+--                    grants for the Data API at the end.
+-- =============================================================================
 
-create extension if not exists "pgcrypto";
+create schema if not exists dayforge;
+-- Unqualified names below are created in (and resolved from) dayforge.
+set search_path = dayforge, public, extensions;
 
 -- Tasks: to-dos, reminders, and events, scheduled or unscheduled, one-off or recurring.
 create table if not exists tasks (
@@ -57,15 +81,19 @@ alter table task_completions enable row level security;
 alter table routines enable row level security;
 alter table routine_items enable row level security;
 
+drop policy if exists "own tasks" on tasks;
 create policy "own tasks" on tasks for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists "own completions" on task_completions;
 create policy "own completions" on task_completions for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists "own routines" on routines;
 create policy "own routines" on routines for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists "own routine items" on routine_items;
 create policy "own routine items" on routine_items for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -86,13 +114,16 @@ insert into storage.buckets (id, name, public)
 values ('voice-notes', 'voice-notes', false)
 on conflict (id) do nothing;
 
-create policy "own voice note objects select" on storage.objects for select
+drop policy if exists "DayForge: own voice note objects select" on storage.objects;
+create policy "DayForge: own voice note objects select" on storage.objects for select
   using (bucket_id = 'voice-notes' and (storage.foldername(name))[1] = auth.uid()::text);
 
-create policy "own voice note objects insert" on storage.objects for insert
+drop policy if exists "DayForge: own voice note objects insert" on storage.objects;
+create policy "DayForge: own voice note objects insert" on storage.objects for insert
   with check (bucket_id = 'voice-notes' and (storage.foldername(name))[1] = auth.uid()::text);
 
-create policy "own voice note objects delete" on storage.objects for delete
+drop policy if exists "DayForge: own voice note objects delete" on storage.objects;
+create policy "DayForge: own voice note objects delete" on storage.objects for delete
   using (bucket_id = 'voice-notes' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- =============================================================================
@@ -115,6 +146,7 @@ create table if not exists notes (
 
 alter table notes enable row level security;
 
+drop policy if exists "own notes" on notes;
 create policy "own notes" on notes for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -138,6 +170,7 @@ create table if not exists note_labels (
 
 alter table note_labels enable row level security;
 
+drop policy if exists "own note labels" on note_labels;
 create policy "own note labels" on note_labels for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -149,7 +182,7 @@ create or replace function delete_note_label(p_label_id uuid)
 returns void
 language sql
 security invoker
-set search_path = public
+set search_path = dayforge, public
 as $$
   update notes
      set label_ids = array_remove(label_ids, p_label_id)
@@ -199,9 +232,11 @@ create table if not exists note_attachments (
 alter table task_attachments enable row level security;
 alter table note_attachments enable row level security;
 
+drop policy if exists "own task attachments" on task_attachments;
 create policy "own task attachments" on task_attachments for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists "own note attachments" on note_attachments;
 create policy "own note attachments" on note_attachments for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -212,13 +247,16 @@ insert into storage.buckets (id, name, public)
 values ('entry-images', 'entry-images', false)
 on conflict (id) do nothing;
 
-create policy "own entry image objects select" on storage.objects for select
+drop policy if exists "DayForge: own entry image objects select" on storage.objects;
+create policy "DayForge: own entry image objects select" on storage.objects for select
   using (bucket_id = 'entry-images' and (storage.foldername(name))[1] = auth.uid()::text);
 
-create policy "own entry image objects insert" on storage.objects for insert
+drop policy if exists "DayForge: own entry image objects insert" on storage.objects;
+create policy "DayForge: own entry image objects insert" on storage.objects for insert
   with check (bucket_id = 'entry-images' and (storage.foldername(name))[1] = auth.uid()::text);
 
-create policy "own entry image objects delete" on storage.objects for delete
+drop policy if exists "DayForge: own entry image objects delete" on storage.objects;
+create policy "DayForge: own entry image objects delete" on storage.objects for delete
   using (bucket_id = 'entry-images' and (storage.foldername(name))[1] = auth.uid()::text);
 
 
@@ -226,133 +264,122 @@ create policy "own entry image objects delete" on storage.objects for delete
 -- Admin roles (added in migrations/009_admin_roles.sql for existing installs;
 -- included here so a fresh install gets them in one pass). Admins see
 -- ⋮ › Admin (change log, every change, admins list) and admin-only items in
--- What's new. On a fresh install the first account to sign up becomes the
--- admin (trigger below). See the migration's header for the security model.
+-- What's new. The first admin is added by hand (see "First admin" below).
+-- See the migration's header for the security model.
 -- =============================================================================
-create table if not exists public.app_admins (
+create table if not exists dayforge.app_admins (
   user_id uuid primary key references auth.users(id) on delete cascade,
   added_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
-alter table public.app_admins enable row level security;
+alter table dayforge.app_admins enable row level security;
 -- Intentionally no policies: direct table access is denied to the app.
 
 -- ---- is_admin(): is the signed-in account an admin? ------------------------
-create or replace function public.is_admin()
+create or replace function dayforge.is_admin()
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = dayforge, public
 as $$
-  select exists (select 1 from public.app_admins where user_id = auth.uid());
+  select exists (select 1 from dayforge.app_admins where user_id = auth.uid());
 $$;
 
 -- ---- list_admins(): admins only ---------------------------------------------
-create or replace function public.list_admins()
+create or replace function dayforge.list_admins()
 returns table (user_id uuid, email text, created_at timestamptz)
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = dayforge, public
 as $$
 begin
-  if not public.is_admin() then
+  if not dayforge.is_admin() then
     raise exception 'Admins only' using errcode = '42501';
   end if;
   return query
     select a.user_id, u.email::text, a.created_at
-    from public.app_admins a
+    from dayforge.app_admins a
     join auth.users u on u.id = a.user_id
     order by a.created_at;
 end;
 $$;
 
 -- ---- add_admin(email): admins only ------------------------------------------
-create or replace function public.add_admin(p_email text)
+create or replace function dayforge.add_admin(p_email text)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = dayforge, public
 as $$
 declare
   v_id uuid;
 begin
-  if not public.is_admin() then
+  if not dayforge.is_admin() then
     raise exception 'Admins only' using errcode = '42501';
   end if;
   select id into v_id from auth.users where lower(email) = lower(btrim(p_email)) limit 1;
   if v_id is null then
     raise exception 'No DayForge account uses that email yet. Ask them to sign up first.' using errcode = 'P0002';
   end if;
-  insert into public.app_admins (user_id, added_by) values (v_id, auth.uid())
+  insert into dayforge.app_admins (user_id, added_by) values (v_id, auth.uid())
   on conflict (user_id) do nothing;
 end;
 $$;
 
 -- ---- remove_admin(user_id): admins only, never the last one -----------------
-create or replace function public.remove_admin(p_user_id uuid)
+create or replace function dayforge.remove_admin(p_user_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = dayforge, public
 as $$
 begin
-  if not public.is_admin() then
+  if not dayforge.is_admin() then
     raise exception 'Admins only' using errcode = '42501';
   end if;
-  if (select count(*) from public.app_admins) <= 1
-     and exists (select 1 from public.app_admins where user_id = p_user_id) then
+  if (select count(*) from dayforge.app_admins) <= 1
+     and exists (select 1 from dayforge.app_admins where user_id = p_user_id) then
     raise exception 'Keep at least one admin.' using errcode = 'P0001';
   end if;
-  delete from public.app_admins where user_id = p_user_id;
+  delete from dayforge.app_admins where user_id = p_user_id;
 end;
 $$;
 
 -- Only signed-in accounts may call these (each one checks admin itself).
-revoke all on function public.is_admin() from public, anon;
-revoke all on function public.list_admins() from public, anon;
-revoke all on function public.add_admin(text) from public, anon;
-revoke all on function public.remove_admin(uuid) from public, anon;
-grant execute on function public.is_admin() to authenticated;
-grant execute on function public.list_admins() to authenticated;
-grant execute on function public.add_admin(text) to authenticated;
-grant execute on function public.remove_admin(uuid) to authenticated;
+revoke all on function dayforge.is_admin() from public, anon;
+revoke all on function dayforge.list_admins() from public, anon;
+revoke all on function dayforge.add_admin(text) from public, anon;
+revoke all on function dayforge.remove_admin(uuid) from public, anon;
+grant execute on function dayforge.is_admin() to authenticated;
+grant execute on function dayforge.list_admins() to authenticated;
+grant execute on function dayforge.add_admin(text) to authenticated;
+grant execute on function dayforge.remove_admin(uuid) to authenticated;
 
--- ---- First admin: the first account ever created ---------------------------
--- Only when there are no admins yet, so re-running never adds anyone.
-insert into public.app_admins (user_id)
-select id from auth.users
-where not exists (select 1 from public.app_admins)
-order by created_at
-limit 1
-on conflict (user_id) do nothing;
+-- ---- First admin ------------------------------------------------------------
+-- Not picked automatically: in a shared project the first account in
+-- auth.users may belong to another tool. Make the DayForge owner admin once:
+--   insert into dayforge.app_admins (user_id)
+--   select id from auth.users where lower(email) = lower('<owner email>');
 
--- On a brand-new install (no accounts yet), the first account to sign up
--- becomes the admin instead. Only the very first account: if every admin is
--- later removed, a new sign-up does NOT become admin (add one back from the
--- SQL Editor: insert into public.app_admins (user_id) values ('<id>');).
-create or replace function public.claim_first_admin()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if not exists (select 1 from public.app_admins)
-     and (select count(*) from auth.users) = 1 then
-    insert into public.app_admins (user_id) values (new.id) on conflict (user_id) do nothing;
-  end if;
-  return new;
-end;
-$$;
-revoke all on function public.claim_first_admin() from public, anon, authenticated;
+-- No sign-up trigger: in a shared project a trigger on auth.users would run
+-- for every tool's sign-ups (and block them all if this schema broke). Add
+-- the first admin by hand, as above.
+-- Projects that ran migration 009 have a trigger dayforge_claim_first_admin
+-- on auth.users calling public.claim_first_admin(); it only ever acts on the
+-- very first account, so it's harmless there.
 
-drop trigger if exists dayforge_claim_first_admin on auth.users;
-create trigger dayforge_claim_first_admin
-  after insert on auth.users
-  for each row execute function public.claim_first_admin();
+-- =============================================================================
+-- Data API access. Row level security above decides WHICH rows; these grants
+-- let signed-in users reach the schema at all. anon gets usage only (every
+-- DayForge call needs a signed-in user).
+-- =============================================================================
+grant usage on schema dayforge to anon, authenticated, service_role;
+grant select, insert, update, delete on all tables in schema dayforge to authenticated, service_role;
+alter default privileges in schema dayforge grant select, insert, update, delete on tables to authenticated, service_role;
+grant execute on function dayforge.delete_note_label(uuid) to authenticated;
 
--- Make the new functions visible to the app immediately.
+-- Make the schema's tables and functions visible to the app immediately.
 notify pgrst, 'reload schema';
