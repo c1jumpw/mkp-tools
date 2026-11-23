@@ -20,6 +20,10 @@ Put a new release at the top, below this section:
 - Keep the date and title of a published release unchanged: they identify it, and changing them shows it again as new.
 - The build checks this file and fails on a typo in a tag or kind.
 
+## 2026-11-22 · Old address fix
+- Fixed: On the old c1jumpw.github.io address, What's new and Settings › Change log work again.
+- [Admins] Changed: Dispatch It now lives at dispatchit.mkcworkspace.com, from the c3jumpw/mkp-tools repo. This copy only stays up so captures waiting on a phone can still send.
+
 ## 2026-11-20 · Change log, admin code and What's new
 - New: After an update, a What's new card shows what changed, once on each device. You only see the changes that apply to you.
 - [Admins] New: Settings › Admin › Change log lists every update from launch to today. Switch between newest and oldest first, filter by who it's for or what kind of change it is, search, and download the whole history as CSV or JSON.
