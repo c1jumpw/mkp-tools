@@ -10,8 +10,7 @@
 
   SCRIPT ORDER MATTERS (plain scripts, no bundler — each file uses the
   globals defined by the ones before it):
-    config.js → storage.js → clickup.js → ui.js → routing.js →
-    changelog.js → app.js
+    config.js → storage.js → clickup.js → ui.js → routing.js → app.js
 
   VERSION HISTORY
     v1  2026-07-23  Initial shell.
@@ -22,11 +21,13 @@
                     (replaces the play triangle, which read as a video
                     icon); SVG favicon + 32px PNG fallback + a proper
                     180px apple-touch-icon (was reusing the 192px file).
-    v3  2026-11-20  Added changelog.js (admin Change log + What's new).
-                    Moving to dispatch.mkcworkspace.com: on the old GitHub
-                    Pages address, the inline script below forwards to the
-                    new one, but only once the new address answers and no
-                    captures are waiting to send on this device.
+    v3  2026-11-21  "Moved" bar. Dispatch It moved to
+                    https://dispatchit.mkcworkspace.com/ and its code to
+                    c3jumpw/mkp-tools (app v16+). This copy at
+                    c1jumpw.github.io is frozen at this version and stays
+                    usable, so captures waiting on a phone can still send
+                    (the server keeps accepting this address for now).
+                    Edited in GitHub's web editor; nothing else changed.
   ===========================================================================
 -->
 <html lang="en">
@@ -48,8 +49,24 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* v3: "moved" bar (see <body>). Sits above the app in normal flow so it
+       never covers the app's own header; amber on ink like the app. */
+    .moved-bar { display: flex; gap: 12px; align-items: center; justify-content: space-between;
+      padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+      background: #2a2112; color: #f4e7cf; border-bottom: 1px solid #e8a33d;
+      font: 14px/1.4 'IBM Plex Sans', system-ui, sans-serif; }
+    .moved-bar b { color: #e8a33d; }
+    .moved-bar a { flex: none; background: #e8a33d; color: #12141a; font-weight: 600;
+      text-decoration: none; padding: 6px 14px; border-radius: 999px; }
+  </style>
 </head>
 <body>
+  <!-- v3: tells people on this old address where Dispatch It lives now. -->
+  <div class="moved-bar" role="status">
+    <span><b>Dispatch It has moved</b> to dispatchit.mkcworkspace.com. Send any waiting captures here first, then open the new address and add it to your home screen.</span>
+    <a href="https://dispatchit.mkcworkspace.com/">Open</a>
+  </div>
   <div id="app"></div>
   <div id="toast-root" aria-live="polite"></div>
 
@@ -58,24 +75,8 @@
   <script src="js/clickup.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/routing.js"></script>
-  <script src="js/changelog.js"></script>
   <script src="js/app.js"></script>
   <script>
-    // New address (v3). On the old GitHub Pages copy only: when
-    // dispatch.mkcworkspace.com is live, go there, keeping the screen.
-    // Waits while captures are queued here (they live in this address's
-    // storage and would otherwise never send). ?moved=1 tells the lock
-    // screen to explain why the passcode is asked for again.
-    (function () {
-      var NEW_HOME = 'https://dispatch.mkcworkspace.com/';
-      if (location.hostname !== 'c1jumpw.github.io') return;
-      try { if (Storage.getQueue().length) return; } catch (e) { return; }
-      // no-cors: an opaque answer is enough to know the site is up; a
-      // network error (DNS not set up yet) leaves this copy working.
-      fetch(NEW_HOME + 'manifest.webmanifest', { mode: 'no-cors', cache: 'no-store' })
-        .then(function () { location.replace(NEW_HOME + '?moved=1' + location.hash); })
-        .catch(function () {});
-    })();
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     }
