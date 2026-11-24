@@ -6,6 +6,7 @@
 |---|---|---|
 | `dayforge/` | DayForge — planner + notes (React, Vite, Tailwind v4, Supabase) | Vercel → https://dayforge.mkcworkspace.com |
 | `mkp-dispatch/` | Dispatch It — ClickUp capture PWA (plain JS) + Cloudflare Worker in `worker/` | Vercel → https://dispatch.mkcworkspace.com (old GitHub Pages copy forwards) |
+| `pdl/` | My PD's library only: `pdl/media` (audio, video, docs, covers, summaries, transcripts, collections, Trash), written by the `pdl-relay` Worker. The app itself moved to `c3jumpw/mkp-tools/pdl`; `pdl/index.html` just forwards the old address | Vercel (from c3) → https://mypd.mkcworkspace.com |
 | `guides/` | Builds each app's illustrated guide, getting-started tour and change-log data | GitHub Actions (`.github/workflows/guides.yml`) |
 
 ## Every change gets a change-log entry
