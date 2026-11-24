@@ -1,0 +1,6 @@
+# .vercelignore — files NOT published to mypd.mkcworkspace.com
+# v1 2026-11-22  The site is index.html, guide.html and changelog.json only.
+#                Maintainer notes and the guide's build sources stay in GitHub.
+README.md
+CLAUDE.md
+guide-src/

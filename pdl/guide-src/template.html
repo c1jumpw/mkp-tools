@@ -1,0 +1,1166 @@
+<title>My PD Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>
+  // Follow the app: an explicit ?theme= from the in-app sheet wins, then the app's own saved
+  // theme (same site on GitHub Pages), otherwise the system setting.
+  (function () {
+    try {
+      var q = new URLSearchParams(location.search);
+      var t = q.get("theme");
+      if (t !== "light" && t !== "dark") {
+        var saved = localStorage.getItem("pdl_theme_v1");
+        if (saved === "light" || saved === "dark") t = saved;
+      }
+      if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      if (q.get("embed") === "1") document.documentElement.classList.add("embed");
+    } catch (e) {}
+  })();
+</script>
+<style>
+  /* Layout: a field manual for the app. One reading column; each screen is a phone on the
+     left with its numbered key beside it (stacked on phones). Colors and type come from the
+     app itself so the guide feels like part of it. */
+  :root {
+    --bg: #171310;
+    --bg-2: #1e1a15;
+    --panel: #221d18;
+    --line: #332b22;
+    --text: #ece5d8;
+    --text-dim: #a69a87;
+    --brass: #c9a15e;
+    --brass-dim: #4a3d28;
+    --brass-soft: rgba(201, 161, 94, 0.12);
+    --sage: #93b5a8;
+    --sage-soft: rgba(147, 181, 168, 0.12);
+    --sage-line: rgba(147, 181, 168, 0.38);
+    --phone: #0b0908;
+    --phone-edge: rgba(255, 255, 255, 0.07);
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+    --nav-bg: rgba(23, 19, 16, 0.92);
+    /* pins always sit on app screenshots, so they keep one look in both themes */
+    --pin: #e0b56a;
+    --pin-ink: #1b140c;
+    --pin-ring: rgba(12, 9, 6, 0.6);
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "TeX Gyre Pagella", "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #faf6ee; --bg-2: #f1e9d8; --panel: #ffffff; --line: #e4d9c0;
+      --text: #2b2419; --text-dim: #6c604b;
+      --brass: #93691e; --brass-dim: #e6d3a6; --brass-soft: rgba(156, 114, 38, 0.11);
+      --sage: #3b6a5c; --sage-soft: rgba(59, 106, 92, 0.09); --sage-line: rgba(59, 106, 92, 0.35);
+      --phone: #2b2419; --phone-edge: rgba(0, 0, 0, 0.1);
+      --shadow: 0 16px 36px rgba(70, 48, 14, 0.16);
+      --nav-bg: rgba(250, 246, 238, 0.93);
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #faf6ee; --bg-2: #f1e9d8; --panel: #ffffff; --line: #e4d9c0;
+    --text: #2b2419; --text-dim: #6c604b;
+    --brass: #93691e; --brass-dim: #e6d3a6; --brass-soft: rgba(156, 114, 38, 0.11);
+    --sage: #3b6a5c; --sage-soft: rgba(59, 106, 92, 0.09); --sage-line: rgba(59, 106, 92, 0.35);
+    --phone: #2b2419; --phone-edge: rgba(0, 0, 0, 0.1);
+    --shadow: 0 16px 36px rgba(70, 48, 14, 0.16);
+    --nav-bg: rgba(250, 246, 238, 0.93);
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .pin { transition: none !important; } }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+    z-index: 10; background: var(--bg);
+  }
+  a { color: var(--brass); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible, li:focus-visible {
+    outline: 2px solid var(--brass); outline-offset: 2px; border-radius: 6px;
+  }
+  .wrap {
+    max-width: 1080px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .prose { max-width: 68ch; }
+  .prose p { margin: 0 0 14px; }
+  .dim { color: var(--text-dim); }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--brass); font-weight: 650;
+  }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; text-wrap: balance; margin: 0; letter-spacing: 0.005em; }
+  h1 { font-size: clamp(36px, 6vw, 54px); line-height: 1.05; }
+  h2 { font-size: clamp(27px, 4.2vw, 34px); line-height: 1.15; }
+  h3 { font-size: 21px; line-height: 1.25; margin: 30px 0 8px; }
+  kbd, code {
+    font-family: var(--mono); font-size: 0.86em; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 1px 6px; color: var(--text); white-space: nowrap;
+  }
+
+  /* ---------- top ---------- */
+  .top .wrap { padding-block: 44px 34px; display: grid; gap: 22px; }
+  .embed .top .wrap { padding-block: 26px 26px; }
+  .lockup { display: flex; align-items: center; gap: 14px; }
+  .lockup svg { width: 54px; height: 54px; flex-shrink: 0; }
+  .lockup .name { font-family: var(--serif); font-size: 22px; line-height: 1.1; }
+  .lockup .sub { font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--brass); font-weight: 650; margin-top: 4px; }
+  .lede { font-size: 18px; line-height: 1.55; color: var(--text-dim); max-width: 62ch; margin: 0; }
+  .roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 4px; }
+  .role {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px 20px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  }
+  .role h2 { font-size: 22px; }
+  .role ul { margin: 0; padding-left: 18px; color: var(--text-dim); font-size: 14.5px; }
+  .role ul li { margin: 3px 0; }
+  .role a { font-weight: 650; font-size: 14.5px; text-decoration: none; margin-top: auto; }
+  .role a:hover { text-decoration: underline; }
+  .role.admin a { color: var(--sage); }
+  @media (max-width: 680px) { .roles { grid-template-columns: 1fr; } }
+
+  .who {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid var(--brass-dim);
+    color: var(--brass); background: var(--brass-soft);
+  }
+  .who.admin { color: var(--sage); border-color: var(--sage-line); background: var(--sage-soft); }
+
+  /* ---------- chapter nav ---------- */
+  nav.chapters {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--nav-bg); border-block: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-block: 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips a {
+    flex-shrink: 0; text-decoration: none; font-size: 13px; font-weight: 650; color: var(--text-dim);
+    padding: 6px 13px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+    white-space: nowrap;
+  }
+  .chips a:hover { color: var(--text); }
+  .chips a.on { color: var(--brass); background: var(--brass-soft); border-color: var(--brass-dim); }
+  .chips a.admin.on { color: var(--sage); background: var(--sage-soft); border-color: var(--sage-line); }
+  .chips .sep { flex-shrink: 0; width: 1px; background: var(--line); margin: 4px 2px; }
+
+  /* ---------- sections ---------- */
+  main section { padding-block: 40px 8px; }
+  main section + section { border-top: 1px solid var(--line); }
+  .sec-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .part {
+    margin-top: 40px; padding-block: 34px 26px; border-top: 1px solid var(--line);
+    display: grid; gap: 10px;
+  }
+  .part h2 { font-size: clamp(34px, 5.4vw, 48px); }
+  .part p { margin: 0; color: var(--text-dim); max-width: 64ch; font-size: 17px; }
+  .part.admin .eyebrow { color: var(--sage); }
+
+  /* ---------- screens ---------- */
+  .screen {
+    display: grid; grid-template-columns: minmax(0, 290px) minmax(0, 1fr);
+    gap: clamp(22px, 4vw, 48px); align-items: start; margin: 26px 0 38px;
+  }
+  .screen.pair { grid-template-columns: minmax(0, 580px) minmax(0, 1fr); }
+  @media (max-width: 1000px) { .screen.pair { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 720px) { .screen { grid-template-columns: minmax(0, 1fr); } }
+  .phones { display: flex; flex-wrap: wrap; gap: 22px; justify-content: center; }
+  .shot { flex: 1 1 250px; max-width: 290px; display: flex; flex-direction: column; gap: 10px; margin: 0 auto; width: 100%; }
+  .screen:not(.pair) .shot { margin: 0; }
+  @media (max-width: 720px) { .screen:not(.pair) .shot { margin: 0 auto; } }
+  .phone {
+    background: var(--phone); border-radius: 34px; padding: 9px;
+    box-shadow: var(--shadow), inset 0 0 0 1px var(--phone-edge);
+  }
+  .glass { position: relative; border-radius: 26px; overflow: hidden; }
+  .glass img { display: block; width: 100%; height: auto; max-width: 100%; }
+  .shot-cap { text-align: center; font-size: 12.5px; font-weight: 650; color: var(--text-dim); letter-spacing: 0.02em; }
+  .pin {
+    position: absolute; transform: translate(-50%, -50%); width: 20px; height: 20px; border-radius: 50%;
+    background: var(--pin); color: var(--pin-ink); font: 750 11px/20px var(--sans); text-align: center;
+    box-shadow: 0 0 0 2px var(--pin-ring), 0 3px 8px rgba(0, 0, 0, 0.45);
+    transition: transform 0.15s ease; cursor: default; user-select: none;
+  }
+  .pin.on { transform: translate(-50%, -50%) scale(1.3); }
+  .key { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+  .key li {
+    display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: start;
+    padding: 8px 10px; border-radius: 10px; transition: background 0.15s;
+  }
+  .key li.on { background: var(--brass-soft); }
+  .key .n {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--pin); color: var(--pin-ink);
+    font: 750 11.5px/22px var(--sans); text-align: center; margin-top: 1px;
+  }
+  .key b { font-weight: 650; display: block; line-height: 1.4; }
+  .key span.t { display: block; color: var(--text-dim); font-size: 14.5px; line-height: 1.5; }
+  .key .group { grid-column: 1 / -1; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; padding: 10px 10px 2px; display: block; }
+
+  /* ---------- small building blocks ---------- */
+  .steps { list-style: none; padding: 0; margin: 18px 0 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .steps li { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 6px; align-content: start; }
+  .steps .num { font-family: var(--serif); font-size: 30px; line-height: 1; color: var(--brass); }
+  .steps b { font-size: 16px; }
+  .steps span { color: var(--text-dim); font-size: 14.5px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+
+  ol.do { margin: 10px 0 18px; padding-left: 22px; max-width: 68ch; }
+  ol.do li { margin: 6px 0; padding-left: 4px; }
+  ol.do li::marker { color: var(--brass); font-weight: 700; }
+  ul.plain { margin: 10px 0 18px; padding-left: 20px; max-width: 68ch; }
+  ul.plain li { margin: 6px 0; }
+  ul.plain li::marker { color: var(--brass); }
+
+  .note {
+    background: var(--brass-soft); border: 1px solid var(--brass-dim); border-radius: 12px;
+    padding: 14px 16px; margin: 16px 0 22px; max-width: 72ch; font-size: 15px;
+  }
+  .note.admin { background: var(--sage-soft); border-color: var(--sage-line); }
+  .note b:first-child { color: var(--brass); }
+  .note.admin b:first-child { color: var(--sage); }
+
+  .kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0 6px; }
+  .kinds div { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .kinds b { font-family: var(--serif); font-weight: 500; font-size: 19px; display: block; margin-bottom: 4px; }
+  .kinds span { color: var(--text-dim); font-size: 14.5px; }
+  @media (max-width: 760px) { .kinds { grid-template-columns: 1fr; } }
+
+  /* app map */
+  .map { display: grid; grid-template-columns: minmax(0, 0.9fr) auto minmax(0, 1.1fr) auto minmax(0, 1.4fr); gap: 12px; align-items: center; margin: 18px 0 14px; }
+  .map-col { display: grid; gap: 10px; min-width: 0; }
+  .map-arrow { color: var(--brass); font-size: 20px; text-align: center; }
+  a.node {
+    display: grid; gap: 2px; text-decoration: none; color: var(--text);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+  }
+  a.node:hover { border-color: var(--brass-dim); }
+  a.node b { font-weight: 650; font-size: 15px; }
+  a.node span { color: var(--text-dim); font-size: 13px; line-height: 1.45; }
+  a.node.entry { border-style: dashed; }
+  .map-over {
+    border: 1px dashed var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px;
+  }
+  .map-over .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tags a, .tags span {
+    font-size: 13px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--bg-2); color: var(--text); text-decoration: none;
+  }
+  .tags a:hover { border-color: var(--brass-dim); }
+  @media (max-width: 860px) {
+    .map { grid-template-columns: minmax(0, 1fr); }
+    .map-arrow { transform: rotate(90deg); line-height: 1; }
+  }
+
+  /* tables */
+  .table-scroll { overflow-x: auto; margin: 16px 0 24px; border: 1px solid var(--line); border-radius: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 560px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); background: var(--bg-2); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.yes, td.no { text-align: center; width: 120px; font-weight: 700; }
+  .matrix table { min-width: 0; }
+  @media (max-width: 560px) {
+    .matrix th, .matrix td { padding: 9px 10px; }
+    .matrix td.yes, .matrix td.no { width: 66px; }
+    .matrix thead th.c { letter-spacing: 0.02em; font-size: 10.5px; }
+  }
+  td.yes { color: var(--brass); }
+  td.yes.admin { color: var(--sage); }
+  td.no { color: var(--text-dim); font-weight: 400; }
+  th.c { text-align: center; }
+  tr.group td { background: var(--bg-2); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; padding-block: 7px; }
+  td code { white-space: normal; word-break: break-word; }
+
+  /* trash lifecycle */
+  .flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1.3fr); gap: 10px; align-items: center; margin: 18px 0 26px; }
+  .flow .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .flow .stage b { display: block; font-size: 15px; }
+  .flow .stage span { color: var(--text-dim); font-size: 13.5px; }
+  .flow .arrow { color: var(--brass); text-align: center; font-size: 13px; font-weight: 650; line-height: 1.3; }
+  .flow .ends { display: grid; gap: 8px; }
+  .flow .ends .stage { padding: 10px 14px; }
+  @media (max-width: 860px) {
+    .flow { grid-template-columns: minmax(0, 1fr); }
+    .flow .arrow { padding: 2px 0; }
+  }
+
+  /* architecture */
+  .arch { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; margin: 18px 0 24px; }
+  .arch .box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+  .arch .box b { font-size: 15.5px; }
+  .arch .box span { color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+  .arch .box .eyebrow { font-size: 10.5px; }
+  .arch .box.hub { border-color: var(--brass-dim); background: var(--brass-soft); }
+  .arch .stack { display: grid; gap: 10px; }
+  .arch .link { display: grid; align-content: center; justify-items: center; color: var(--brass); font-size: 12.5px; font-weight: 650; text-align: center; gap: 2px; }
+  .arch .link i { font-style: normal; font-size: 18px; }
+  @media (max-width: 860px) {
+    .arch { grid-template-columns: minmax(0, 1fr); }
+    .arch .link i { transform: rotate(90deg); }
+  }
+
+  pre.tree {
+    font: 13px/1.65 var(--mono); background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px; overflow-x: auto; margin: 16px 0 24px; color: var(--text);
+  }
+  pre.tree .c { color: var(--text-dim); }
+  pre.tree .f { color: var(--brass); }
+
+  .tasks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 16px 0 10px; }
+  .task { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; min-width: 0; }
+  .task h3 { margin: 0 0 6px; font-size: 19px; }
+  .task ol { margin: 6px 0 0; padding-left: 20px; font-size: 14.5px; }
+  .task li { margin: 5px 0; }
+  .task p { margin: 4px 0 0; font-size: 14.5px; color: var(--text-dim); }
+  @media (max-width: 760px) { .tasks { grid-template-columns: 1fr; } }
+
+  /* help */
+  details.faq { border-bottom: 1px solid var(--line); max-width: 78ch; }
+  details.faq summary {
+    cursor: pointer; list-style: none; padding: 14px 30px 14px 0; font-weight: 650; position: relative;
+  }
+  details.faq summary::-webkit-details-marker { display: none; }
+  details.faq summary::after { content: "+"; position: absolute; right: 4px; top: 12px; color: var(--brass); font-size: 20px; font-weight: 400; }
+  details.faq[open] summary::after { content: "−"; }
+  details.faq p { margin: 0 0 16px; color: var(--text-dim); }
+  .symbols { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 16px 0 10px; }
+  .symbols div { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font-size: 14px; }
+  .symbols .g { width: 44px; height: 34px; border-radius: 8px; background: var(--bg-2); display: grid; place-items: center; color: var(--brass); font-size: 15px; font-weight: 700; white-space: nowrap; }
+
+  /* change log */
+  .cl-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 14px; }
+  .cl-stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px; min-width: 120px; }
+  .cl-stat b { display: block; font-family: var(--serif); font-weight: 500; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .cl-stat span { font-size: 12.5px; color: var(--text-dim); }
+  .cl-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 22px; }
+  .seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+  .seg button { font: inherit; font-size: 13px; font-weight: 650; color: var(--text-dim); background: none; border: 0; border-radius: 999px; padding: 6px 13px; cursor: pointer; }
+  .seg button.on { color: var(--brass); background: var(--brass-soft); }
+  .seg.aud button.on[data-aud="admin"] { color: var(--sage); background: var(--sage-soft); }
+  .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .timeline::before { content: ""; position: absolute; left: 87px; top: 10px; bottom: 10px; width: 2px; background: var(--line); }
+  .rel { position: relative; display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 0 40px; padding-bottom: 22px; }
+  .rel::before { content: ""; position: absolute; left: 81px; top: 9px; width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 2px solid var(--brass); box-sizing: border-box; }
+  .rel.latest::before { background: var(--brass); box-shadow: 0 0 0 5px var(--brass-soft); }
+  .rel-date { text-align: right; padding-top: 3px; }
+  .rel-date .d { display: block; font-family: var(--serif); font-size: 28px; line-height: 1; }
+  .rel-date .m { display: block; margin-top: 4px; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); font-weight: 650; }
+  .rel-card { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px 12px; }
+  .rel.latest .rel-card { border-color: var(--brass-dim); }
+  .rel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
+  .rel-meta .latest-badge { font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass); background: var(--brass-soft); border: 1px solid var(--brass-dim); border-radius: 999px; padding: 2px 9px; }
+  .rel-card h3 { margin: 6px 0 2px; font-size: 20px; }
+  .rel-card > p { margin: 0 0 8px; color: var(--text-dim); font-size: 14.5px; }
+  .rel-items { list-style: none; margin: 0; padding: 0; }
+  .rel-items li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .rel-items .tag { grid-row: span 3; align-self: start; margin-top: 2px; text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 0; border-radius: 6px; border: 1px solid transparent; }
+  .tag.new { background: var(--brass); color: #221a0e; }
+  .tag.improved { background: var(--brass-soft); color: var(--brass); border-color: var(--brass-dim); }
+  .tag.fixed { background: var(--bg-2); color: var(--text-dim); border-color: var(--line); }
+  .tag.changed { background: var(--sage-soft); color: var(--sage); border-color: var(--sage-line); }
+  .rel-items b { font-weight: 650; font-size: 15px; }
+  .rel-items .aud { display: inline-block; margin-left: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 999px; vertical-align: 2px; color: var(--brass); background: var(--brass-soft); }
+  .rel-items .aud.admin { color: var(--sage); background: var(--sage-soft); }
+  .rel-items .txt { color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+  .rel-items a { font-size: 13px; font-weight: 650; text-decoration: none; justify-self: start; }
+  .rel-note { font-size: 13px; color: var(--text-dim); margin: 0 0 8px; font-style: italic; }
+  .rel-commits { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-dim); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .rel-commits a { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+  .rel-commits a:hover { color: var(--brass); border-color: var(--brass-dim); }
+  .cl-empty { color: var(--text-dim); padding: 10px 0 20px; }
+  @media (max-width: 640px) {
+    .timeline::before { left: 6px; }
+    .rel { grid-template-columns: minmax(0, 1fr); padding-left: 28px; }
+    .rel::before { left: 0; top: 4px; }
+    .rel-date { text-align: left; display: flex; align-items: baseline; gap: 8px; padding: 0 0 8px; }
+    .rel-date .d { font-size: 20px; }
+    .rel-date .m { margin: 0; }
+    .rel-card { padding: 12px 14px 10px; }
+    .rel-items li { grid-template-columns: 68px minmax(0, 1fr); }
+  }
+
+  footer .wrap { padding-block: 34px 48px; color: var(--text-dim); font-size: 13.5px; border-top: 1px solid var(--line); margin-top: 40px; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="lockup">
+      {{LOGO}}
+      <div>
+        <div class="name">My PD</div>
+        <div class="sub">Personal Development Library</div>
+      </div>
+    </div>
+    <h1>How My PD works</h1>
+    <p class="lede">Every screen, button and setting, shown on the app itself. Part one is for anyone who listens, reads and keeps ideas in the Vault. Part two is for whoever runs the library: Organize mode, uploads and setup.</p>
+    <div class="roles">
+      <div class="role">
+        <span class="who">Everyone</span>
+        <h2>Listen, read and keep ideas</h2>
+        <ul>
+          <li>Today's Practice and the mini-player</li>
+          <li>Transcripts and summaries</li>
+          <li>Collections</li>
+          <li>The Vault: terms, topics and ideas</li>
+        </ul>
+        <a href="#home">Start with the home screen →</a>
+      </div>
+      <div class="role admin">
+        <span class="who admin">Admin</span>
+        <h2>Run the library</h2>
+        <ul>
+          <li>Organize mode: rename, move, Trash</li>
+          <li>Uploads, covers and collections</li>
+          <li>Transcripts and summaries</li>
+          <li>Passcode, relay and keys</li>
+        </ul>
+        <a href="#admin">Go to admin →</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="chapters" aria-label="Chapters">
+  <div class="wrap chips">
+    <a href="#start">Start</a>
+    <a href="#roles">Who does what</a>
+    <a href="#home">Home</a>
+    <a href="#listen">Listening</a>
+    <a href="#collections">Collections</a>
+    <a href="#vault">Vault</a>
+    <span class="sep" aria-hidden="true"></span>
+    <a href="#admin" class="admin">Admin</a>
+    <a href="#upload" class="admin">Uploads</a>
+    <a href="#trash" class="admin">Trash</a>
+    <a href="#setup" class="admin">Setup</a>
+    <a href="#changelog" class="admin">Change log</a>
+    <span class="sep" aria-hidden="true"></span>
+    <a href="#help">Help</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <section id="start">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Quick start</h2>
+    </div>
+    <div class="prose">
+      <p>My PD is your personal development library: audio, video and documents you return to, plus a Vault for the words and ideas you want to keep. It runs in the browser and works best on a phone.</p>
+    </div>
+    <ol class="steps">
+      <li><span class="num">1</span><b>Unlock</b><span>Enter the four-digit passcode. Each phone or computer asks once, then remembers.</span></li>
+      <li><span class="num">2</span><b>Press Play on Today's Practice</b><span>A track from your library, picked fresh each day. It keeps playing while you browse or lock the screen.</span></li>
+      <li><span class="num">3</span><b>Keep what stands out</b><span>Pause, open the Vault and tap + New term. The entry links back to the exact moment you heard it.</span></li>
+    </ol>
+    <div class="prose">
+      <p class="dim">Open it at <b>mypd.mkcworkspace.com</b>. In Safari, tap Share, then Add to Home Screen: My PD gets its own icon and opens like an app.</p>
+    </div>
+
+    <h3>Map of the app</h3>
+    <div class="prose"><p class="dim">Tap any box to jump to that part of the guide.</p></div>
+    <div class="map">
+      <div class="map-col">
+        <a class="node entry" href="#home"><b>Lock screen</b><span>Four-digit passcode, once per device</span></a>
+      </div>
+      <div class="map-arrow" aria-hidden="true">→</div>
+      <div class="map-col">
+        <a class="node" href="#home"><b>Home</b><span>Greeting · 📖 Guide · theme · Organize</span></a>
+        <a class="node" href="#home"><b>Today's Practice</b><span>One track a day</span></a>
+      </div>
+      <div class="map-arrow" aria-hidden="true">→</div>
+      <div class="map-col">
+        <a class="node" href="#browse"><b>📁 Browse</b><span>Folders and files · + Upload · list or grid · Trash (Organize on)</span></a>
+        <a class="node" href="#collections"><b>🏷 Collections</b><span>Groups of items from any folder, each with a header image</span></a>
+        <a class="node" href="#vault"><b>🔐 Vault</b><span>Terms · Topics · Ideas</span></a>
+      </div>
+    </div>
+    <div class="map-over">
+      <div class="label">Opens on top of any view</div>
+      <div class="tags">
+        <a href="#listen">Mini-player</a>
+        <a href="#listen">Transcript</a>
+        <a href="#summaries">Summary</a>
+        <a href="#summaries">Video and document viewer</a>
+        <a href="#vault">Term, topic and idea editors</a>
+        <a href="#transcripts">Transcript editor</a>
+        <a href="#covers">Cover art editor</a>
+        <a href="#manage-collections">Add to collections</a>
+        <a href="#upload">Upload progress</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="roles">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Who does what</h2>
+    </div>
+    <div class="prose">
+      <p>There are no separate accounts. Everyone uses the same app with the same passcode. What changes is the <b>Organize</b> switch at the top right: with it off you get the everyday library; with it on, the admin tools appear.</p>
+    </div>
+    <div class="table-scroll matrix">
+      <table>
+        <thead><tr><th>Task</th><th class="c">Everyone</th><th class="c">Admin</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="3">Use the library</td></tr>
+          <tr><td>Browse folders, search, filter, list or grid</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr><td>Play audio and video, read documents</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr><td>Read transcripts and summaries</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr><td>Open collections</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr><td>Add, edit and delete Vault entries</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr><td>Write or edit a summary (Edit in the summary sheet)</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr><td>Upload files (+ Upload is always shown)</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr><td>See What's new after an update</td><td class="yes">✓</td><td class="yes admin">✓</td></tr>
+          <tr class="group"><td colspan="3">Manage the library</td></tr>
+          <tr><td>Create folders, rename and move files</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+          <tr><td>Trash, restore and delete forever</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+          <tr><td>Create collections, tag files, set header images</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+          <tr><td>Add or change cover art</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+          <tr><td>Add or edit transcripts</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+          <tr><td>See admin changes in What's new</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+          <tr class="group"><td colspan="3">Outside the app</td></tr>
+          <tr><td>Change the passcode, relay address or keys (in the setup files)</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+          <tr><td>Add entries to the change log</td><td class="no">—</td><td class="yes admin">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note admin">
+      <b>Organize is a switch, not a sign-in.</b> Anyone who has the passcode can turn it on, so the passcode is the only lock on the whole library. Share it only with people you'd trust to rename or delete files. Separate listener and admin logins would need a change to the app.
+    </div>
+  </section>
+
+  <div class="part" id="everyday">
+    <span class="eyebrow">Part one</span>
+    <h2>Everyday use</h2>
+    <p>Listening, reading, collections and the Vault. Nothing in this part changes or removes files.</p>
+  </div>
+
+  <section id="home">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Getting in and the home screen</h2>
+    </div>
+    <div class="prose">
+      <p>The first time you open My PD on a device, it asks for the passcode. After that it opens straight to the library.</p>
+    </div>
+    {{FIG:lock}}
+    <h3>The home screen</h3>
+    <div class="prose">
+      <p>Everything starts here. The top half is the same in every view; the list underneath changes with the tab you pick.</p>
+    </div>
+    {{FIG:home}}
+    <h3>What's new after an update</h3>
+    <div class="prose">
+      <p>When My PD is updated, a short summary of the changes appears the first time you open it, after the passcode screen. It only lists what applies to you, and each device sees each update once. Admin changes wait until Organize is switched on, or show straight away on a device that has used Organize before.</p>
+    </div>
+    {{FIG:whatsnew}}
+  </section>
+
+  <section id="browse">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Browsing the library</h2>
+    </div>
+    <div class="prose">
+      <p>Browse shows the folders and files in your library. Open a folder to see what's inside; the path above the list shows where you are. Tap a file to open it: audio plays in the mini-player, video and documents open in a viewer.</p>
+    </div>
+    {{FIG:files}}
+    <h3>Grid view</h3>
+    <div class="prose"><p>Tap ▦ above the list for a grid of square tiles. It's the best way to see cover art. Tap ☰ to go back to the list.</p></div>
+    {{FIG:grid}}
+    <div class="note"><b>Something new not showing?</b> Pull down from the top of the list and let go. That refreshes whichever view you're in.</div>
+  </section>
+
+  <section id="listen">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Listening</h2>
+    </div>
+    <div class="prose">
+      <p>Audio plays in the mini-player at the bottom of the screen, so you can keep browsing. It keeps playing when the screen locks, with play, pause and skip on the lock screen. If a track has a transcript, tap Transcript to follow along.</p>
+    </div>
+    {{FIG:player}}
+    <ul class="plain">
+      <li>Speed is remembered, so a track you start tomorrow plays at the speed you last chose.</li>
+      <li>"No transcript yet" means nobody has added one. Admins can add one; see <a href="#transcripts">Transcripts</a>.</li>
+      <li>Starting another track replaces the one playing.</li>
+    </ul>
+  </section>
+
+  <section id="summaries">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Summaries, video and documents</h2>
+    </div>
+    <div class="prose">
+      <p>A summary tells you what an item covers before you spend time on it. Anything with a summary shows 📝 in the list. Open it from there, from the mini-player, or from the 📝 button in the video and document viewer.</p>
+    </div>
+    {{FIG:summary}}
+    <h3>Video and documents</h3>
+    <div class="prose">
+      <p>Video and documents open in a full-screen viewer. PDFs show inside the viewer on a computer; on iPhone you get Open and Download buttons. Word files always offer Open and Download. Text and Markdown files open as text.</p>
+    </div>
+    {{FIG:media}}
+  </section>
+
+  <section id="collections">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Collections</h2>
+    </div>
+    <div class="prose">
+      <p>A collection groups items from any folder without moving them, much like a playlist. One item can be in several collections. Use them for a course, a theme or a morning routine.</p>
+    </div>
+    {{FIG:collections}}
+    <div class="prose"><p class="dim">Creating collections and choosing what's in them is an admin task. See <a href="#manage-collections">Managing collections</a>.</p></div>
+  </section>
+
+  <section id="vault">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>The Vault</h2>
+    </div>
+    <div class="prose">
+      <p>The Vault is your personal knowledge base. It sits beside the media library but is stored separately, so entries don't show up in Browse. It holds three kinds of entry:</p>
+    </div>
+    <div class="kinds">
+      <div><b>🔤 Terms</b><span>A word or phrase, in any language. Definition, example and your notes.</span></div>
+      <div><b>📚 Topics</b><span>A concept to understand properly. A simple explanation first, a full one when you want it.</span></div>
+      <div><b>💡 Ideas</b><span>Your own thoughts. Your note stays word for word, with an AI summary and your reflection beside it.</span></div>
+    </div>
+    {{FIG:vault}}
+    <h3>Filtering by subject</h3>
+    {{FIG:vault-subjects}}
+
+    <h3>Saving a term while you listen</h3>
+    <ol class="do">
+      <li>Pause the track at the moment you heard it.</li>
+      <li>Open the <b>Vault</b> tab, stay on <b>Terms</b> and tap <b>+ New term</b>.</li>
+      <li>Type the word and tap <b>Look it up</b>. Edit anything you like.</li>
+      <li>Add subjects, ask a follow-up if you want, and tap <b>Save to vault</b>.</li>
+    </ol>
+    {{FIG:term}}
+    <div class="note"><b>Keep the answers you want.</b> Follow-up answers disappear when the sheet closes. Tap + Add to notes on any answer you want to keep before you save.</div>
+
+    <h3>Topics</h3>
+    <div class="prose"><p>For a concept you want to understand rather than define. Name it, tap ✨ Explain simply, and expand it into a full explainer when the simple version isn't enough.</p></div>
+    {{FIG:topic}}
+
+    <h3>Ideas</h3>
+    <div class="prose"><p>A journal for raw thoughts. Write the idea as it comes; the summary and your reflection sit beside it without changing it.</p></div>
+    {{FIG:idea}}
+  </section>
+
+  <section id="preferences">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Personal preferences</h2>
+    </div>
+    <div class="prose">
+      <p>There's no settings page for everyday use. A few choices are remembered on each device, so a phone and a laptop can be set up differently.</p>
+    </div>
+    <div class="screen">
+      {{SHOT:light}}
+      <ul class="key">
+        <li data-n="1" tabindex="0"><span class="n">1</span><div><b>Theme</b><span class="t">Dark (🌙) or light (☀️).</span></div></li>
+        <li><span class="n" style="background:var(--bg-2);color:var(--text-dim)">·</span><div><b>Playback speed</b><span class="t">The speed button in the mini-player or video viewer.</span></div></li>
+        <li><span class="n" style="background:var(--bg-2);color:var(--text-dim)">·</span><div><b>List or grid</b><span class="t">☰ and ▦ above the list, in Browse and Collections.</span></div></li>
+        <li><span class="n" style="background:var(--bg-2);color:var(--text-dim)">·</span><div><b>Stay unlocked</b><span class="t">After the first unlock. Clearing the browser's site data asks for the passcode again.</span></div></li>
+        <li><span class="n" style="background:var(--bg-2);color:var(--text-dim)">·</span><div><b>Pull to refresh</b><span class="t">At the top of any list, pull down and let go.</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="part admin" id="admin">
+    <span class="eyebrow">Part two</span>
+    <h2>Admin</h2>
+    <p>Managing what's in the library happens in Organize mode inside the app. The passcode, the relay and the keys live outside it; see <a href="#setup" style="color:var(--sage)">Setup</a>.</p>
+  </div>
+
+  <section id="organize">
+    <div class="sec-head">
+      <span class="who admin">Admin · Organize on</span>
+      <h2>Organize mode</h2>
+    </div>
+    <div class="prose">
+      <p>Turn on the Organize switch at the top right. Every file gets five tools, + New folder appears beside + Upload, and Trash appears at the end of the Library. Turn it off again for everyday listening. With Organize on, tapping a row's title still plays it.</p>
+    </div>
+    {{FIG:organize}}
+    <div class="note admin"><b>Saves take a few seconds.</b> Each change is saved straight to the library on GitHub. If you see "Move failed … replication delay", wait a moment and try again.</div>
+  </section>
+
+  <section id="upload">
+    <div class="sec-head">
+      <span class="who admin">Admin</span>
+      <h2>Uploading files</h2>
+    </div>
+    <ol class="do">
+      <li>Open the folder you want the files in, or a collection.</li>
+      <li>Tap <b>+ Upload</b> and pick one or more files.</li>
+      <li>Keep the screen on until every file says <b>Done</b>, then tap <b>Done</b>.</li>
+    </ol>
+    {{FIG:upload}}
+    <ul class="plain">
+      <li><b>Audio:</b> mp3, m4a, wav, aac, flac, ogg. <b>Video:</b> mp4, mov, m4v, webm. <b>Documents:</b> pdf, doc, docx, txt, md.</li>
+      <li>If a file with the same name is already in the folder, the app asks before replacing it. Its summary and transcript stay attached to the new file.</li>
+      <li>Uploading while a collection is open adds the files to that collection.</li>
+      <li>An interrupted upload leaves nothing half-saved behind. Upload the file again.</li>
+      <li>+ Upload only puts files inside the library. To update the app itself, see <a href="#setup">Setup</a>.</li>
+    </ul>
+  </section>
+
+  <section id="rename-move">
+    <div class="sec-head">
+      <span class="who admin">Admin · Organize on</span>
+      <h2>Renaming and moving</h2>
+    </div>
+    <div class="prose">
+      <p>Tap ✎ on a file to rename it. The field opens under the row.</p>
+    </div>
+    {{FIG:rename}}
+    <div class="prose">
+      <p>Tap ⇄ to move a file. Type the folder name as it appears in Browse, such as <code>Wealth</code>, or a path such as <code>Wealth/2026</code> for a folder inside a folder. Leave it blank to move the file to the top of the Library.</p>
+      <p>Renaming and moving don't upload anything again, so even large files move in seconds. The summary, transcript, cover and collection tags go with the file. To make a new folder, open the folder it should sit in and tap <b>+ New folder</b>.</p>
+    </div>
+  </section>
+
+  <section id="trash">
+    <div class="sec-head">
+      <span class="who admin">Admin · Organize on</span>
+      <h2>Trash and recovery</h2>
+    </div>
+    <div class="prose">
+      <p>Tap 🗑 on a file to move it to Trash. Nothing is deleted straight away: you have 30 days to change your mind.</p>
+    </div>
+    <div class="flow" role="img" aria-label="Trash lifecycle: a file moved to Trash waits 30 days. Restore puts it back in its folder, delete forever removes it now, and after 30 days it is removed automatically.">
+      <div class="stage"><b>In a folder</b><span>Visible in Browse and its collections</span></div>
+      <div class="arrow">🗑<br>Move to Trash</div>
+      <div class="stage"><b>In Trash</b><span>Hidden from collections. Countdown starts at 30 days.</span></div>
+      <div class="arrow">then</div>
+      <div class="ends">
+        <div class="stage"><b>↩ Restore</b><span>Back in the folder it came from, tags intact</span></div>
+        <div class="stage"><b>✕ Delete forever</b><span>Gone now, with its summary, transcript and parts</span></div>
+        <div class="stage"><b>After 30 days</b><span>Removed automatically the next time Trash is opened, with a message saying how many</span></div>
+      </div>
+    </div>
+    {{FIG:trash}}
+  </section>
+
+  <section id="manage-collections">
+    <div class="sec-head">
+      <span class="who admin">Admin · Organize on</span>
+      <h2>Managing collections</h2>
+    </div>
+    <ol class="do">
+      <li>Tap 🏷 on any file, in Browse or in a collection.</li>
+      <li>Tick the collections it belongs in, or type a new name and tap <b>Add</b>.</li>
+      <li>Tap <b>Save</b>.</li>
+    </ol>
+    {{FIG:manage-collections}}
+  </section>
+
+  <section id="covers">
+    <div class="sec-head">
+      <span class="who admin">Admin · Organize on</span>
+      <h2>Cover art</h2>
+    </div>
+    <div class="prose">
+      <p>Covers are managed from the grid. With Organize on, switch to grid (▦) and tap any tile. Collection headers use the same editor from <b>Edit header</b>, cropped to a wide 1200 × 675 banner.</p>
+    </div>
+    {{FIG:covers}}
+    <div class="prose"><p class="dim">A new cover shows on your device straight away and on other devices within a few minutes.</p></div>
+  </section>
+
+  <section id="transcripts">
+    <div class="sec-head">
+      <span class="who admin">Admin · Organize on</span>
+      <h2>Transcripts</h2>
+    </div>
+    <div class="prose">
+      <p>The app can't turn speech into text by itself. You either tap along while you listen, or paste a transcript you already have, such as captions from YouTube or a transcription app.</p>
+    </div>
+    <ol class="do">
+      <li>Turn on Organize and play the track.</li>
+      <li>Tap <b>Transcript</b> in the mini-player, then <b>+ Add transcript</b> (or <b>✎ Edit transcript</b>).</li>
+      <li>Choose <b>Tap along</b> or <b>Paste text</b>, then tap <b>Save transcript</b>.</li>
+    </ol>
+    {{FIG:transcripts}}
+  </section>
+
+  <section id="write-summaries">
+    <div class="sec-head">
+      <span class="who admin">Admin</span>
+      <h2>Writing summaries</h2>
+    </div>
+    <div class="prose">
+      <p>With Organize on, the 📝 tool on any file opens its summary ready to edit. (Anyone can also tap Edit in the summary sheet.) ✨ Summarize needs something to read: a transcript, or the text of a .txt or .md file. For audio without a transcript, write the summary yourself or add a transcript first.</p>
+    </div>
+    {{FIG:summary-edit}}
+  </section>
+
+  <section id="setup">
+    <div class="sec-head">
+      <span class="who admin">Admin</span>
+      <h2>Setup and settings</h2>
+    </div>
+    <div class="prose">
+      <p>My PD has three parts. The app is a single page. Your files live in a GitHub repository. A small relay on Cloudflare holds the keys, so the app never needs a GitHub token on your phone.</p>
+      <p>The app's own files (<code>index.html</code>, this guide and <code>changelog.json</code>) live in the GitHub repo <b>c3jumpw/mkp-tools</b>, folder <code>pdl</code>. Vercel publishes them to <b>mypd.mkcworkspace.com</b> about a minute after every push. The library itself stays in <b>c1jumpw/mkp-tools</b>, folder <code>pdl/media</code>: the app reads it from there and the relay saves to it. The old address, c1jumpw.github.io/mkp-tools/pdl/, forwards visitors to the new one.</p>
+    </div>
+    <div class="arch" role="img" aria-label="The app sends every save, upload, large-file stream, Vault request and AI request to the relay. The relay holds the keys and talks to GitHub, Supabase and Gemini. The app also reads files straight from GitHub.">
+      <div class="box">
+        <span class="eyebrow">On your phone</span>
+        <b>My PD app</b>
+        <span><code>index.html</code>, this guide and <code>changelog.json</code>, from c3jumpw/mkp-tools (<code>pdl</code>), published by Vercel at mypd.mkcworkspace.com</span>
+      </div>
+      <div class="link"><i>→</i>saves, uploads,<br>Vault and AI</div>
+      <div class="box hub">
+        <span class="eyebrow">Relay</span>
+        <b>Cloudflare Worker <code>pdl-relay</code></b>
+        <span>Holds the GitHub token and the Supabase and Gemini keys. Checks the app key on every request, and only writes inside the allowed folders (normally <code>pdl/media</code>). Also streams large files so they play straight away.</span>
+      </div>
+      <div class="link"><i>→</i>uses the keys</div>
+      <div class="stack">
+        <div class="box"><span class="eyebrow">Library</span><b>GitHub repo <code>c1jumpw/mkp-tools</code></b><span>Media, covers, summaries, transcripts, collections and Trash, in <code>pdl/media</code></span></div>
+        <div class="box"><span class="eyebrow">Vault</span><b>Supabase</b><span>Terms, topics, ideas and their attachments</span></div>
+        <div class="box"><span class="eyebrow">AI</span><b>Gemini</b><span>Look it up, explanations, follow-ups and summaries</span></div>
+      </div>
+    </div>
+    <div class="prose"><p class="dim">Reading needs no keys: the app lists folders and plays most files straight from GitHub (through the jsDelivr CDN for speed). Only changes, large files, the Vault and AI go through the relay.</p></div>
+
+    <h3>Where each setting lives</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Setting</th><th>Where</th><th>How to change it</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="3">On each device</td></tr>
+          <tr><td>Theme, speed, list or grid, stay unlocked</td><td>The browser on that device</td><td>From the app. See <a href="#preferences">Personal preferences</a>.</td></tr>
+          <tr class="group"><td colspan="3">Address</td></tr>
+          <tr><td>mypd.mkcworkspace.com</td><td>Vercel project <code>mkp-tools-mypd</code>, linked to c3jumpw/mkp-tools with root directory <code>pdl</code>; a <code>CNAME</code> record named <code>mypd</code> in GoDaddy DNS</td><td>Push to <code>pdl/</code> in c3jumpw/mkp-tools. Vercel publishes in about a minute</td></tr>
+          <tr><td>Forwarding from the old address</td><td><code>pdl/index.html</code> in c1jumpw/mkp-tools, a small page that sends visitors on</td><td>Leave it in place so old bookmarks keep working</td></tr>
+          <tr class="group"><td colspan="3">In index.html (the app)</td></tr>
+          <tr><td>Passcode</td><td><code>PASSCODE</code>, near the end</td><td>Edit and upload index.html. See the task below.</td></tr>
+          <tr><td>Library location</td><td><code>OWNER</code>, <code>REPO</code>, <code>BRANCH</code>, <code>MEDIA_PATH</code>, at the top (c1jumpw, mkp-tools, main, pdl/media)</td><td>Only if the library moves; the relay's <code>OWNER</code> and <code>REPO</code> must move with it</td></tr>
+          <tr><td>Relay address and app key</td><td><code>CONFIG.WORKER_URL</code>, <code>CONFIG.APP_KEY</code></td><td>The app key must match <code>APP_KEY</code> in the Worker</td></tr>
+          <tr><td>Trash days, skip length, speeds</td><td><code>TRASH_RETENTION_DAYS</code> (30), <code>SKIP_SECONDS</code> (15), <code>SPEEDS</code></td><td>Edit and upload index.html</td></tr>
+          <tr class="group"><td colspan="3">In the Cloudflare Worker (Settings → Variables and Secrets)</td></tr>
+          <tr><td>GitHub access</td><td><code>GITHUB_TOKEN</code> (secret)</td><td>Replace when it expires. See the task below.</td></tr>
+          <tr><td>Repo and allowed folders</td><td><code>OWNER</code>, <code>REPO</code>, <code>BRANCH</code>, <code>ALLOWED_PREFIXES</code></td><td><code>ALLOWED_PREFIXES</code> lists the folders the app may write to, normally <code>pdl/media</code></td></tr>
+          <tr><td>App keys</td><td><code>APP_KEY</code> (this app), <code>UPLOAD_APP_KEY</code> (the Uploader app)</td><td>Change in the Worker and in each app together</td></tr>
+          <tr><td>Vault database</td><td><code>SUPABASE_URL</code>, <code>SUPABASE_SERVICE_KEY</code> (secrets)</td><td>From the Supabase project's API settings</td></tr>
+          <tr><td>AI features</td><td><code>GEMINI_API_KEY</code> (secret)</td><td>From Google AI Studio</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Where files are stored</h3>
+    <pre class="tree"><b>c3jumpw/mkp-tools</b>                         <span class="c">the app, published by Vercel</span>
+└─ pdl/
+   ├─ <span class="f">index.html</span>                          <span class="c">the app</span>
+   ├─ <span class="f">guide.html</span>                          <span class="c">this guide</span>
+   ├─ <span class="f">changelog.json</span>                      <span class="c">the change log, and the What's new notes</span>
+   ├─ README.md, CLAUDE.md               <span class="c">notes for whoever changes the app (not published)</span>
+   └─ .vercelignore                      <span class="c">keeps those notes off the website</span>
+
+<b>c1jumpw/mkp-tools</b>                         <span class="c">the library</span>
+└─ pdl/
+   ├─ <span class="f">index.html</span>                          <span class="c">forwards the old address to mypd.mkcworkspace.com</span>
+   └─ media/                              <span class="c">folders here show in Browse</span>
+      ├─ Wealth/
+      ├─ The_Four_Layers_of_Wealth_Architecture.m4a
+      ├─ The_Four_Layers….m4a<span class="f">.summary.json</span>       <span class="c">summary</span>
+      ├─ The_Four_Layers….m4a<span class="f">.transcript.json</span>    <span class="c">transcript</span>
+      ├─ The_Four_Layers….m4a<span class="f">.cover.jpg</span>          <span class="c">cover art</span>
+      ├─ Big_file.m4a<span class="f">.chunked.json</span>                <span class="c">a large file, stored in parts…</span>
+      ├─ <span class="f">.chunks-Big_file.m4a/</span>                 <span class="c">…and the parts themselves</span>
+      ├─ <span class="f">.collections.json</span>                     <span class="c">collections and which files are in them</span>
+      ├─ <span class="f">.collection-covers/</span>                   <span class="c">collection header images</span>
+      └─ trash/  <span class="f">.trash-meta.json</span>               <span class="c">Trash, and when each item went in</span></pre>
+    <div class="prose"><p class="dim">The extra files beside each item are hidden in the app and travel with their file when it's renamed, moved or trashed. Rename and move from the app rather than on GitHub, or they'll be left behind.</p></div>
+
+    <h3>Common admin tasks</h3>
+    <div class="tasks">
+      <div class="task">
+        <h3>Change the passcode</h3>
+        <ol>
+          <li>In <code>pdl/index.html</code> in c3jumpw/mkp-tools, find <code>const PASSCODE</code> and set four new digits.</li>
+          <li>To make every device ask again, also change <code>pdl_unlocked_v1</code> on the next line to <code>pdl_unlocked_v2</code>. Otherwise devices that already unlocked stay unlocked.</li>
+          <li>Add an admin note to <code>changelog.json</code> and commit both. Vercel publishes in about a minute.</li>
+        </ol>
+      </div>
+      <div class="task">
+        <h3>Update the app or this guide</h3>
+        <ol>
+          <li>Change the files in <code>pdl/</code> of <b>c3jumpw/mkp-tools</b>, on GitHub or in a Claude session with that repo.</li>
+          <li>Add a release to <code>changelog.json</code> in the same commit, so people see What's new. See <a href="#changelog">Change log</a>.</li>
+          <li>Push to <code>main</code>. Vercel publishes mypd.mkcworkspace.com in about a minute.</li>
+          <li>The Uploader and + Upload still write to the library in c1jumpw/mkp-tools, not to the app.</li>
+        </ol>
+      </div>
+      <div class="task">
+        <h3>Replace the GitHub token</h3>
+        <ol>
+          <li>When saves fail with "Bad credentials", the token has expired.</li>
+          <li>On GitHub, create a fine-grained token with Contents: Read and write on <code>c1jumpw/mkp-tools</code> (the library) and any repo the Uploader writes to.</li>
+          <li>In Cloudflare, open the <code>pdl-relay</code> Worker → Settings → Variables and Secrets, replace <code>GITHUB_TOKEN</code>, and deploy.</li>
+        </ol>
+      </div>
+      <div class="task">
+        <h3>Check the relay is running</h3>
+        <ol>
+          <li>Open the relay address from <code>CONFIG.WORKER_URL</code> in a browser.</li>
+          <li>"Missing or invalid app key" means it's running and answering. That reply is expected.</li>
+          <li>An error page, or no reply, means the Worker is down or its address has changed.</li>
+        </ol>
+      </div>
+      <div class="task">
+        <h3>Give someone access</h3>
+        <ol>
+          <li>Send them mypd.mkcworkspace.com and the passcode.</li>
+          <li>They'll have everything in this guide, including Organize.</li>
+          <li>To take access away, change the passcode and the unlocked key, as in Change the passcode.</li>
+        </ol>
+      </div>
+      <div class="task">
+        <h3>Find a deleted file</h3>
+        <ol>
+          <li>Within 30 days: turn on Organize, open Trash and tap ↩.</li>
+          <li>After that, or after Delete forever: it's still in the repo's history on GitHub, in the commit that deleted it.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="changelog">
+    <div class="sec-head">
+      <span class="who admin">Admin</span>
+      <h2>Change log</h2>
+    </div>
+    <div class="prose">
+      <p>Every update to My PD since the first version, in date order, and who each change affects. The app reads the same list to show What's new, so adding an entry here is how an update gets announced.</p>
+    </div>
+    <div class="cl-stats" id="clStats"></div>
+    <div class="cl-controls">
+      <div class="seg" role="group" aria-label="Order">
+        <button type="button" data-order="asc" class="on" aria-pressed="true">Oldest first</button>
+        <button type="button" data-order="desc" aria-pressed="false">Newest first</button>
+      </div>
+      <div class="seg aud" role="group" aria-label="Who it affects">
+        <button type="button" data-aud="all" class="on" aria-pressed="true">All</button>
+        <button type="button" data-aud="everyone" aria-pressed="false">Everyone</button>
+        <button type="button" data-aud="admin" aria-pressed="false">Admin</button>
+      </div>
+    </div>
+    <ol class="timeline" id="clList"></ol>
+    <div class="prose"><p class="dim" id="clSource">Releases up to 10 October 2026 were rebuilt from the GitHub history of <code>pdl/index.html</code> in c1jumpw/mkp-tools; each lists the uploads it was made from. Later releases are commits to c3jumpw/mkp-tools.</p></div>
+
+    <h3>Adding to the change log</h3>
+    <ol class="do">
+      <li>Open <code>pdl/changelog.json</code> in c3jumpw/mkp-tools.</li>
+      <li>Add a release at the end of <code>releases</code>: a <code>version</code> (the date as YYYY.MM.DD, with -2 for a second update that day), the <code>date</code>, a short <code>title</code> and <code>summary</code>, and one item per change.</li>
+      <li>Give each item a <code>type</code> (new, improved, fixed or changed), an <code>audience</code> (everyone or admin), a <code>title</code> and <code>text</code>, and optionally a <code>link</code> to a chapter of this guide, such as <code>#trash</code>.</li>
+      <li>Update <code>updated</code> at the top and add the file versions to <code>versions</code>, then commit <code>changelog.json</code> to <code>pdl/</code> in c3jumpw/mkp-tools, together with the files that changed.</li>
+    </ol>
+    <pre class="tree">{ <span class="f">"version"</span>: "2026.12.04", <span class="f">"date"</span>: "2026-12-04",
+  <span class="f">"title"</span>: "Short name for the update", <span class="f">"summary"</span>: "One line", <span class="f">"commits"</span>: [],
+  <span class="f">"items"</span>: [
+    { <span class="f">"type"</span>: "new",   <span class="f">"audience"</span>: "everyone", <span class="f">"title"</span>: "…", <span class="f">"text"</span>: "…", <span class="f">"link"</span>: "#vault" },
+    { <span class="f">"type"</span>: "fixed", <span class="f">"audience"</span>: "admin",    <span class="f">"title"</span>: "…", <span class="f">"text"</span>: "…" }
+  ] }</pre>
+    <div class="note admin"><b>Who sees what.</b> After an update, everyone sees its "everyone" items the first time they open My PD. "admin" items show on devices that have used Organize, or the first time Organize is switched on. Each device sees each update once. Releases older than <code>announceSince</code> are kept as history and never announced.</div>
+  </section>
+
+  <section id="help">
+    <div class="sec-head">
+      <span class="who">Everyone</span>
+      <h2>Help</h2>
+    </div>
+    <details class="faq"><summary>A file I just uploaded isn't showing</summary><p>Pull down from the top of the list and let go. GitHub's file list can lag for a few minutes; a refresh skips that delay.</p></details>
+    <details class="faq"><summary>"Move failed … replication delay"</summary><p>GitHub sometimes needs a few seconds after one save before the next. Wait a moment and try again. Nothing is lost.</p></details>
+    <details class="faq"><summary>Summarize says there's nothing to read</summary><p>The AI reads transcripts and text files; it can't listen to audio. Add a transcript first, or write the summary yourself.</p></details>
+    <details class="faq"><summary>An upload stopped partway</summary><p>The screen locked or the signal dropped. Nothing half-finished is saved, so upload the file again and keep the screen on until it says Done.</p></details>
+    <details class="faq"><summary>The Vault shows an error instead of my entries</summary><p>The Vault is reached through the relay. Check the relay is running (see <a href="#setup">Setup</a>), then check <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_KEY</code> in the Worker.</p></details>
+    <details class="faq"><summary>Look it up, Explain or Summarize doesn't work</summary><p>These use Gemini through the relay. Check that <code>GEMINI_API_KEY</code> is set in the Worker and that the key still has quota.</p></details>
+    <details class="faq"><summary>A new cover isn't showing on my other phone</summary><p>Covers can take a few minutes to reach other devices. The device you saved on shows it straight away.</p></details>
+    <details class="faq"><summary>Video sound carries on after I lock the screen</summary><p>That's on purpose, so you can keep listening. Use the lock-screen controls, or close the video to stop it.</p></details>
+    <details class="faq"><summary>Today's Practice is the same track all day</summary><p>That's on purpose. It changes at midnight and only picks audio, never anything in Trash.</p></details>
+    <details class="faq"><summary>The Guide button shows a "404" page</summary><p>guide.html is missing from the <code>pdl</code> folder of c3jumpw/mkp-tools. Commit it next to index.html.</p></details>
+    <details class="faq"><summary>mypd.mkcworkspace.com doesn't open</summary><p>Check the <code>mypd</code> record in GoDaddy DNS and the Domains page of the Vercel project (see <a href="#setup">Setup</a>). A new or changed record can take up to an hour to spread.</p></details>
+    <details class="faq"><summary>I'm asked for the passcode again at the new address</summary><p>Each address keeps its own settings on your device, so the first visit to mypd.mkcworkspace.com asks once, and theme and speed start fresh.</p></details>
+    <details class="faq"><summary>I didn't see What's new, or I closed it too soon</summary><p>It shows once per update on each device. Everything it said is in the <a href="#changelog">Change log</a>.</p></details>
+    <details class="faq"><summary>I forgot the passcode</summary><p>An admin can find it in index.html by searching for <code>PASSCODE</code>.</p></details>
+
+    <h3>Symbols at a glance</h3>
+    <div class="symbols">
+      <div><span class="g">♪</span>Audio</div>
+      <div><span class="g">▶</span>Video</div>
+      <div><span class="g">▤</span>Document</div>
+      <div><span class="g">📁</span>Folder</div>
+      <div><span class="g">📝</span>Summary</div>
+      <div><span class="g">☰ ▦</span>List or grid</div>
+      <div><span class="g">🌙</span>Dark or light theme</div>
+      <div><span class="g">📖</span>This guide</div>
+      <div><span class="g">−15s</span>Back 15 seconds</div>
+      <div><span class="g">1x</span>Playback speed</div>
+      <div><span class="g">✨</span>AI writes a draft</div>
+      <div><span class="g">💬</span>Follow-up question</div>
+      <div><span class="g">📎</span>Attachment</div>
+      <div><span class="g">▶ 1:15</span>Link to a moment</div>
+      <div><span class="g">🏷</span>Collections</div>
+      <div><span class="g">✎</span>Rename</div>
+      <div><span class="g">⇄</span>Move</div>
+      <div><span class="g">🗑</span>Trash</div>
+      <div><span class="g">↩</span>Restore</div>
+      <div><span class="g">✕</span>Close, or delete forever in Trash</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">My PD guide · Matches the app as of November 2026 · Screenshots show a sample library</div>
+</footer>
+
+<script type="application/json" id="changelogData">{{CHANGELOG_JSON}}</script>
+<script>
+  (function () {
+    // Renders the change log from the copy built into this page. On My PD's own site it then
+    // re-reads changelog.json, so entries added since this guide was uploaded show up too.
+    var holder = document.getElementById("changelogData");
+    var list = document.getElementById("clList");
+    if (!holder || !list) return;
+    var data;
+    try { data = JSON.parse(holder.textContent); } catch (e) { return; }
+    var order = "asc", aud = "all";
+    var DEFAULT_REPO = "c1jumpw/mkp-tools";
+    var LABEL = { "new": "New", improved: "Improved", fixed: "Fixed", changed: "Changed" };
+    var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function parts(d) { var p = String(d).split("-"); return { y: p[0], m: MONTHS[(+p[1] || 1) - 1], d: +p[2] || "" }; }
+    function longDate(d) { var p = parts(d); return p.d + " " + ({ Jan: "January", Feb: "February", Mar: "March", Apr: "April", May: "May", Jun: "June", Jul: "July", Aug: "August", Sep: "September", Oct: "October", Nov: "November", Dec: "December" })[p.m] + " " + p.y; }
+    function render() {
+      var rels = (data.releases || []).slice().sort(function (a, b) { return a.version < b.version ? -1 : a.version > b.version ? 1 : 0; });
+      var latest = rels.length ? rels[rels.length - 1].version : null;
+      var total = 0, admin = 0;
+      rels.forEach(function (r) { (r.items || []).forEach(function (i) { total++; if (i.audience === "admin") admin++; }); });
+      document.getElementById("clStats").innerHTML = rels.length ?
+        '<div class="cl-stat"><b>' + rels.length + '</b><span>updates</span></div>' +
+        '<div class="cl-stat"><b>' + total + '</b><span>changes, ' + admin + ' for admins</span></div>' +
+        '<div class="cl-stat"><b>' + esc(parts(rels[0].date).m + " " + parts(rels[0].date).y) + '</b><span>first version, ' + esc(longDate(rels[0].date)) + '</span></div>' +
+        '<div class="cl-stat"><b>' + esc(parts(rels[rels.length - 1].date).m + " " + parts(rels[rels.length - 1].date).d) + '</b><span>latest update, ' + esc(parts(rels[rels.length - 1].date).y) + '</span></div>' : "";
+      if (order === "desc") rels.reverse();
+      var html = "";
+      rels.forEach(function (r) {
+        var items = (r.items || []).filter(function (i) { return aud === "all" || i.audience === aud; });
+        if (!items.length) return;
+        var p = parts(r.date);
+        var commits = r.commits || [];
+        html += '<li class="rel' + (r.version === latest ? " latest" : "") + '" id="v' + esc(r.version).replace(/\./g, "-") + '">' +
+          '<div class="rel-date"><span class="d">' + p.d + '</span><span class="m">' + esc(p.m + " " + p.y) + '</span></div>' +
+          '<div class="rel-card"><div class="rel-meta"><code>' + esc(r.version) + '</code>' +
+          (r.version === latest ? '<span class="latest-badge">Latest</span>' : "") +
+          '<span>' + items.length + ' change' + (items.length === 1 ? "" : "s") + '</span></div>' +
+          '<h3>' + esc(r.title) + '</h3>' + (r.summary ? '<p>' + esc(r.summary) + '</p>' : "") +
+          (r.note ? '<p class="rel-note">' + esc(r.note) + '</p>' : "") +
+          '<ul class="rel-items">' + items.map(function (i) {
+            var t = LABEL[i.type] ? i.type : "new";
+            var link = (i.link && /^#[\w-]+$/.test(i.link)) ? '<a href="' + i.link + '">In the guide →</a>' : "";
+            return '<li><span class="tag ' + t + '">' + LABEL[t] + '</span><div><b>' + esc(i.title) + '</b><span class="aud' + (i.audience === "admin" ? " admin" : "") + '">' + (i.audience === "admin" ? "Admin" : "Everyone") + '</span></div><div class="txt">' + esc(i.text) + '</div>' + link + '</li>';
+          }).join("") + '</ul>' +
+          ((commits.length || r.versions) ? '<div class="rel-commits">' + (r.versions ? '<span>' + esc(r.versions) + '</span>' : '') +
+            (commits.length ? '<span>· ' + esc(r.repo || DEFAULT_REPO) + ':</span>' + commits.map(function (c) { return '<a href="https://github.com/' + esc(r.repo || DEFAULT_REPO) + '/commit/' + esc(c) + '" target="_blank" rel="noopener" title="Open this commit on GitHub">' + esc(c) + '</a>'; }).join("") : '') + '</div>' : '') +
+          '</div></li>';
+      });
+      list.innerHTML = html || '<li class="cl-empty">Nothing for this audience.</li>';
+    }
+    function wire(attr, set) {
+      document.querySelectorAll("[data-" + attr + "]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          set(b.getAttribute("data-" + attr));
+          b.parentNode.querySelectorAll("button").forEach(function (x) { var on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on ? "true" : "false"); });
+          render();
+        });
+      });
+    }
+    wire("order", function (v) { order = v; });
+    wire("aud", function (v) { aud = v; });
+    render();
+    var home = /(^|\.)mkcworkspace\.com$|\.github\.io$/.test(location.hostname) || document.documentElement.classList.contains("embed");
+    if (home && window.fetch) {
+      fetch("changelog.json?v=" + Date.now(), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d && d.releases && String(d.updated || "") >= String(data.updated || "")) { data = d; render(); } })
+        .catch(function () {});
+    }
+  })();
+</script>
+<script>
+  (function () {
+    // Point at a number in the key and its pin grows on the screenshot, and the other way round.
+    document.querySelectorAll(".screen").forEach(function (fig) {
+      function light(n, on) {
+        fig.querySelectorAll('[data-n="' + n + '"]').forEach(function (x) { x.classList.toggle("on", on); });
+      }
+      fig.querySelectorAll("[data-n]").forEach(function (x) {
+        var n = x.getAttribute("data-n");
+        x.addEventListener("mouseenter", function () { light(n, true); });
+        x.addEventListener("mouseleave", function () { light(n, false); });
+        x.addEventListener("focus", function () { light(n, true); });
+        x.addEventListener("blur", function () { light(n, false); });
+      });
+    });
+
+    // Highlight the chapter you're reading in the bar at the top.
+    var links = Array.prototype.slice.call(document.querySelectorAll(".chips a"));
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
+    var order = ["start", "roles", "home", "browse", "listen", "summaries", "collections", "vault", "preferences",
+                 "admin", "organize", "upload", "rename-move", "trash", "manage-collections", "covers",
+                 "transcripts", "write-summaries", "setup", "changelog", "help"];
+    var navFor = { browse: "home", summaries: "listen", preferences: "vault", organize: "admin",
+                   "rename-move": "upload", "manage-collections": "trash", covers: "trash",
+                   transcripts: "trash", "write-summaries": "trash" };
+    var targets = order.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+    var current = null;
+    function update() {
+      var y = window.scrollY + 120, hit = targets[0];
+      targets.forEach(function (t) { if (t.getBoundingClientRect().top + window.scrollY <= y) hit = t; });
+      var key = navFor[hit.id] || hit.id;
+      if (key === current) return;
+      current = key;
+      links.forEach(function (a) { a.classList.toggle("on", a === byId[key]); });
+      var on = byId[key];
+      if (on && on.scrollIntoView) {
+        var bar = on.parentNode, l = on.offsetLeft - 24;
+        if (l < bar.scrollLeft || on.offsetLeft + on.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollTo({ left: Math.max(0, l), behavior: "smooth" });
+      }
+    }
+    var ticking = false;
+    window.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () { ticking = false; update(); });
+    }, { passive: true });
+    update();
+
+    // The app's in-app sheet changes the hash to jump to a chapter; make sure that scrolls even
+    // when the guide is already open at the same chapter.
+    window.addEventListener("hashchange", function () {
+      var t = document.getElementById(location.hash.slice(1));
+      if (t) t.scrollIntoView();
+    });
+  })();
+</script>

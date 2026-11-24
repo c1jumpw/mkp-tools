@@ -1,0 +1,4 @@
+# guide-src/.gitignore — generated sample media for capture.py
+# v1 2026-11-22
+assets/
+__pycache__/

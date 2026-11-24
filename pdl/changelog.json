@@ -1,0 +1,572 @@
+{
+  "app": "My PD - Personal Development Library",
+  "address": "https://mypd.mkcworkspace.com/",
+  "updated": "2026-11-22",
+  "announceSince": "2026.11.20",
+  "about": "Every update to My PD, oldest first. The app's files live in c3jumpw/mkp-tools (folder pdl) and Vercel publishes them to mypd.mkcworkspace.com on every push. The library itself (media, covers, summaries, transcripts, collections, Trash) stays in c1jumpw/mkp-tools/pdl/media. Releases up to 2026.10.10 were rebuilt from the commit history of pdl/index.html in c1jumpw/mkp-tools; the commits listed there are the uploads that make up each release. The app reads this file to show What's new: items for everyone after unlocking, admin items on devices that use Organize. A device that has never seen What's new (a new phone, or any device at a new address) is shown only the newest release. Releases older than announceSince are history only and are never announced.",
+  "fields": {
+    "type": "new | improved | fixed | changed",
+    "audience": "everyone | admin",
+    "link": "optional chapter in guide.html, e.g. #trash",
+    "versions": "file versions in the release, matching each file's VERSION HISTORY",
+    "commits": "commit ids in the repo named by repo (default c1jumpw/mkp-tools)"
+  },
+  "releases": [
+    {
+      "version": "2026.07.13",
+      "date": "2026-07-13",
+      "title": "The library opens",
+      "summary": "First version of the Personal Development Library page.",
+      "versions": "index.html v1",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "aebfbda",
+        "23fe7db"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Your library on one page",
+          "text": "Folders and files from pdl/media, with search and Audio, Video and Docs filters."
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Today's Practice",
+          "text": "One audio track picked each day to return to."
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Mini-player and viewer",
+          "text": "Audio plays at the bottom of the screen while you browse; video and documents open in a viewer."
+        },
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "Organize mode",
+          "text": "Rename and move files and create folders. At this stage it needed a GitHub token saved in the browser."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.14",
+      "date": "2026-07-14",
+      "title": "Collections, and saves through the relay",
+      "summary": "Collections arrive, and the GitHub token leaves the device.",
+      "versions": "index.html v2",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "c0f7750"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Collections",
+          "text": "Group items from any folder into named collections without moving them.",
+          "link": "#collections"
+        },
+        {
+          "type": "changed",
+          "audience": "admin",
+          "title": "Saves go through the relay",
+          "text": "Renames, moves and collection changes are sent through the pdl-relay Cloudflare Worker, which holds the GitHub token. No token is kept on the phone.",
+          "link": "#setup"
+        }
+      ]
+    },
+    {
+      "version": "2026.07.15",
+      "date": "2026-07-15",
+      "title": "Passcode, themes and large files",
+      "summary": "A passcode lock, dark and light themes, and support for large files.",
+      "versions": "index.html v3",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "253477a",
+        "69ecdad"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Passcode lock",
+          "text": "A four-digit passcode, asked once on each device.",
+          "link": "#home"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Dark and light themes",
+          "text": "Switch with the moon and sun button. Remembered on each device."
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Large files",
+          "text": "Files stored in parts, or as GitHub release files, play and open like any other."
+        },
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "Trash folder",
+          "text": "The trash button moves a file into a trash folder instead of deleting it."
+        },
+        {
+          "type": "improved",
+          "audience": "admin",
+          "title": "Clearer relay errors",
+          "text": "Plain messages when the relay address or app key is wrong, instead of a bare network error."
+        },
+        {
+          "type": "improved",
+          "audience": "admin",
+          "title": "Large files move whole",
+          "text": "Moving or renaming a file stored in parts moves every part in a single save."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.16",
+      "date": "2026-07-16",
+      "title": "Speed, skip and transcripts",
+      "summary": "Better listening controls and a place for transcripts.",
+      "versions": "index.html v4",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "2f3621a"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Playback speed and 15-second skip",
+          "text": "1x, 1.25x, 1.5x or 2x, remembered for next time, plus back and forward 15 seconds. Video gets the same speed button.",
+          "link": "#listen"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Transcripts",
+          "text": "Read a track's transcript under the player when one has been added."
+        },
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "Faster opening",
+          "text": "Today's Practice is worked out once a day instead of on every visit."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.24",
+      "date": "2026-07-24",
+      "title": "Transcript editor and progress bar",
+      "summary": "Transcripts that follow along, and a bar you can drag.",
+      "versions": "index.html v5",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "0ee5618"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "Transcript editor",
+          "text": "Tap along while you listen, or paste text or SRT and VTT captions.",
+          "link": "#transcripts"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Transcripts follow the track",
+          "text": "The current line is highlighted as it plays. Tap any line to jump to that moment.",
+          "link": "#listen"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Draggable progress bar",
+          "text": "Drag or tap the bar to jump to any point."
+        },
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "Collections show instantly",
+          "text": "Collections are remembered on the device, so they appear before the network answers."
+        }
+      ]
+    },
+    {
+      "version": "2026.07.25",
+      "date": "2026-07-25",
+      "title": "Time display",
+      "summary": "See where you are in a track.",
+      "versions": "index.html v6",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "32e589b"
+      ],
+      "items": [
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "Time played and time left",
+          "text": "Shown under the progress bar in the mini-player."
+        }
+      ]
+    },
+    {
+      "version": "2026.09.18",
+      "date": "2026-09-18",
+      "title": "The Vault",
+      "summary": "A personal vocabulary and knowledge base beside the media library.",
+      "versions": "index.html v7",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "d54eccb",
+        "42bcd26",
+        "e1eab20",
+        "248e5a9",
+        "f6ea71e",
+        "9f5f531",
+        "6619b2c"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Vault: Terms",
+          "text": "Save words and phrases with a definition, an example and your notes. Look it up fills them in with AI.",
+          "link": "#vault"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Linked to the moment",
+          "text": "A new entry links to the track you were playing and the moment in it. Jump to source plays it from there."
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Subjects, suggestions and attachments",
+          "text": "Tag entries with several subjects, take AI subject suggestions, ask for a new example, and attach a file."
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Ask a follow-up",
+          "text": "Ask questions about a term and add the answers to your notes."
+        },
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "App icon and tab icons",
+          "text": "A proper icon in the browser tab, and icons on the Browse, Collections and Vault tabs."
+        },
+        {
+          "type": "fixed",
+          "audience": "everyone",
+          "title": "Reliability fixes",
+          "text": "A round of fixes across the library from a full review of the app."
+        },
+        {
+          "type": "fixed",
+          "audience": "admin",
+          "title": "Relay settings restored",
+          "text": "The relay address and app key were briefly reset to placeholders in an update and were restored the same afternoon."
+        }
+      ]
+    },
+    {
+      "version": "2026.09.19",
+      "date": "2026-09-19",
+      "title": "Ideas, Topics and uploads in the app",
+      "summary": "The Vault grows to three kinds of entry, and files can be uploaded from the app.",
+      "versions": "index.html v8",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "14862b2",
+        "a3b81e1",
+        "beaf17b",
+        "69c9875"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Ideas journal",
+          "text": "Write an idea as it comes. The note stays word for word, with an AI summary and your reflection beside it.",
+          "link": "#vault"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Topics",
+          "text": "For concepts you want to understand: a simple explanation first, a full explainer when you want it.",
+          "link": "#vault"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Filter by subject",
+          "text": "Sort the Vault by subject and pick the subjects to show."
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Greeting by time of day",
+          "text": "Good morning, good day or good evening."
+        },
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "+ Upload in the app",
+          "text": "Upload files straight into the folder or collection you're in.",
+          "link": "#upload"
+        },
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "Faster playback",
+          "text": "Media is served through the jsDelivr CDN, with GitHub as the fallback."
+        }
+      ]
+    },
+    {
+      "version": "2026.09.28",
+      "date": "2026-09-28",
+      "title": "Summaries and sturdier uploads",
+      "summary": "Summaries for every item, a better document viewer, and uploads that survive a weak signal.",
+      "versions": "index.html v9",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "75925ed",
+        "0baee96",
+        "b50e482"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Summaries",
+          "text": "Items with a summary show 📝. Write one, or let ✨ Summarize draft it from the transcript.",
+          "link": "#summaries"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Keep listening when the screen locks",
+          "text": "Video sound carries on when the phone locks, and the lock screen shows the title with working controls."
+        },
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "Documents open in the app",
+          "text": "A progress bar while loading, Open and Download on iPhone, and text files shown right in the viewer."
+        },
+        {
+          "type": "improved",
+          "audience": "admin",
+          "title": "Large uploads recover",
+          "text": "Files of 20 MB or more get two tries as a single upload, then switch to 4 MB parts with automatic retries, so a dropped signal no longer loses the whole file.",
+          "link": "#upload"
+        },
+        {
+          "type": "improved",
+          "audience": "admin",
+          "title": "Screen stays awake during uploads",
+          "text": "The app asks the phone to keep the screen on until uploads finish."
+        }
+      ]
+    },
+    {
+      "version": "2026.09.29",
+      "date": "2026-09-29",
+      "title": "Trash, cover art and pull to refresh",
+      "summary": "A 30-day Trash, cover art with a grid view, and streaming for large files.",
+      "versions": "index.html v10",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "3d02e07",
+        "6f7db8b",
+        "af06663",
+        "375bd82",
+        "96f14d8",
+        "95289a6"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "Trash with 30 days to undo",
+          "text": "Restore puts a file back where it came from, Delete forever removes it now, and anything left for 30 days is removed automatically.",
+          "link": "#trash"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Grid view with cover art",
+          "text": "Switch between list and grid. Grid shows each item's cover.",
+          "link": "#browse"
+        },
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "Cover art and collection headers",
+          "text": "Crop and save a square cover for any item, and a wide header image for each collection.",
+          "link": "#covers"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Pull to refresh",
+          "text": "Pull down at the top of any list to reload it."
+        },
+        {
+          "type": "improved",
+          "audience": "admin",
+          "title": "Large uploads always go in parts",
+          "text": "Files of 20 MB or more now go straight to 4 MB parts. Parts can be played in the app; GitHub release files could only be downloaded.",
+          "link": "#upload"
+        },
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "Large files stream",
+          "text": "Files stored in parts start playing straight away through the relay instead of downloading first."
+        },
+        {
+          "type": "improved",
+          "audience": "everyone",
+          "title": "New covers show at once",
+          "text": "A cover you just saved appears on your device without waiting for GitHub."
+        },
+        {
+          "type": "fixed",
+          "audience": "everyone",
+          "title": "New files appear on refresh",
+          "text": "Refreshing now skips GitHub's cached folder list, so a file uploaded moments ago shows up."
+        }
+      ]
+    },
+    {
+      "version": "2026.09.30",
+      "date": "2026-09-30",
+      "title": "Tidier collections and safer uploads",
+      "summary": "Fixes that keep summaries, covers and tags attached to the right file.",
+      "versions": "index.html v11",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "2a867ff"
+      ],
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "Summary from the viewer",
+          "text": "The 📝 button in the video and document viewer opens the item's summary."
+        },
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "Clean up missing",
+          "text": "Finds collection tags pointing at files that no longer exist and offers to remove them.",
+          "link": "#manage-collections"
+        },
+        {
+          "type": "improved",
+          "audience": "admin",
+          "title": "Asks before replacing",
+          "text": "Uploading a file whose name is already in the folder asks first. Its summary and transcript stay attached.",
+          "link": "#upload"
+        },
+        {
+          "type": "fixed",
+          "audience": "admin",
+          "title": "Extras move with their file",
+          "text": "Summaries, transcripts and covers now follow a file when it's renamed, moved or trashed."
+        },
+        {
+          "type": "fixed",
+          "audience": "everyone",
+          "title": "Playback fallback",
+          "text": "If the CDN can't play a file, the app now always tries GitHub before giving up."
+        }
+      ]
+    },
+    {
+      "version": "2026.10.10",
+      "date": "2026-10-10",
+      "title": "Renamed to My PD",
+      "summary": "A shorter name for the app.",
+      "versions": "index.html v12",
+      "repo": "c1jumpw/mkp-tools",
+      "commits": [
+        "56968e5"
+      ],
+      "items": [
+        {
+          "type": "changed",
+          "audience": "everyone",
+          "title": "My PD",
+          "text": "The app is now My PD – Personal Development Library. Added to a home screen, its label reads My PD, and the lock screen player shows My PD."
+        }
+      ]
+    },
+    {
+      "version": "2026.11.20",
+      "date": "2026-11-20",
+      "title": "Guide, What's new and a new address",
+      "summary": "A built-in guide, update notes like these, and a new home at mypd.mkcworkspace.com.",
+      "versions": "index.html v13 · guide.html v2 · changelog.json v1",
+      "repo": "c3jumpw/mkp-tools",
+      "commits": [],
+      "note": "Includes the guide prepared on 30 October 2026. First release served from c3jumpw/mkp-tools through Vercel; earlier history stays in c1jumpw/mkp-tools.",
+      "items": [
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "📖 Guide",
+          "text": "A picture guide to every screen. Tap Guide under the Organize switch; it opens at the part you're using.",
+          "link": "#start"
+        },
+        {
+          "type": "new",
+          "audience": "everyone",
+          "title": "What's new",
+          "text": "After an update, a short summary like this one shows the first time you open My PD."
+        },
+        {
+          "type": "changed",
+          "audience": "everyone",
+          "title": "New address: mypd.mkcworkspace.com",
+          "text": "Bookmark the new address, or add it to your home screen again. It asks for the passcode once more, and theme and speed start fresh."
+        },
+        {
+          "type": "new",
+          "audience": "admin",
+          "title": "Change log",
+          "text": "Every update since July, in order, in the guide's admin section. Admin-only notes like this one show the first time Organize is switched on after an update.",
+          "link": "#changelog"
+        },
+        {
+          "type": "fixed",
+          "audience": "admin",
+          "title": "Renaming on a phone",
+          "text": "The rename box now drops onto its own line instead of running off the screen.",
+          "link": "#rename-move"
+        },
+        {
+          "type": "changed",
+          "audience": "admin",
+          "title": "App files moved to c3jumpw/mkp-tools",
+          "text": "index.html, guide.html and changelog.json now live in c3jumpw/mkp-tools, folder pdl, and Vercel publishes them to mypd.mkcworkspace.com on every push. The library's media stays in c1jumpw/mkp-tools/pdl/media, so uploads, renames and Trash work as before.",
+          "link": "#setup"
+        }
+      ]
+    }
+  ]
+}
